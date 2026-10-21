@@ -2,13 +2,14 @@
 
 [![pub package](https://img.shields.io/pub/v/swm_chart.svg)](https://pub.dev/packages/swm_chart)
 
-**Stock World Monitor Charts** (`swm_chart`) are high-performance financial
+**Stock World Monitor Charts** (`swm_chart`), by
+[Stock World Monitor](https://stockworldmonitor.com/), are high-performance financial
 charts for Flutter. The package is a native Dart port of
 [TradingView Lightweight Charts™](https://github.com/tradingview/lightweight-charts) (based on v5.2.1).
 
 ```yaml
 dependencies:
-  swm_chart: ^0.4.0
+  swm_chart: ^0.4.1
 ```
 
 There is no WebView. Everything is drawn with `CustomPainter`, and the

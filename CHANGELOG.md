@@ -1,3 +1,8 @@
+## 0.4.1
+
+* Homepage: https://stockworldmonitor.com/
+* Example: "SWM Chart" watermark.
+
 ## 0.4.0
 
 * Renamed to **Stock World Monitor Charts** (package name stays `swm_chart`).
