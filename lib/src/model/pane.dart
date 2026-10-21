@@ -40,7 +40,7 @@ class Pane {
 
   PriceScale priceScale(String id, ChartOptions options) => priceScales.putIfAbsent(
         id,
-        () => PriceScale(id, options.rightPriceScale.copyWith(visible: false, autoScale: true)),
+        () => PriceScale(id, options.overlayPriceScales.copyWith(visible: false)),
       );
 
   bool _hasSeriesOn(PriceScale scale) => series.any((s) => s.priceScale == scale);

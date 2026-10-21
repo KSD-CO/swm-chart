@@ -30,7 +30,7 @@ const List<(int, int)> _intradayWeightDivisors = [
   (12 * 60 * 60 * 1000, TickMarkWeight.hour12),
 ];
 
-DateTime utcDate(int seconds) => DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true);
+DateTime utcDate(num seconds) => DateTime.fromMillisecondsSinceEpoch((seconds * 1000).round(), isUtc: true);
 
 int _weightByTime(DateTime current, DateTime prev) {
   if (current.year != prev.year) return TickMarkWeight.year;
@@ -47,12 +47,12 @@ int _weightByTime(DateTime current, DateTime prev) {
 }
 
 /// Fills [weights] for [times] (sorted, seconds) starting at [startIndex].
-void fillWeightsForPoints(List<int> times, List<int> weights, [int startIndex = 0]) {
+void fillWeightsForPoints(List<num> times, List<int> weights, [int startIndex = 0]) {
   if (times.isEmpty) return;
 
-  int? prevTime = startIndex == 0 ? null : times[startIndex - 1];
+  num? prevTime = startIndex == 0 ? null : times[startIndex - 1];
   DateTime? prevDate = prevTime != null ? utcDate(prevTime) : null;
-  var totalTimeDiff = 0;
+  num totalTimeDiff = 0;
 
   for (var index = startIndex; index < times.length; ++index) {
     final currentTime = times[index];
@@ -88,19 +88,39 @@ TickMarkType weightToTickMarkType(int weight, bool timeVisible, bool secondsVisi
   return TickMarkType.year;
 }
 
-const List<String> _monthsShort = [
+/// English month names, the default of [LocalizationOptions].
+const List<String> englishShortMonthNames = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', //
 ];
 
-String _two(int v) => v.toString().padLeft(2, '0');
+const List<String> englishLongMonthNames = [
+  'January', 'February', 'March', 'April', 'May', 'June', //
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
 
-String defaultTickMarkFormatter(int time, TickMarkType type) {
+String _pad(int v, int width) => v.toString().padLeft(width, '0');
+
+String _two(int v) => _pad(v, 2);
+
+/// Port of upstream's `formatDate`: supports `yyyy`, `yy`, `MMMM`, `MMM`,
+/// `MM` and `dd`, replaced in that order.
+String formatDate(DateTime d, String format, List<String> shortMonthNames, List<String> longMonthNames) {
+  return format
+      .replaceAll('yyyy', _pad(d.year, 4))
+      .replaceAll('yy', _two(d.year % 100))
+      .replaceAll('MMMM', longMonthNames[d.month - 1])
+      .replaceAll('MMM', shortMonthNames[d.month - 1])
+      .replaceAll('MM', _two(d.month))
+      .replaceAll('dd', _two(d.day));
+}
+
+String defaultTickMarkFormatter(num time, TickMarkType type, List<String> shortMonthNames) {
   final d = utcDate(time);
   switch (type) {
     case TickMarkType.year:
       return '${d.year}';
     case TickMarkType.month:
-      return _monthsShort[d.month - 1];
+      return shortMonthNames[d.month - 1];
     case TickMarkType.dayOfMonth:
       return '${d.day}';
     case TickMarkType.time:
@@ -110,10 +130,17 @@ String defaultTickMarkFormatter(int time, TickMarkType type) {
   }
 }
 
-/// Default crosshair time label: `dd MMM 'yy` plus `HH:mm[:ss]` when time is visible.
-String defaultTimeFormatter(int time, {required bool timeVisible, required bool secondsVisible}) {
+/// Default crosshair time label: [dateFormat] plus `HH:mm[:ss]` when time is visible.
+String defaultTimeFormatter(
+  num time, {
+  String dateFormat = "dd MMM 'yy",
+  List<String> shortMonthNames = englishShortMonthNames,
+  List<String> longMonthNames = englishLongMonthNames,
+  required bool timeVisible,
+  required bool secondsVisible,
+}) {
   final d = utcDate(time);
-  final date = "${_two(d.day)} ${_monthsShort[d.month - 1]} '${_two(d.year % 100)}";
+  final date = formatDate(d, dateFormat, shortMonthNames, longMonthNames);
   if (!timeVisible) return date;
   final clock = secondsVisible
       ? '${_two(d.hour)}:${_two(d.minute)}:${_two(d.second)}'

@@ -10,13 +10,14 @@ import 'package:flutter/scheduler.dart';
 import '../data.dart';
 import '../options.dart';
 import '../plugins/primitive.dart';
-import '../series_options.dart';
 import 'pane.dart';
 import 'price_scale.dart';
 import 'primitive_context.dart';
 import 'series.dart';
 import 'time_scale.dart';
-import 'time_utils.dart';
+import 'horz_scale_behavior.dart';
+import 'tick_marks.dart';
+import 'time_utils.dart' show TickMarkWeight;
 
 export 'pane.dart' show leftPriceScaleId, rightPriceScaleId;
 
@@ -43,7 +44,7 @@ class CrosshairState {
 class ModelEventParams {
   const ModelEventParams({this.time, this.logical, this.point, this.paneIndex, this.seriesData = const {}});
 
-  final int? time;
+  final num? time;
   final int? logical;
 
   /// Pane coordinates in logical pixels.
@@ -66,15 +67,19 @@ class PriceAxisLabelSpec {
 }
 
 class ChartModel extends ChangeNotifier {
-  ChartModel(this._options) : timeScale = TimeScale(_options.timeScale) {
+  ChartModel(this._options, {this.behavior = const TimeHorzScaleBehavior()})
+      : timeScale = TimeScale(_options.timeScale) {
     panes.add(Pane(_options));
   }
 
   ChartOptions _options;
   final TimeScale timeScale;
+
+  /// What the horizontal axis measures (time, months, price).
+  final HorzScaleBehavior behavior;
   final List<Pane> panes = [];
 
-  List<int> _times = [];
+  List<num> _times = [];
   List<int> _weights = [];
 
   int? _crosshairPane;
@@ -100,6 +105,13 @@ class ChartModel extends ChangeNotifier {
   final List<void Function(ModelEventParams)> crosshairMoveListeners = [];
   final List<void Function(ModelEventParams)> clickListeners = [];
   final List<void Function(ModelEventParams)> dblClickListeners = [];
+  final List<void Function(SeriesModel)> dataChangedListeners = [];
+
+  void _emitDataChanged(SeriesModel s) {
+    for (final l in List.of(dataChangedListeners)) {
+      l(s);
+    }
+  }
 
   ChartOptions get options => _options;
 
@@ -274,51 +286,64 @@ class ChartModel extends ChangeNotifier {
     invalidate();
   }
 
-  void setSeriesData<T extends SeriesData>(SeriesModel<T, SeriesOptions> s, List<T> data) {
+  void setSeriesData(SeriesModel s, List<SeriesData> data) {
     s.setData(data);
     _rebuildTimeline();
+    _emitDataChanged(s);
     invalidate();
   }
 
-  void updateSeries<T extends SeriesData>(SeriesModel<T, SeriesOptions> s, T item) {
+  void updateSeries(SeriesModel s, SeriesData item) {
     final previous = s.lastItem;
-    final appended = s.update(item);
-    if (appended || previous == null || s.closeValue(previous) != s.closeValue(item)) {
+    final kind = s.update(item);
+    final last = s.lastItem;
+    if (last != null && (previous == null || kind != SeriesUpdateKind.replaced || s.closeValue(previous) != s.closeValue(last))) {
       s.lastUpdateTime = now;
     }
-    if (appended) {
-      final time = item.time;
-      if (_times.isEmpty || time > _times.last) {
-        // Fast path: a new bar to the right of everything.
-        final times = List<int>.of(_times)..add(time);
-        final weights = List<int>.of(_weights)..add(0);
-        fillWeightsForPoints(times, weights, times.length - 1);
-        if (times.length == 1) weights[0] = TickMarkWeight.day;
-        s.setIndices(List<int>.of(s.indices)..add(times.length - 1));
-        _applyTimeline(times, weights, times.length - 1);
-      } else {
-        final index = timeScale.timeToIndex(time);
-        if (index != null && (s.indices.isEmpty || index > s.indices.last)) {
-          // Another series already has this time; only this series' indices grow.
-          s.setIndices(List<int>.of(s.indices)..add(index));
+    final time = item.time;
+    switch (kind) {
+      case SeriesUpdateKind.replaced:
+        break;
+      case SeriesUpdateKind.replacedKind:
+        _rebuildTimeline();
+      case SeriesUpdateKind.appended:
+      case SeriesUpdateKind.appendedWhitespace:
+        final hasValue = kind == SeriesUpdateKind.appended;
+        if (_times.isEmpty || time > _times.last) {
+          // Fast path: a new point to the right of everything.
+          final times = List<num>.of(_times)..add(time);
+          final weights = List<int>.of(_weights)..add(0);
+          behavior.fillWeights(times, weights, times.length - 1);
+          if (times.length == 1 && behavior is TimeHorzScaleBehavior) weights[0] = TickMarkWeight.day;
+          if (hasValue) s.setIndices(List<int>.of(s.indices)..add(times.length - 1));
+          _applyTimeline(times, weights, times.length - 1);
         } else {
-          _rebuildTimeline();
+          final index = timeScale.timeToIndex(time);
+          if (index != null && (s.indices.isEmpty || index > s.indices.last)) {
+            // Another series already has this time; only this series' indices grow.
+            if (hasValue) {
+              s.setIndices(List<int>.of(s.indices)..add(index));
+              _applyTimeline(_times, _weights, _times.length, replacedWhitespace: true);
+            }
+          } else {
+            _rebuildTimeline();
+          }
         }
-      }
     }
+    _emitDataChanged(s);
     invalidate();
   }
 
   void _rebuildTimeline() {
-    final all = <int>{};
+    final all = <num>{};
     for (final s in series) {
-      for (final d in s.data) {
+      for (final d in s.allItems) {
         all.add(d.time);
       }
     }
     final times = all.toList()..sort();
     final weights = List<int>.filled(times.length, 0);
-    fillWeightsForPoints(times, weights);
+    behavior.fillWeights(times, weights, 0);
 
     for (final s in series) {
       final indices = List<int>.filled(s.data.length, 0);
@@ -346,10 +371,26 @@ class ChartModel extends ChangeNotifier {
     _applyTimeline(times, weights, firstChanged);
   }
 
+  /// Like upstream's data layer: the last index that has a value in any
+  /// series (whitespace after it doesn't count).
+  int? _computeBaseIndex(List<num> times) {
+    if (times.isEmpty) return null;
+    var base = 0;
+    for (final s in series) {
+      if (s.indices.isNotEmpty) base = math.max(base, s.indices.last);
+    }
+    return base;
+  }
+
+  void _updateIndicesWithData() {
+    if (!timeScale.options.ignoreWhitespaceIndices) return;
+    timeScale.setIndicesWithData({for (final s in series) ...s.indices});
+  }
+
   /// Mirrors `ChartModel.updateTimeScale`: keeps the visible range stable when
   /// bars are added, unless the last bar is visible and
   /// `shiftVisibleRangeOnNewBar` is on.
-  void _applyTimeline(List<int> times, List<int> weights, int firstChanged) {
+  void _applyTimeline(List<num> times, List<int> weights, int firstChanged, {bool replacedWhitespace = false}) {
     final oldFirstTime = timeScale.indexToTime(0);
     final visibleBars = timeScale.visibleStrictRange();
     final currentBaseIndex = timeScale.baseIndex;
@@ -359,19 +400,22 @@ class ChartModel extends ChangeNotifier {
     timeScale.update(times, weights, firstChanged);
 
     final newFirstTime = times.isEmpty ? null : times.first;
-    final newBaseIndex = times.isEmpty ? null : times.length - 1;
+    final newBaseIndex = _computeBaseIndex(times);
 
     if (visibleBars != null && oldFirstTime != null && newFirstTime != null) {
       final isLastSeriesBarVisible = visibleBars.contains(currentBaseIndex);
       final isLeftBarShiftToLeft = oldFirstTime > newFirstTime;
       final isSeriesPointsAdded = newBaseIndex != null && newBaseIndex > currentBaseIndex;
       final isSeriesPointsAddedToRight = isSeriesPointsAdded && !isLeftBarShiftToLeft;
-      final needShift = isLastSeriesBarVisible && timeScale.options.shiftVisibleRangeOnNewBar;
+      final needShift = isLastSeriesBarVisible &&
+          (!replacedWhitespace || timeScale.options.allowShiftVisibleRangeOnWhitespaceReplacement) &&
+          timeScale.options.shiftVisibleRangeOnNewBar;
       if (isSeriesPointsAddedToRight && !needShift) {
         timeScale.setRightOffset(timeScale.rightOffset - (newBaseIndex - currentBaseIndex));
       }
     }
     timeScale.setBaseIndex(newBaseIndex);
+    _updateIndicesWithData();
   }
 
   // ---- layout (called by the painter every frame) ----
@@ -381,7 +425,9 @@ class ChartModel extends ChangeNotifier {
     _pixelRatio = pixelRatio;
     final fontSize = _options.layout.fontSize;
 
-    _timeAxisHeight = _options.timeScale.visible ? _optimalTimeAxisHeight(fontSize) : 0;
+    _timeAxisHeight = _options.timeScale.visible
+        ? math.max(_optimalTimeAxisHeight(fontSize), _options.timeScale.minimumHeight)
+        : 0;
     _layoutPanes(size.height, pixelRatio, fontSize);
     _updateFormatters();
 
@@ -479,7 +525,7 @@ class ChartModel extends ChangeNotifier {
   }
 
   void _updateFormatters() {
-    final override = _options.localization.priceFormatter;
+    final localization = _options.localization;
     final visible = timeScale.visibleStrictRange();
     for (final pane in panes) {
       for (final s in pane.series) {
@@ -488,7 +534,7 @@ class ChartModel extends ChangeNotifier {
       for (final ps in pane.priceScales.values) {
         final main = pane.series.where((s) => s.priceScale == ps).firstOrNull;
         if (main != null) {
-          ps.setFormatter(main.formatter, override);
+          ps.setFormatter(main.formatter, localization);
           ps.baseValue = main.baseValue;
         }
       }
@@ -520,6 +566,10 @@ class ChartModel extends ChangeNotifier {
           above = math.max(above, info.margins?.above ?? 0);
           below = math.max(below, info.margins?.below ?? 0);
         }
+        if (ps.hasVisibleEdgeMarks) {
+          above = math.max(above, ps.edgeMarksPadding);
+          below = math.max(below, ps.edgeMarksPadding);
+        }
         ps.setMargins(above, below);
         ps.updateAutoScaleRange(range);
       }
@@ -529,15 +579,9 @@ class ChartModel extends ChangeNotifier {
   String formatSeriesPrice(SeriesModel s, double price) =>
       s.priceScale.isPercentLike ? s.formatPrice(price) : (_options.localization.priceFormatter ?? s.formatter.call)(price);
 
-  String formatTime(int time) {
-    final custom = _options.localization.timeFormatter;
-    if (custom != null) return custom(time);
-    return defaultTimeFormatter(
-      time,
-      timeVisible: _options.timeScale.timeVisible,
-      secondsVisible: _options.timeScale.secondsVisible,
-    );
-  }
+  String formatTime(num time) => behavior.formatHorzItem(time, _options);
+
+  String formatTickMark(TickMark mark) => behavior.formatTickMark(mark, _options);
 
   PrimitiveContextImpl primitiveContext(Pane pane, SeriesModel? s, [Canvas? canvas]) =>
       PrimitiveContextImpl(this, pane, s, canvas);
@@ -632,7 +676,8 @@ class ChartModel extends ChangeNotifier {
     final pane = panes[paneIndex];
     final x = point.dx.clamp(0.0, math.max(0.0, paneWidth - 1)).toDouble();
     final y = point.dy.clamp(0.0, math.max(0.0, pane.height - 1)).toDouble();
-    final index = timeScale.coordinateToIndex(x);
+    var index = timeScale.coordinateToIndex(x, considerIgnoreWhitespace: true);
+    if (_options.crosshair.doNotSnapToHiddenSeriesIndices) index = _nearestVisibleSeriesIndex(index);
     final snappedX = timeScale.indexToCoordinate(index);
     var resolvedY = y;
 
@@ -653,6 +698,23 @@ class ChartModel extends ChangeNotifier {
     _crosshair = CrosshairState(paneIndex: paneIndex, index: index, x: snappedX, y: resolvedY);
   }
 
+  /// Nearest index where a visible series has data, for
+  /// `doNotSnapToHiddenSeriesIndices`.
+  int _nearestVisibleSeriesIndex(int index) {
+    final visible = series.where((s) => s.visible && s.indices.isNotEmpty).toList();
+    if (visible.isEmpty || visible.any((s) => s.itemAt(index) != null)) return index;
+    int? best;
+    for (final s in visible) {
+      final pos = s.lowerBound(index);
+      for (final p in [pos - 1, pos]) {
+        if (p < 0 || p >= s.indices.length) continue;
+        final candidate = s.indices[p];
+        if (best == null || (candidate - index).abs() < (best - index).abs()) best = candidate;
+      }
+    }
+    return best ?? index;
+  }
+
   Map<SeriesModel, SeriesData> _dataAt(int index) => {
         for (final s in series) s: ?s.itemAt(index),
       };
@@ -669,7 +731,7 @@ class ChartModel extends ChangeNotifier {
   }
 
   void click(int paneIndex, Offset point, {bool doubleClick = false}) {
-    final index = timeScale.coordinateToIndex(point.dx);
+    final index = timeScale.coordinateToIndex(point.dx, considerIgnoreWhitespace: true);
     _emit(
       doubleClick ? dblClickListeners : clickListeners,
       ModelEventParams(

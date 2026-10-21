@@ -188,7 +188,7 @@ void main() {
     layout();
     final visible = chart.model.timeScale.visibleStrictRange()!;
     final label = chart.model.priceAxisLabels(chart.model.panes.first, AxisSide.right).single;
-    expect(label.text, s.data()[visible.right].close.toStringAsFixed(2));
+    expect(label.text, s.data().cast<CandlestickData>()[visible.right].close.toStringAsFixed(2));
   });
 
   test('autoscaleInfoProvider overrides the range', () {

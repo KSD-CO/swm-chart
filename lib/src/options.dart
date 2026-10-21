@@ -1,5 +1,7 @@
 import 'dart:ui' show Color;
 
+import 'model/time_utils.dart' show englishLongMonthNames, englishShortMonthNames;
+
 /// Style of a line (grid, crosshair, price line, line series).
 enum LineStyle { solid, dotted, dashed, largeDashed, sparseDotted }
 
@@ -43,15 +45,18 @@ enum PriceLineSource { lastBar, lastVisible }
 /// Type of a time scale tick mark, passed to [TickMarkFormatter].
 enum TickMarkType { year, month, dayOfMonth, time, timeWithSeconds }
 
-/// Formats a tick mark label. [time] is a UTC timestamp in seconds.
-/// Return `null` to fall back to the default formatter.
-typedef TickMarkFormatter = String? Function(int time, TickMarkType type);
+/// Formats a tick mark label. [time] is the horizontal value (UTC seconds on
+/// a time chart). Return `null` to fall back to the default formatter.
+typedef TickMarkFormatter = String? Function(num time, TickMarkType type, String locale);
 
-/// Formats a time for the crosshair label. [time] is a UTC timestamp in seconds.
-typedef TimeFormatter = String Function(int time);
+/// Formats the horizontal value for the crosshair label.
+typedef TimeFormatter = String Function(num time);
 
 /// Formats a price.
 typedef PriceFormatterFn = String Function(double price);
+
+/// Formats all tick mark prices of a price axis at once.
+typedef TickmarksPriceFormatterFn = List<String> Function(List<double> prices);
 
 class PaneOptions {
   const PaneOptions({
@@ -74,9 +79,21 @@ class LayoutOptions {
     this.fontSize = 12,
     this.fontFamily,
     this.panes = const PaneOptions(),
+    this.backgroundBottomColor,
+    this.attributionLogo = true,
   });
 
+  /// Background, or the top color of a vertical gradient when
+  /// [backgroundBottomColor] is set.
   final Color backgroundColor;
+
+  /// Bottom color of a vertical background gradient.
+  final Color? backgroundBottomColor;
+
+  /// Show the TradingView attribution logo, as upstream does by default.
+  /// The Apache 2.0 NOTICE of Lightweight Charts requires attribution; if
+  /// you hide the logo, credit TradingView elsewhere in your app.
+  final bool attributionLogo;
   final Color textColor;
   final double fontSize;
   final String? fontFamily;
@@ -88,8 +105,12 @@ class LayoutOptions {
     double? fontSize,
     String? fontFamily,
     PaneOptions? panes,
+    Color? backgroundBottomColor,
+    bool? attributionLogo,
   }) {
     return LayoutOptions(
+      backgroundBottomColor: backgroundBottomColor ?? this.backgroundBottomColor,
+      attributionLogo: attributionLogo ?? this.attributionLogo,
       backgroundColor: backgroundColor ?? this.backgroundColor,
       textColor: textColor ?? this.textColor,
       fontSize: fontSize ?? this.fontSize,
@@ -177,21 +198,27 @@ class CrosshairOptions {
     this.vertLine = const CrosshairLineOptions(),
     this.horzLine = const CrosshairLineOptions(),
     this.mode = CrosshairMode.magnet,
+    this.doNotSnapToHiddenSeriesIndices = false,
   });
 
   final CrosshairLineOptions vertLine;
   final CrosshairLineOptions horzLine;
   final CrosshairMode mode;
 
+  /// Snap only to bars of visible series.
+  final bool doNotSnapToHiddenSeriesIndices;
+
   CrosshairOptions copyWith({
     CrosshairLineOptions? vertLine,
     CrosshairLineOptions? horzLine,
     CrosshairMode? mode,
+    bool? doNotSnapToHiddenSeriesIndices,
   }) {
     return CrosshairOptions(
       vertLine: vertLine ?? this.vertLine,
       horzLine: horzLine ?? this.horzLine,
       mode: mode ?? this.mode,
+      doNotSnapToHiddenSeriesIndices: doNotSnapToHiddenSeriesIndices ?? this.doNotSnapToHiddenSeriesIndices,
     );
   }
 }
@@ -217,6 +244,8 @@ class PriceScaleOptions {
     this.tickMarkDensity = 2.5,
     this.minimumWidth = 0,
     this.alignLabels = true,
+    this.ticksVisible = false,
+    this.ensureEdgeTickMarksVisible = false,
   });
 
   final bool autoScale;
@@ -235,6 +264,12 @@ class PriceScaleOptions {
   /// Push overlapping axis labels apart.
   final bool alignLabels;
 
+  /// Draw small ticks next to the labels.
+  final bool ticksVisible;
+
+  /// Always label the top and bottom of the scale (autoscale only).
+  final bool ensureEdgeTickMarksVisible;
+
   PriceScaleOptions copyWith({
     bool? autoScale,
     PriceScaleMode? mode,
@@ -247,6 +282,8 @@ class PriceScaleOptions {
     double? tickMarkDensity,
     double? minimumWidth,
     bool? alignLabels,
+    bool? ticksVisible,
+    bool? ensureEdgeTickMarksVisible,
   }) {
     return PriceScaleOptions(
       autoScale: autoScale ?? this.autoScale,
@@ -260,6 +297,8 @@ class PriceScaleOptions {
       tickMarkDensity: tickMarkDensity ?? this.tickMarkDensity,
       minimumWidth: minimumWidth ?? this.minimumWidth,
       alignLabels: alignLabels ?? this.alignLabels,
+      ticksVisible: ticksVisible ?? this.ticksVisible,
+      ensureEdgeTickMarksVisible: ensureEdgeTickMarksVisible ?? this.ensureEdgeTickMarksVisible,
     );
   }
 }
@@ -267,11 +306,13 @@ class PriceScaleOptions {
 class TimeScaleOptions {
   const TimeScaleOptions({
     this.rightOffset = 0,
+    this.rightOffsetPixels,
     this.barSpacing = 6,
     this.minBarSpacing = 0.5,
     this.maxBarSpacing = 0,
     this.fixLeftEdge = false,
     this.fixRightEdge = false,
+    this.lockVisibleTimeRangeOnResize = false,
     this.rightBarStaysOnScroll = false,
     this.visible = true,
     this.borderVisible = true,
@@ -279,40 +320,67 @@ class TimeScaleOptions {
     this.timeVisible = false,
     this.secondsVisible = true,
     this.shiftVisibleRangeOnNewBar = true,
+    this.allowShiftVisibleRangeOnWhitespaceReplacement = false,
+    this.ticksVisible = false,
     this.tickMarkMaxCharacterLength = 8,
+    this.uniformDistribution = false,
+    this.minimumHeight = 0,
+    this.allowBoldLabels = true,
+    this.ignoreWhitespaceIndices = false,
+    this.enableConflation = false,
+    this.conflationThresholdFactor = 1,
     this.tickMarkFormatter,
   });
 
   /// Margin from the last bar to the right edge, in bars.
   final double rightOffset;
-
+  /// Margin from the last bar to the right edge in pixels; overrides [rightOffset].
+  final double? rightOffsetPixels;
   /// Distance between bars in logical pixels.
   final double barSpacing;
   final double minBarSpacing;
-
   /// 0 means "half of the chart width".
   final double maxBarSpacing;
   final bool fixLeftEdge;
   final bool fixRightEdge;
+  /// Keep the visible range (not the bar spacing) when the chart is resized.
+  final bool lockVisibleTimeRangeOnResize;
   final bool rightBarStaysOnScroll;
   final bool visible;
   final bool borderVisible;
   final Color borderColor;
   final bool timeVisible;
   final bool secondsVisible;
-
   /// Keep following the last bar when a new one arrives (only while it is visible).
   final bool shiftVisibleRangeOnNewBar;
+  /// Also follow when a whitespace point at the end is replaced by data.
+  final bool allowShiftVisibleRangeOnWhitespaceReplacement;
+  /// Draw small ticks at the labels.
+  final bool ticksVisible;
   final int tickMarkMaxCharacterLength;
+  /// Only keep tick marks evenly spaced.
+  final bool uniformDistribution;
+  /// Minimum height of the time axis.
+  final double minimumHeight;
+  /// Draw the heaviest tick marks (e.g. a new day) in bold.
+  final bool allowBoldLabels;
+  /// The crosshair and tick marks skip whitespace points.
+  final bool ignoreWhitespaceIndices;
+  /// Merge bars that would be narrower than a device pixel, for speed with large data sets.
+  final bool enableConflation;
+  /// Values above 1 conflate earlier (smoother sparklines).
+  final double conflationThresholdFactor;
   final TickMarkFormatter? tickMarkFormatter;
 
   TimeScaleOptions copyWith({
     double? rightOffset,
+    double? rightOffsetPixels,
     double? barSpacing,
     double? minBarSpacing,
     double? maxBarSpacing,
     bool? fixLeftEdge,
     bool? fixRightEdge,
+    bool? lockVisibleTimeRangeOnResize,
     bool? rightBarStaysOnScroll,
     bool? visible,
     bool? borderVisible,
@@ -320,16 +388,26 @@ class TimeScaleOptions {
     bool? timeVisible,
     bool? secondsVisible,
     bool? shiftVisibleRangeOnNewBar,
+    bool? allowShiftVisibleRangeOnWhitespaceReplacement,
+    bool? ticksVisible,
     int? tickMarkMaxCharacterLength,
+    bool? uniformDistribution,
+    double? minimumHeight,
+    bool? allowBoldLabels,
+    bool? ignoreWhitespaceIndices,
+    bool? enableConflation,
+    double? conflationThresholdFactor,
     TickMarkFormatter? tickMarkFormatter,
   }) {
     return TimeScaleOptions(
       rightOffset: rightOffset ?? this.rightOffset,
+      rightOffsetPixels: rightOffsetPixels ?? this.rightOffsetPixels,
       barSpacing: barSpacing ?? this.barSpacing,
       minBarSpacing: minBarSpacing ?? this.minBarSpacing,
       maxBarSpacing: maxBarSpacing ?? this.maxBarSpacing,
       fixLeftEdge: fixLeftEdge ?? this.fixLeftEdge,
       fixRightEdge: fixRightEdge ?? this.fixRightEdge,
+      lockVisibleTimeRangeOnResize: lockVisibleTimeRangeOnResize ?? this.lockVisibleTimeRangeOnResize,
       rightBarStaysOnScroll: rightBarStaysOnScroll ?? this.rightBarStaysOnScroll,
       visible: visible ?? this.visible,
       borderVisible: borderVisible ?? this.borderVisible,
@@ -337,45 +415,133 @@ class TimeScaleOptions {
       timeVisible: timeVisible ?? this.timeVisible,
       secondsVisible: secondsVisible ?? this.secondsVisible,
       shiftVisibleRangeOnNewBar: shiftVisibleRangeOnNewBar ?? this.shiftVisibleRangeOnNewBar,
+      allowShiftVisibleRangeOnWhitespaceReplacement: allowShiftVisibleRangeOnWhitespaceReplacement ?? this.allowShiftVisibleRangeOnWhitespaceReplacement,
+      ticksVisible: ticksVisible ?? this.ticksVisible,
       tickMarkMaxCharacterLength: tickMarkMaxCharacterLength ?? this.tickMarkMaxCharacterLength,
+      uniformDistribution: uniformDistribution ?? this.uniformDistribution,
+      minimumHeight: minimumHeight ?? this.minimumHeight,
+      allowBoldLabels: allowBoldLabels ?? this.allowBoldLabels,
+      ignoreWhitespaceIndices: ignoreWhitespaceIndices ?? this.ignoreWhitespaceIndices,
+      enableConflation: enableConflation ?? this.enableConflation,
+      conflationThresholdFactor: conflationThresholdFactor ?? this.conflationThresholdFactor,
       tickMarkFormatter: tickMarkFormatter ?? this.tickMarkFormatter,
     );
   }
 }
 
 class LocalizationOptions {
-  const LocalizationOptions({this.timeFormatter, this.priceFormatter});
+  const LocalizationOptions({
+    this.locale = 'en-US',
+    this.dateFormat = "dd MMM 'yy",
+    this.shortMonthNames = englishShortMonthNames,
+    this.longMonthNames = englishLongMonthNames,
+    this.timeFormatter,
+    this.priceFormatter,
+    this.tickmarksPriceFormatter,
+    this.percentageFormatter,
+    this.tickmarksPercentageFormatter,
+  });
+
+  /// Passed to [TimeScaleOptions.tickMarkFormatter].
+  final String locale;
+
+  /// Date part of the crosshair time label: `yyyy`, `yy`, `MMMM`, `MMM`,
+  /// `MM` and `dd` are replaced.
+  final String dateFormat;
+
+  /// Month names used by `MMM` and month tick marks. Dart has no built-in
+  /// locale data, so pass translated names for other locales.
+  final List<String> shortMonthNames;
+
+  /// Month names used by `MMMM`.
+  final List<String> longMonthNames;
 
   /// Formats the time in the crosshair label.
   final TimeFormatter? timeFormatter;
 
   /// Overrides every series' price formatter.
   final PriceFormatterFn? priceFormatter;
+
+  /// Formats the price axis tick marks (normal and log modes).
+  final TickmarksPriceFormatterFn? tickmarksPriceFormatter;
+
+  /// Formats percentages (percentage mode).
+  final PriceFormatterFn? percentageFormatter;
+
+  /// Formats the price axis tick marks in percentage mode.
+  final TickmarksPriceFormatterFn? tickmarksPercentageFormatter;
 }
 
-class InteractionOptions {
-  const InteractionOptions({
-    this.handleScroll = true,
-    this.handleScale = true,
-    this.kineticScroll = true,
-    this.axisDragScale = true,
-    this.axisDoubleTapReset = true,
+/// Scrolling, like upstream's `HandleScrollOptions`.
+class HandleScrollOptions {
+  const HandleScrollOptions({
+    this.mouseWheel = true,
+    this.pressedMouseMove = true,
+    this.horzTouchDrag = true,
+    this.vertTouchDrag = true,
   });
 
-  /// Drag the pane to scroll the time scale.
-  final bool handleScroll;
+  /// Shift + wheel / horizontal wheel scrolls the time scale.
+  final bool mouseWheel;
 
-  /// Pinch to zoom the time scale.
-  final bool handleScale;
+  /// Dragging with the mouse scrolls.
+  final bool pressedMouseMove;
 
-  /// Keep scrolling after a fling.
-  final bool kineticScroll;
+  /// Horizontal touch drags scroll the time scale.
+  final bool horzTouchDrag;
 
-  /// Drag the price/time axis to scale it.
-  final bool axisDragScale;
+  /// Vertical touch drags scroll a manual price scale. Turn off to leave
+  /// vertical drags to an enclosing scroll view.
+  final bool vertTouchDrag;
+}
 
-  /// Double-tap an axis to reset it.
-  final bool axisDoubleTapReset;
+class AxisInteractionOptions {
+  const AxisInteractionOptions({this.time = true, this.price = true});
+
+  final bool time;
+  final bool price;
+}
+
+/// Scaling, like upstream's `HandleScaleOptions`.
+class HandleScaleOptions {
+  const HandleScaleOptions({
+    this.mouseWheel = true,
+    this.pinch = true,
+    this.axisPressedMouseMove = const AxisInteractionOptions(),
+    this.axisDoubleClickReset = const AxisInteractionOptions(),
+  });
+
+  final bool mouseWheel;
+  final bool pinch;
+
+  /// Dragging an axis scales it.
+  final AxisInteractionOptions axisPressedMouseMove;
+
+  /// Double-tapping an axis resets it.
+  final AxisInteractionOptions axisDoubleClickReset;
+}
+
+/// Inertia after a fling.
+class KineticScrollOptions {
+  const KineticScrollOptions({this.touch = true, this.mouse = false});
+
+  final bool touch;
+  final bool mouse;
+}
+
+enum TrackingModeExitMode {
+  /// The crosshair hides when the finger lifts.
+  onTouchEnd,
+
+  /// The crosshair stays until the next tap.
+  onNextTap,
+}
+
+/// Touch crosshair behaviour after a long press.
+class TrackingModeOptions {
+  const TrackingModeOptions({this.exitMode = TrackingModeExitMode.onNextTap});
+
+  final TrackingModeExitMode exitMode;
 }
 
 class ChartOptions {
@@ -385,9 +551,13 @@ class ChartOptions {
     this.crosshair = const CrosshairOptions(),
     this.rightPriceScale = const PriceScaleOptions(),
     this.leftPriceScale = const PriceScaleOptions(visible: false),
+    this.overlayPriceScales = const PriceScaleOptions(visible: false),
     this.timeScale = const TimeScaleOptions(),
     this.localization = const LocalizationOptions(),
-    this.interaction = const InteractionOptions(),
+    this.handleScroll = const HandleScrollOptions(),
+    this.handleScale = const HandleScaleOptions(),
+    this.kineticScroll = const KineticScrollOptions(),
+    this.trackingMode = const TrackingModeOptions(),
   });
 
   final LayoutOptions layout;
@@ -395,9 +565,16 @@ class ChartOptions {
   final CrosshairOptions crosshair;
   final PriceScaleOptions rightPriceScale;
   final PriceScaleOptions leftPriceScale;
+
+  /// Defaults of overlay price scales (any `priceScaleId` other than
+  /// `left`/`right`).
+  final PriceScaleOptions overlayPriceScales;
   final TimeScaleOptions timeScale;
   final LocalizationOptions localization;
-  final InteractionOptions interaction;
+  final HandleScrollOptions handleScroll;
+  final HandleScaleOptions handleScale;
+  final KineticScrollOptions kineticScroll;
+  final TrackingModeOptions trackingMode;
 
   ChartOptions copyWith({
     LayoutOptions? layout,
@@ -405,9 +582,13 @@ class ChartOptions {
     CrosshairOptions? crosshair,
     PriceScaleOptions? rightPriceScale,
     PriceScaleOptions? leftPriceScale,
+    PriceScaleOptions? overlayPriceScales,
     TimeScaleOptions? timeScale,
     LocalizationOptions? localization,
-    InteractionOptions? interaction,
+    HandleScrollOptions? handleScroll,
+    HandleScaleOptions? handleScale,
+    KineticScrollOptions? kineticScroll,
+    TrackingModeOptions? trackingMode,
   }) {
     return ChartOptions(
       layout: layout ?? this.layout,
@@ -415,9 +596,13 @@ class ChartOptions {
       crosshair: crosshair ?? this.crosshair,
       rightPriceScale: rightPriceScale ?? this.rightPriceScale,
       leftPriceScale: leftPriceScale ?? this.leftPriceScale,
+      overlayPriceScales: overlayPriceScales ?? this.overlayPriceScales,
       timeScale: timeScale ?? this.timeScale,
       localization: localization ?? this.localization,
-      interaction: interaction ?? this.interaction,
+      handleScroll: handleScroll ?? this.handleScroll,
+      handleScale: handleScale ?? this.handleScale,
+      kineticScroll: kineticScroll ?? this.kineticScroll,
+      trackingMode: trackingMode ?? this.trackingMode,
     );
   }
 }

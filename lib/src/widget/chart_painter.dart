@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/animation.dart' show Curves;
 import 'package:flutter/rendering.dart';
@@ -6,11 +7,11 @@ import 'package:flutter/rendering.dart';
 import '../model/chart_model.dart';
 import '../model/pane.dart';
 import '../model/series.dart';
-import '../model/time_utils.dart';
 import '../options.dart';
 import '../plugins/primitive.dart';
 import '../renderers/draw_utils.dart';
 import '../renderers/paint_context.dart';
+import 'attribution_logo.dart';
 
 /// Caches laid-out text. Labels repeat a lot between frames.
 class TextCache {
@@ -81,7 +82,14 @@ class ChartPainter extends CustomPainter {
     if (size.isEmpty) return;
     model.layout(size, pixelRatio, (t) => _text(t).width);
 
-    canvas.drawRect(Offset.zero & size, Paint()..color = _o.layout.backgroundColor);
+    final bottomColor = _o.layout.backgroundBottomColor;
+    canvas.drawRect(
+      Offset.zero & size,
+      bottomColor == null
+          ? (Paint()..color = _o.layout.backgroundColor)
+          : (Paint()
+            ..shader = ui.Gradient.linear(Offset.zero, Offset(0, size.height), [_o.layout.backgroundColor, bottomColor])),
+    );
 
     for (var i = 0; i < model.panes.length; i++) {
       final pane = model.panes[i];
@@ -95,6 +103,11 @@ class ChartPainter extends CustomPainter {
       if (model.leftAxisWidth > 0) _paintPriceAxis(canvas, i, pane, AxisSide.left);
       if (model.rightAxisWidth > 0) _paintPriceAxis(canvas, i, pane, AxisSide.right);
       if (i < model.panes.length - 1) _paintSeparator(canvas, i, pane, size.width);
+    }
+
+    if (_o.layout.attributionLogo && model.panes.isNotEmpty) {
+      final logo = attributionLogoRect(model.paneRect(model.panes.length - 1));
+      if (logo.top >= 0) paintAttributionLogo(canvas, logo.topLeft, darkBackground: isDarkTheme(_o.layout.textColor));
     }
 
     if (model.timeAxisHeight > 0) _paintTimeAxis(canvas, size);
@@ -174,7 +187,7 @@ class ChartPainter extends CustomPainter {
 
     if (grid.vertLines.visible) {
       paint.color = grid.vertLines.color;
-      for (final mark in model.timeScale.marks(_o.layout.fontSize, model.timeScale.formatTickMark)) {
+      for (final mark in model.timeScale.marks(_o.layout.fontSize, model.formatTickMark)) {
         final x = (mark.coord * pr).roundToDouble();
         drawVerticalLine(canvas, paint, x, 0, paneSize.height * pr, lineWidth, grid.vertLines.style);
       }
@@ -360,9 +373,15 @@ class ChartPainter extends CustomPainter {
 
     double textX(TextPainter t) => isLeft ? left + width - 1 - tickLength - padding - t.width : left + 1 + tickLength + padding;
 
+    final tickPaint = Paint()..color = ps.options.borderColor;
+    final tickWidth = math.max(1, pr.floor()) / pr;
     for (final mark in ps.marks()) {
       final t = _text(mark.label);
       t.paint(canvas, Offset(textX(t), mark.coord - t.height / 2));
+      if (ps.options.ticksVisible) {
+        final x = isLeft ? left + width - 1 - tickLength : left + 1;
+        canvas.drawRect(Rect.fromLTWH(x, mark.coord - tickWidth / 2, tickLength, tickWidth), tickPaint);
+      }
     }
 
     for (final label in _alignedLabels(pane, side)) {
@@ -434,18 +453,21 @@ class ChartPainter extends CustomPainter {
 
     canvas.save();
     canvas.clipRect(Rect.fromLTWH(paneLeft, top, paneWidth, height));
-    final marks = ts.marks(f, ts.formatTickMark);
+    final marks = ts.marks(f, model.formatTickMark);
     if (marks.isNotEmpty) {
-      // The heaviest visible weight is drawn bold (capped at month), like upstream.
-      var maxWeight = marks.map((m) => m.weight).reduce(math.max);
-      if (maxWeight > TickMarkWeight.day) maxWeight = TickMarkWeight.month;
-
+      final maxWeight = model.behavior.maxTickMarkWeight(marks.map((m) => m.weight));
+      final bold = ts.options.allowBoldLabels;
       final labelY = top + 1 + 5 + 3 * f / 12;
+      final tickPaint = Paint()..color = ts.options.borderColor;
+      final tickWidth = math.max(1, pr.floor()) / pr;
       for (final mark in marks) {
         if (mark.coord < -50 || mark.coord > paneWidth + 50) continue;
-        final t = _text(mark.label, weight: mark.weight >= maxWeight ? FontWeight.bold : FontWeight.normal);
+        final t = _text(mark.label, weight: bold && mark.weight >= maxWeight ? FontWeight.bold : FontWeight.normal);
         final x = (mark.coord - t.width / 2).clamp(0.0, math.max(0.0, paneWidth - t.width)).toDouble();
         t.paint(canvas, Offset(paneLeft + x, labelY));
+        if (ts.options.ticksVisible) {
+          canvas.drawRect(Rect.fromLTWH(paneLeft + mark.coord - tickWidth / 2, top + 1, tickWidth, 5), tickPaint);
+        }
       }
     }
 

@@ -3,7 +3,6 @@ import 'dart:math' as math;
 
 import '../options.dart';
 import 'tick_marks.dart';
-import 'time_utils.dart';
 
 const int _minVisibleBarsCount = 2;
 const int _defaultTickMarkMaxCharacterLength = 8;
@@ -46,14 +45,18 @@ class TimeMark {
 class TimeScale {
   TimeScale(this._options)
       : _barSpacing = _options.barSpacing,
-        _rightOffset = _options.rightOffset;
+        _rightOffset = _options.rightOffsetPixels != null
+            ? _options.rightOffsetPixels! / _options.barSpacing
+            : _options.rightOffset {
+    _tickMarks.setUniformDistribution(_options.uniformDistribution);
+  }
 
   TimeScaleOptions _options;
   double _width = 0;
   int? _baseIndex;
   double _rightOffset;
   double _barSpacing;
-  List<int> _times = const [];
+  List<num> _times = const [];
   List<int> _weights = const [];
 
   double? _scrollStartX;
@@ -64,19 +67,55 @@ class TimeScale {
   List<TimeMark>? _marksCache;
   double _marksFontSize = 0;
 
+  /// Indices where at least one series has data (not only whitespace),
+  /// used by `ignoreWhitespaceIndices`.
+  Set<int> _indicesWithData = const {};
+  int _indicesWithDataId = 0;
+
   TimeScaleOptions get options => _options;
 
   void applyOptions(TimeScaleOptions options) {
     final old = _options;
     _options = options;
+    _tickMarks.setUniformDistribution(options.uniformDistribution);
+    if (options.fixLeftEdge) _doFixLeftEdge();
+    if (options.fixRightEdge) _doFixRightEdge();
+    // Bar spacing first: the right offset depends on it.
     if (old.barSpacing != options.barSpacing) _setBarSpacing(options.barSpacing);
     if (old.rightOffset != options.rightOffset) _rightOffset = options.rightOffset;
+    if (options.rightOffsetPixels != null && options.rightOffsetPixels != old.rightOffsetPixels) {
+      _rightOffset = options.rightOffsetPixels! / _barSpacing;
+    }
     _correctBarSpacing();
     _correctOffset();
     _invalidateMarks();
   }
 
-  List<int> get times => _times;
+  void setIndicesWithData(Set<int> indices) {
+    _indicesWithData = indices;
+    _indicesWithDataId++;
+    _invalidateMarks();
+  }
+
+  bool _shouldConsiderIndex(int index) => !_options.ignoreWhitespaceIndices || _indicesWithData.contains(index);
+
+  /// Nearest index with data, searching outwards from [x] like upstream's
+  /// `testNearestIntegers`.
+  int _findNearestIndexWithData(double x) {
+    final rounded = x.round();
+    final roundedDown = rounded < x;
+    final maxIndex = _times.length - 1;
+    for (var offset = 1; offset <= _times.length + 1; offset++) {
+      final first = roundedDown ? rounded + offset : rounded - offset;
+      final second = roundedDown ? rounded - offset : rounded + offset;
+      if (_indicesWithData.contains(first)) return first;
+      if (_indicesWithData.contains(second)) return second;
+      if ((first < 0 || first > maxIndex) && (second < 0 || second > maxIndex)) break;
+    }
+    return x.ceil();
+  }
+
+  List<num> get times => _times;
 
   int get pointsCount => _times.length;
 
@@ -90,11 +129,11 @@ class TimeScale {
 
   int get baseIndex => _baseIndex ?? 0;
 
-  int? indexToTime(int index) => (index >= 0 && index < _times.length) ? _times[index] : null;
+  num? indexToTime(int index) => (index >= 0 && index < _times.length) ? _times[index] : null;
 
   /// Index of [time], or the nearest index to the left if [findNearest] and
   /// [time] isn't present.
-  int? timeToIndex(int time, {bool findNearest = false}) {
+  int? timeToIndex(num time, {bool findNearest = false}) {
     var lo = 0;
     var hi = _times.length;
     while (lo < hi) {
@@ -112,13 +151,27 @@ class TimeScale {
 
   void setWidth(double newWidth) {
     if (!newWidth.isFinite || newWidth <= 0 || _width == newWidth) return;
+    // Use the range before the resize to keep the left edge fixed.
+    final previousVisibleRange = visibleLogicalRange();
+    final oldWidth = _width;
     _width = newWidth;
+
+    if (_options.lockVisibleTimeRangeOnResize && oldWidth != 0) {
+      _barSpacing = _barSpacing * newWidth / oldWidth;
+    }
+    // When scrolled to the left edge with fixLeftEdge, keep the left edge
+    // instead of the right one to avoid shaking.
+    if (_options.fixLeftEdge && previousVisibleRange != null && previousVisibleRange.from <= 0) {
+      final delta = oldWidth - newWidth;
+      _rightOffset -= (delta / _barSpacing).round() + 1;
+    }
+    // Bar spacing first: the right offset depends on it.
     _correctBarSpacing();
     _correctOffset();
     _invalidateMarks();
   }
 
-  void update(List<int> times, List<int> weights, int firstChangedPointIndex) {
+  void update(List<num> times, List<int> weights, int firstChangedPointIndex) {
     _times = times;
     _weights = weights;
     _tickMarks.setTimeScalePoints(times, weights, firstChangedPointIndex);
@@ -147,7 +200,24 @@ class TimeScale {
     return (index * 1000000).round() / 1000000;
   }
 
-  int coordinateToIndex(double x) => coordinateToFloatIndex(x).ceil();
+  /// Bar index at [x]. With [considerIgnoreWhitespace] and
+  /// `ignoreWhitespaceIndices`, snaps to the nearest index with data.
+  int coordinateToIndex(double x, {bool considerIgnoreWhitespace = false}) {
+    final floatIndex = coordinateToFloatIndex(x);
+    final index = floatIndex.ceil();
+    if (!considerIgnoreWhitespace || _shouldConsiderIndex(index)) return index;
+    return _findNearestIndexWithData(floatIndex);
+  }
+
+  /// Bars merged into one when drawing, a power of two (1 = none). Port of
+  /// upstream's DPR-aware `_updateConflationFactor`.
+  int conflationFactor(double pixelRatio) {
+    if (!_options.enableConflation) return 1;
+    final threshold = (1.0 / pixelRatio) * _options.conflationThresholdFactor;
+    if (_barSpacing >= threshold) return 1;
+    final level = math.pow(2, (math.log(threshold / _barSpacing) / math.ln2).floor()).toInt();
+    return math.min(level, 512);
+  }
 
   LogicalRange? visibleLogicalRange() {
     if (isEmpty) return null;
@@ -171,7 +241,10 @@ class TimeScale {
   }
 
   void setBarSpacing(double newBarSpacing) {
+    final old = _barSpacing;
     _setBarSpacing(newBarSpacing);
+    // In pixel mode, zooming keeps the pixel offset.
+    if (_options.rightOffsetPixels != null && old != 0) _rightOffset = _rightOffset * old / _barSpacing;
     _correctOffset();
   }
 
@@ -240,6 +313,11 @@ class TimeScale {
     _correctBarSpacing();
   }
 
+  void _doFixRightEdge() {
+    _correctOffset();
+    _correctBarSpacing();
+  }
+
   /// Zooms by [scale] steps around [zoomPoint] (mouse-wheel style; >0 zooms in).
   void zoom(double zoomPoint, double scale) {
     final floatIndexAtZoomPoint = coordinateToFloatIndex(zoomPoint);
@@ -305,20 +383,29 @@ class TimeScale {
   bool get isScrolling => _scrollStartX != null;
 
   void restoreDefault() {
-    _setBarSpacing(_options.barSpacing);
-    setRightOffset(_options.rightOffset);
+    setBarSpacing(_options.barSpacing);
+    final pixels = _options.rightOffsetPixels;
+    setRightOffset(pixels != null ? pixels / _barSpacing : _options.rightOffset);
   }
 
   void fitContent() {
     if (_times.isEmpty) return;
-    setLogicalRange(LogicalRange(0, _times.length - 1 + _options.rightOffset));
+    // Without rightOffsetPixels, include rightOffset so bar spacing leaves room for it.
+    final rightOffsetBars = _options.rightOffsetPixels == null ? _options.rightOffset : 0.0;
+    _setVisibleRange(LogicalRange(0, _times.length - 1 + rightOffsetBars), applyDefaultOffset: true);
   }
 
-  void setLogicalRange(LogicalRange range) {
+  void setLogicalRange(LogicalRange range) => _setVisibleRange(range);
+
+  void _setVisibleRange(LogicalRange range, {bool applyDefaultOffset = false}) {
     if (_width == 0) return;
     final length = range.to - range.from + 1;
-    _setBarSpacing(_width / length);
+    final pixelOffset = applyDefaultOffset ? (_options.rightOffsetPixels ?? 0) : 0.0;
+    _setBarSpacing((_width - pixelOffset) / length);
     _rightOffset = range.to - baseIndex;
+    if (applyDefaultOffset) {
+      _rightOffset = pixelOffset != 0 ? pixelOffset / _barSpacing : _options.rightOffset;
+    }
     _correctOffset();
     _invalidateMarks();
   }
@@ -341,7 +428,13 @@ class TimeScale {
     final firstBar = math.max(visibleBars.left, visibleBars.left - indexPerLabel);
     final lastBar = math.max(visibleBars.right, visibleBars.right - indexPerLabel);
 
-    final items = _tickMarks.build(spacing, maxLabelWidth);
+    final items = _tickMarks.build(
+      spacing,
+      maxLabelWidth,
+      checkIndicesForData: _options.ignoreWhitespaceIndices,
+      indicesWithData: _indicesWithData,
+      indicesWithDataId: _indicesWithDataId,
+    );
     final result = <TimeMark>[];
     for (final tm in items) {
       if (tm.index < firstBar || tm.index > lastBar) continue;
@@ -351,11 +444,6 @@ class TimeScale {
     _marksCache = result;
     _marksFontSize = fontSize;
     return result;
-  }
-
-  String formatTickMark(TickMark mark) {
-    final type = weightToTickMarkType(mark.weight, _options.timeVisible, _options.secondsVisible);
-    return _options.tickMarkFormatter?.call(mark.time, type) ?? defaultTickMarkFormatter(mark.time, type);
   }
 
   /// Weights of points, exposed for tests.

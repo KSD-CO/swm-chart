@@ -44,10 +44,10 @@ void main() {
     final s = chart.addCandlestickSeries();
     s.setData(_bars(3));
     s.update(CandlestickData(time: _t0 + 2 * _day, open: 1, high: 1, low: 1, close: 1));
-    expect(s.data().length, 3);
-    expect(s.data().last.close, 1);
+    expect(s.data().cast<CandlestickData>().length, 3);
+    expect(s.data().cast<CandlestickData>().last.close, 1);
     s.update(CandlestickData(time: _t0 + 3 * _day, open: 1, high: 1, low: 1, close: 1));
-    expect(s.data().length, 4);
+    expect(s.data().cast<CandlestickData>().length, 4);
     expect(chart.model.timeScale.pointsCount, 4);
     expect(() => s.update(CandlestickData(time: _t0, open: 1, high: 1, low: 1, close: 1)), throwsArgumentError);
   });
@@ -80,7 +80,7 @@ void main() {
     layout();
     chart.timeScale().scrollToPosition(-20);
     final firstVisibleTime = chart.timeScale().getVisibleRange()!.from;
-    s.setData([..._bars(100), ...s.data()]);
+    s.setData([..._bars(100), ...s.data().cast<CandlestickData>()]);
     layout();
     expect(chart.timeScale().getVisibleRange()!.from, firstVisibleTime);
   });
@@ -92,7 +92,7 @@ void main() {
     final paneHeight = chart.model.panes.first.height;
     final range = chart.priceScale().getVisibleRange()!;
     final visible = chart.model.timeScale.visibleStrictRange()!;
-    final shown = s.data().where((d) {
+    final shown = s.data().cast<CandlestickData>().where((d) {
       final i = chart.model.timeScale.timeToIndex(d.time)!;
       return visible.contains(i);
     });
@@ -118,7 +118,7 @@ void main() {
     final s = chart.addCandlestickSeries();
     s.setData(_bars(50));
     layout();
-    final last = s.data().last;
+    final last = s.data().cast<CandlestickData>().last;
     final x = chart.timeScale().timeToCoordinate(last.time)!;
     ChartEventParams? event;
     chart.subscribeCrosshairMove((p) => event = p);

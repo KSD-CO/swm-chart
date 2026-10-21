@@ -16,6 +16,16 @@ import 'price_line.dart';
 import 'price_scale.dart';
 import 'time_scale.dart';
 
+enum SeriesUpdateKind {
+  /// The last value was replaced by another value.
+  replaced,
+
+  /// The last item switched between value and whitespace.
+  replacedKind,
+  appended,
+  appendedWhitespace,
+}
+
 /// Internal model of a series. The public API is `SeriesApi`.
 abstract class SeriesModel<T extends SeriesData, O extends SeriesOptions> {
   SeriesModel(this._options) : formatter = PriceFormatter(_options.priceFormat);
@@ -24,10 +34,17 @@ abstract class SeriesModel<T extends SeriesData, O extends SeriesOptions> {
   PriceFormatter formatter;
   late PriceScale priceScale;
 
+  /// Items as given, including whitespace.
+  List<SeriesData> _all = <SeriesData>[];
+
+  /// Items with values.
   List<T> _data = <T>[];
 
   /// Time scale index of every item in [_data].
   List<int> _indices = const [];
+
+  /// Bumped on every data change; used by caches (conflation).
+  int dataVersion = 0;
 
   final List<PriceLine> priceLines = [];
   final List<ChartPrimitive> primitives = [];
@@ -45,40 +62,76 @@ abstract class SeriesModel<T extends SeriesData, O extends SeriesOptions> {
     formatter = PriceFormatter(value.priceFormat);
   }
 
+  /// Items with values.
   List<T> get data => _data;
+
+  /// Items as given, including whitespace.
+  List<SeriesData> get allItems => _all;
+
+  /// Whether [item] has no value. Custom series can treat their own items
+  /// as whitespace.
+  bool isWhitespace(SeriesData item) => item is WhitespaceData || item is! T;
+
+  T? _valueItem(SeriesData item) => isWhitespace(item) ? null : item as T;
+
+  static void _checkType<T>(SeriesData item) {
+    if (item is! T && item is! WhitespaceData) {
+      throw ArgumentError('Expected $T or WhitespaceData, got ${item.runtimeType}');
+    }
+  }
 
   List<int> get indices => _indices;
 
   bool get visible => _options.visible;
 
-  /// Replaces all data. Items must be sorted by strictly ascending time.
-  void setData(List<T> data) {
-    for (var i = 1; i < data.length; i++) {
-      if (data[i].time <= data[i - 1].time) {
+  /// Replaces all data. Items (values of type [T] or [WhitespaceData]) must
+  /// be sorted by strictly ascending time.
+  void setData(List<SeriesData> data) {
+    for (var i = 0; i < data.length; i++) {
+      _checkType<T>(data[i]);
+      if (i > 0 && data[i].time <= data[i - 1].time) {
         throw ArgumentError(
           'Data must be sorted by strictly ascending time: '
           'index $i (time ${data[i].time}) <= index ${i - 1} (time ${data[i - 1].time})',
         );
       }
     }
-    _data = List<T>.of(data);
+    _all = List<SeriesData>.of(data);
+    _data = [for (final d in data) ?_valueItem(d)];
+    dataVersion++;
   }
 
   /// Replaces the last item when [item] has the same time, appends it when
-  /// newer. Returns `true` if it was appended.
-  bool update(T item) {
-    if (_data.isNotEmpty) {
-      final last = _data.last;
+  /// newer.
+  SeriesUpdateKind update(SeriesData item) {
+    _checkType<T>(item);
+    dataVersion++;
+    if (_all.isNotEmpty) {
+      final last = _all.last;
       if (item.time < last.time) {
         throw ArgumentError('Cannot update oldest data, last time=${last.time}, new time=${item.time}');
       }
       if (item.time == last.time) {
-        _data[_data.length - 1] = item;
-        return false;
+        _all[_all.length - 1] = item;
+        final wasValue = !isWhitespace(last);
+        final value = _valueItem(item);
+        if (wasValue && value != null) {
+          _data[_data.length - 1] = value;
+          return SeriesUpdateKind.replaced;
+        }
+        if (wasValue) {
+          _data.removeLast();
+          _indices = _indices.sublist(0, _indices.length - 1);
+        } else if (value != null) {
+          _data.add(value);
+        }
+        return SeriesUpdateKind.replacedKind;
       }
     }
-    _data.add(item);
-    return true;
+    _all.add(item);
+    final value = _valueItem(item);
+    if (value != null) _data.add(value);
+    return value != null ? SeriesUpdateKind.appended : SeriesUpdateKind.appendedWhitespace;
   }
 
   void setIndices(List<int> indices) => _indices = indices;

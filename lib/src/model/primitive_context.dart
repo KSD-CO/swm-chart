@@ -44,7 +44,7 @@ class PrimitiveContextImpl implements PrimitivePaintContext {
   Color get backgroundColor => model.options.layout.backgroundColor;
 
   @override
-  double? timeToCoordinate(int time) {
+  double? timeToCoordinate(num time) {
     final index = model.timeScale.timeToIndex(time);
     return index == null ? null : model.timeScale.indexToCoordinate(index);
   }
@@ -53,7 +53,7 @@ class PrimitiveContextImpl implements PrimitivePaintContext {
   double logicalToCoordinate(double logical) => model.timeScale.indexToCoordinate(logical);
 
   @override
-  int? timeToIndex(int time) => model.timeScale.timeToIndex(time);
+  int? timeToIndex(num time) => model.timeScale.timeToIndex(time);
 
   @override
   double? priceToCoordinate(double price) {

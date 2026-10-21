@@ -27,7 +27,7 @@ class FakeFeed {
   final int interval; // seconds per bar
   final math.Random _random = math.Random(42);
 
-  CandlestickData nextBar(int time, double prevClose) {
+  CandlestickData nextBar(num time, double prevClose) {
     final open = prevClose;
     final close = math.max(1.0, open + (_random.nextDouble() - 0.5) * open * 0.01);
     final high = math.max(open, close) + _random.nextDouble() * open * 0.003;
@@ -36,7 +36,7 @@ class FakeFeed {
   }
 
   /// [count] bars ending right before [endTime], walking backwards from [endOpen].
-  List<CandlestickData> history(int endTime, double endOpen, int count) {
+  List<CandlestickData> history(num endTime, double endOpen, int count) {
     final bars = <CandlestickData>[];
     var close = endOpen;
     for (var i = 1; i <= count; i++) {
@@ -123,7 +123,7 @@ class _TradingScreenState extends State<TradingScreen> {
   PriceScaleMode _mode = PriceScaleMode.normal;
   bool? _dark;
 
-  int? _hoveredTime;
+  num? _hoveredTime;
 
   @override
   void initState() {
@@ -433,7 +433,7 @@ class _TradingScreenState extends State<TradingScreen> {
     final index = _hoveredTime == null ? _bars.length - 1 : _bars.indexWhere((b) => b.time == _hoveredTime);
     final bar = _bars[index < 0 ? _bars.length - 1 : index];
     final vol = _volumes[index < 0 ? _volumes.length - 1 : index];
-    final rsiValue = _rsi.data().where((d) => d.time == bar.time).firstOrNull?.value;
+    final rsiValue = _rsi.data().whereType<LineData>().where((d) => d.time == bar.time).firstOrNull?.value;
     final color = bar.isUp ? _up : _down;
     final dark = _dark ?? false;
 

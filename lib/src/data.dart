@@ -1,14 +1,27 @@
 import 'dart:ui' show Color;
 
-/// Base class of every data item. [time] is a UTC timestamp in **seconds**.
+/// Base class of every data item.
 ///
-/// Like Lightweight Charts, labels are rendered from the UTC components of
-/// [time]; to show exchange-local time, shift the timestamps before passing
-/// them in.
+/// [time] is the horizontal value: a UTC timestamp in **seconds** on a time
+/// chart, a duration in months on a yield curve chart, a strike price on an
+/// options chart.
+///
+/// Like Lightweight Charts, time labels are rendered from the UTC
+/// components of [time]; to show exchange-local time, shift the timestamps
+/// before passing them in.
 abstract class SeriesData {
   const SeriesData({required this.time});
 
-  final int time;
+  final num time;
+}
+
+/// A point in time without a value: it extends the time scale but draws
+/// nothing (e.g. a session gap). Accepted by every series.
+class WhitespaceData extends SeriesData {
+  const WhitespaceData({required super.time});
+
+  @override
+  String toString() => 'WhitespaceData(time: $time)';
 }
 
 /// Open/high/low/close data.

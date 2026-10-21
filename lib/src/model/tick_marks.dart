@@ -3,16 +3,25 @@ class TickMark {
   const TickMark(this.index, this.time, this.weight);
 
   final int index;
-  final int time;
+  final num time;
   final int weight;
 }
 
 class TickMarks {
   final Map<int, List<TickMark>> _marksByWeight = {};
   int? _cacheMaxIndexesPerMark;
+  int? _cacheIndicesWithDataId;
+  bool? _cacheCheckIndices;
   List<TickMark>? _cache;
+  bool _uniformDistribution = false;
 
-  void setTimeScalePoints(List<int> times, List<int> weights, int firstChangedPointIndex) {
+  void setUniformDistribution(bool value) {
+    if (value == _uniformDistribution) return;
+    _uniformDistribution = value;
+    _cache = null;
+  }
+
+  void setTimeScalePoints(List<num> times, List<int> weights, int firstChangedPointIndex) {
     _removeMarksSinceIndex(firstChangedPointIndex);
     _cache = null;
 
@@ -21,11 +30,24 @@ class TickMarks {
     }
   }
 
-  List<TickMark> build(double spacing, double maxWidth) {
+  /// With [checkIndicesForData], marks at indices missing from
+  /// [indicesWithData] (whitespace) are skipped.
+  List<TickMark> build(
+    double spacing,
+    double maxWidth, {
+    bool checkIndicesForData = false,
+    Set<int> indicesWithData = const {},
+    int indicesWithDataId = 0,
+  }) {
     final maxIndexesPerMark = (maxWidth / spacing).ceil();
-    if (_cache == null || _cacheMaxIndexesPerMark != maxIndexesPerMark) {
-      _cache = _buildMarksImpl(maxIndexesPerMark);
+    if (_cache == null ||
+        _cacheMaxIndexesPerMark != maxIndexesPerMark ||
+        _cacheCheckIndices != checkIndicesForData ||
+        _cacheIndicesWithDataId != indicesWithDataId) {
+      _cache = _buildMarksImpl(maxIndexesPerMark, checkIndicesForData ? indicesWithData : null);
       _cacheMaxIndexesPerMark = maxIndexesPerMark;
+      _cacheCheckIndices = checkIndicesForData;
+      _cacheIndicesWithDataId = indicesWithDataId;
     }
     return _cache!;
   }
@@ -63,7 +85,8 @@ class TickMarks {
 
   /// Greedy selection from the heaviest weight down: a mark is kept if it is
   /// at least [maxIndexesPerMark] bars away from its already-kept neighbours.
-  List<TickMark> _buildMarksImpl(int maxIndexesPerMark) {
+  List<TickMark> _buildMarksImpl(int maxIndexesPerMark, Set<int>? indicesWithData) {
+    bool canBeIncluded(TickMark mark) => indicesWithData == null || indicesWithData.contains(mark.index);
     var marks = <TickMark>[];
     final weights = _marksByWeight.keys.toList()..sort((a, b) => b - a);
 
@@ -84,7 +107,7 @@ class TickMarks {
         while (prevMarksPointer < prevMarksLength) {
           final lastMark = prevMarks[prevMarksPointer];
           final lastIndex = lastMark.index;
-          if (lastIndex < currentIndex) {
+          if (lastIndex < currentIndex && canBeIncluded(lastMark)) {
             prevMarksPointer++;
             marks.add(lastMark);
             leftIndex = lastIndex;
@@ -95,14 +118,18 @@ class TickMarks {
           }
         }
 
-        if (rightIndex - currentIndex >= maxIndexesPerMark && currentIndex - leftIndex >= maxIndexesPerMark) {
+        if (rightIndex - currentIndex >= maxIndexesPerMark &&
+            currentIndex - leftIndex >= maxIndexesPerMark &&
+            canBeIncluded(mark)) {
           marks.add(mark);
           leftIndex = currentIndex;
+        } else if (_uniformDistribution) {
+          return prevMarks;
         }
       }
 
       for (; prevMarksPointer < prevMarksLength; prevMarksPointer++) {
-        marks.add(prevMarks[prevMarksPointer]);
+        if (canBeIncluded(prevMarks[prevMarksPointer])) marks.add(prevMarks[prevMarksPointer]);
       }
     }
 

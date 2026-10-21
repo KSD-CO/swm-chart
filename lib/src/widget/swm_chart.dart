@@ -10,6 +10,8 @@ import '../api/chart_controller.dart';
 import '../model/chart_model.dart';
 import '../model/pane.dart';
 import '../model/price_scale.dart';
+import '../options.dart';
+import 'attribution_logo.dart';
 import 'chart_painter.dart';
 
 enum _Region { pane, leftAxis, rightAxis, timeAxis, separator }
@@ -39,9 +41,13 @@ const double _separatorHitSlop = 8;
 /// * drag the time axis to change bar spacing, double-tap it to reset;
 /// * drag the separator between panes to resize them.
 class SwmChart extends StatefulWidget {
-  const SwmChart({super.key, required this.controller});
+  const SwmChart({super.key, required this.controller, this.onAttributionLogoTap});
 
   final ChartController controller;
+
+  /// Called when the TradingView attribution logo is tapped; open
+  /// https://www.tradingview.com/ here (e.g. with `url_launcher`).
+  final VoidCallback? onAttributionLogoTap;
 
   @override
   State<SwmChart> createState() => _SwmChartState();
@@ -64,6 +70,9 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
   double _pinchStartBarSpacing = 0;
   double _pinchAnchorIndex = 0;
   bool _crosshairPinned = false;
+  bool _scrollTime = true;
+  bool _scrollPrice = true;
+  bool _dragIsMouse = false;
   int? _activeSeparator;
 
   _Hit? _lastTap;
@@ -142,7 +151,9 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
   void _onScaleStart(ScaleStartDetails d) {
     _stopKinetic();
     _model.cancelAnimations();
-    final interaction = _model.options.interaction;
+    final o = _model.options;
+    final isMouse = d.kind == PointerDeviceKind.mouse;
+    _dragIsMouse = isMouse;
     final start = d.pointerCount == 1 && _downPosition != null ? _downPosition! : d.localFocalPoint;
     final hit = _hitTest(start);
     _dragHit = hit;
@@ -156,11 +167,13 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
       case _Region.pane:
         if (_model.hasCrosshair) _model.setCrosshairPosition(null, null);
         _crosshairPinned = false;
-        if (d.pointerCount >= 2 && interaction.handleScale) {
+        _scrollTime = isMouse ? o.handleScroll.pressedMouseMove : o.handleScroll.horzTouchDrag;
+        _scrollPrice = isMouse ? o.handleScroll.pressedMouseMove : o.handleScroll.vertTouchDrag;
+        if (d.pointerCount >= 2 && o.handleScale.pinch) {
           _mode = _DragMode.pinch;
           _pinchStartBarSpacing = _model.timeScale.barSpacing;
           _pinchAnchorIndex = _model.timeScale.coordinateToFloatIndex(hit.local.dx);
-        } else if (interaction.handleScroll) {
+        } else if (_scrollTime || _scrollPrice) {
           _mode = _DragMode.scroll;
           _model.timeScale.startScroll(hit.local.dx);
           for (final ps in _paneScales(hit.index)) {
@@ -171,14 +184,14 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
         }
       case _Region.leftAxis:
       case _Region.rightAxis:
-        if (interaction.axisDragScale) {
+        if (o.handleScale.axisPressedMouseMove.price) {
           _mode = _DragMode.priceAxisScale;
           _axisScale(hit).startScale(hit.local.dy);
         } else {
           _mode = _DragMode.none;
         }
       case _Region.timeAxis:
-        if (interaction.axisDragScale) {
+        if (o.handleScale.axisPressedMouseMove.time) {
           _mode = _DragMode.timeAxisScale;
           _model.timeScale.startScale(hit.local.dx);
         } else {
@@ -200,9 +213,11 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
       case _DragMode.separator:
         _model.resizePane(hit.index, d.localFocalPoint.dy - _dragStartY);
       case _DragMode.scroll:
-        ts.scrollTo(x);
-        for (final ps in _paneScales(hit.index)) {
-          ps.scrollTo(y);
+        if (_scrollTime) ts.scrollTo(x);
+        if (_scrollPrice) {
+          for (final ps in _paneScales(hit.index)) {
+            ps.scrollTo(y);
+          }
         }
       case _DragMode.pinch:
         ts.zoomAnchored(_pinchStartBarSpacing * d.horizontalScale, _pinchAnchorIndex, x);
@@ -227,7 +242,8 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
         }
         final vx = d.velocity.pixelsPerSecond.dx;
         // Like upstream's KineticAnimation, ignore slow flings.
-        if (_model.options.interaction.kineticScroll && d.pointerCount == 0 && vx.abs() > 200) {
+        final kinetic = _dragIsMouse ? _model.options.kineticScroll.mouse : _model.options.kineticScroll.touch;
+        if (kinetic && _scrollTime && d.pointerCount == 0 && vx.abs() > 200) {
           _startKinetic(vx);
         }
       case _DragMode.priceAxisScale:
@@ -279,6 +295,13 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
     _model.setCrosshairPosition(hit.index, hit.local);
   }
 
+  void _onLongPressEnd(LongPressEndDetails d) {
+    if (_model.options.trackingMode.exitMode == TrackingModeExitMode.onTouchEnd) {
+      _model.setCrosshairPosition(null, null);
+      _crosshairPinned = false;
+    }
+  }
+
   void _onLongPressMove(LongPressMoveUpdateDetails d) {
     if (!_crosshairPinned) return;
     final hit = _hitTest(d.localPosition);
@@ -286,6 +309,13 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
   }
 
   void _onTapUp(TapUpDetails d) {
+    if (_model.options.layout.attributionLogo && _model.panes.isNotEmpty) {
+      final logo = attributionLogoRect(_model.paneRect(_model.panes.length - 1)).inflate(4);
+      if (logo.contains(d.localPosition)) {
+        widget.onAttributionLogoTap?.call();
+        return;
+      }
+    }
     final hit = _hitTest(d.localPosition);
     final now = _clock.elapsed;
     final last = _lastTap;
@@ -296,18 +326,18 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
         now - _lastTapTime! < kDoubleTapTimeout;
     _lastTap = isDoubleTap ? null : hit;
     _lastTapTime = now;
-    final interaction = _model.options.interaction;
+    final reset = _model.options.handleScale.axisDoubleClickReset;
 
     switch (hit.region) {
       case _Region.leftAxis:
       case _Region.rightAxis:
-        if (isDoubleTap && interaction.axisDoubleTapReset) {
+        if (isDoubleTap && reset.price) {
           final ps = _axisScale(hit);
           ps.options = ps.options.copyWith(autoScale: true);
           _model.invalidate();
         }
       case _Region.timeAxis:
-        if (isDoubleTap && interaction.axisDoubleTapReset) {
+        if (isDoubleTap && reset.time) {
           _model.timeScale.restoreDefault();
           _model.invalidate();
         }
@@ -330,12 +360,18 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
   // ---- mouse wheel (desktop / web) ----
 
   void _onPointerSignal(PointerSignalEvent event) {
-    if (event is! PointerScrollEvent || !_model.options.interaction.handleScale) return;
+    if (event is! PointerScrollEvent) return;
+    final o = _model.options;
     final hit = _hitTest(event.localPosition);
     if (hit.region != _Region.pane) return;
-    GestureBinding.instance.pointerSignalResolver.register(event, (e) {
-      final scroll = e as PointerScrollEvent;
-      _model.timeScale.zoom(hit.local.dx, -scroll.scrollDelta.dy / 100);
+    final delta = event.scrollDelta;
+    final zoom = o.handleScale.mouseWheel && delta.dy != 0;
+    final scroll = o.handleScroll.mouseWheel && delta.dx != 0;
+    if (!zoom && !scroll) return;
+    GestureBinding.instance.pointerSignalResolver.register(event, (_) {
+      final ts = _model.timeScale;
+      if (scroll) ts.setRightOffset(ts.rightOffset + delta.dx / ts.barSpacing);
+      if (zoom) ts.zoom(hit.local.dx, -delta.dy / 100);
       _model.invalidate();
     });
   }
@@ -364,7 +400,8 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
             () => LongPressGestureRecognizer(debugOwner: this),
             (r) => r
               ..onLongPressStart = _onLongPressStart
-              ..onLongPressMoveUpdate = _onLongPressMove,
+              ..onLongPressMoveUpdate = _onLongPressMove
+              ..onLongPressEnd = _onLongPressEnd,
           ),
           TapGestureRecognizer: GestureRecognizerFactoryWithHandlers<TapGestureRecognizer>(
             () => TapGestureRecognizer(debugOwner: this),

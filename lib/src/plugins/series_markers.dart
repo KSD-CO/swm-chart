@@ -36,8 +36,8 @@ class SeriesMarker {
     this.id,
   });
 
-  /// UTC seconds of the bar the marker belongs to.
-  final int time;
+  /// Time of the bar the marker belongs to.
+  final num time;
   final SeriesMarkerPosition position;
   final SeriesMarkerShape shape;
   final Color color;

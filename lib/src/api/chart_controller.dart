@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'dart:ui' show Offset, Size;
 
@@ -5,6 +6,7 @@ import 'package:meta/meta.dart';
 
 import '../data.dart';
 import '../model/chart_model.dart';
+import '../model/horz_scale_behavior.dart';
 import '../model/pane.dart';
 import '../model/price_line.dart';
 import '../model/price_scale.dart';
@@ -18,8 +20,9 @@ import '../series_options.dart';
 class ChartEventParams {
   const ChartEventParams({this.time, this.logical, this.point, this.paneIndex, this.seriesData = const {}});
 
-  /// UTC seconds of the bar under the pointer, `null` outside the data.
-  final int? time;
+  /// Horizontal value (UTC seconds on a time chart) of the bar under the
+  /// pointer, `null` outside the data.
+  final num? time;
 
   /// Logical index of the bar under the pointer.
   final int? logical;
@@ -36,7 +39,23 @@ class ChartEventParams {
 
 typedef ChartEventHandler = void Function(ChartEventParams params);
 typedef LogicalRangeChangeHandler = void Function(LogicalRange? range);
-typedef TimeRangeChangeHandler = void Function(({int from, int to})? range);
+typedef TimeRangeChangeHandler = void Function(({num from, num to})? range);
+typedef DataChangedHandler = void Function();
+
+/// What [SeriesApi.dataByIndex] returns when there is no bar at the index.
+enum MismatchDirection {
+  /// Return `null`.
+  none,
+
+  /// Return the nearest bar to the left.
+  nearestLeft,
+
+  /// Return the nearest bar to the right.
+  nearestRight,
+}
+
+/// Type of a series, like upstream's `seriesType()`.
+enum SeriesType { candlestick, bar, line, area, baseline, histogram, custom }
 typedef SizeChangeHandler = void Function(double width, double height);
 
 typedef CandlestickSeriesApi = SeriesApi<CandlestickData, CandlestickSeriesOptions>;
@@ -56,10 +75,66 @@ typedef HistogramSeriesApi = SeriesApi<HistogramData, HistogramSeriesOptions>;
 /// SwmChart(controller: chart);
 /// ```
 class ChartController {
-  ChartController({ChartOptions options = const ChartOptions()}) : _model = ChartModel(options) {
+  /// A chart with a time axis (`createChart`).
+  ChartController({ChartOptions options = const ChartOptions()})
+      : this._(ChartModel(options, behavior: const TimeHorzScaleBehavior()));
+
+  /// An options chart whose horizontal axis is a price (`createOptionsChart`):
+  /// [SeriesData.time] is the strike price.
+  ChartController.options({ChartOptions options = const ChartOptions(), int precision = 2})
+      : this._(ChartModel(options, behavior: PriceHorzScaleBehavior(precision: precision)));
+
+  /// A yield curve chart (`createYieldCurveChart`): [SeriesData.time] is a
+  /// duration in months and the axis is linear in months. Only line and area
+  /// series are supported.
+  factory ChartController.yieldCurve({
+    ChartOptions options = const ChartOptions(
+      timeScale: TimeScaleOptions(ignoreWhitespaceIndices: true),
+      leftPriceScale: PriceScaleOptions(visible: true),
+      rightPriceScale: PriceScaleOptions(visible: false),
+      localization: LocalizationOptions(priceFormatter: _formatYield),
+    ),
+    YieldCurveOptions yieldCurve = const YieldCurveOptions(),
+  }) {
+    return ChartController._(ChartModel(options, behavior: YieldCurveHorzScaleBehavior(yieldCurve)))
+      .._initYieldCurveWhitespace(yieldCurve);
+  }
+
+  ChartController._(this._model) {
     _model.crosshairMoveListeners.add((p) => _dispatch(_crosshairMoveHandlers, p));
     _model.clickListeners.add((p) => _dispatch(_clickHandlers, p));
     _model.dblClickListeners.add((p) => _dispatch(_dblClickHandlers, p));
+  }
+
+  static String _formatYield(double value) => '${value.toStringAsFixed(3)}%';
+
+  bool get _isYieldCurve => _model.behavior is YieldCurveHorzScaleBehavior;
+
+  // Yield curves fill the axis with whitespace every `baseResolution`
+  // months so it is linear in time, like upstream's YieldChartApi.
+  void _initYieldCurveWhitespace(YieldCurveOptions o) {
+    final whitespace = LineSeriesModel(const LineSeriesOptions(lastValueVisible: false, priceLineVisible: false));
+    _model.addSeries(whitespace);
+    String? hash;
+    void update(SeriesModel? changed) {
+      if (changed == whitespace) return;
+      var lastIndex = 0;
+      for (final s in _model.series) {
+        if (s != whitespace && s.allItems.isNotEmpty) lastIndex = math.max(lastIndex, s.allItems.last.time.ceil());
+      }
+      final start = math.max(0, o.startTimeRange);
+      final end = math.max(math.max(0, o.minimumTimeRange), lastIndex);
+      final resolution = math.max(1, o.baseResolution);
+      final newHash = '$start~$end~$resolution';
+      if (newHash == hash) return;
+      hash = newHash;
+      _model.setSeriesData(whitespace, [
+        for (var t = start; t <= end; t += resolution) WhitespaceData(time: t),
+      ]);
+    }
+
+    update(null);
+    _model.dataChangedListeners.add(update);
   }
 
   final ChartModel _model;
@@ -112,6 +187,11 @@ class ChartController {
       _add(HistogramSeriesModel(options), paneIndex);
 
   SeriesApi<T, O> _add<T extends SeriesData, O extends SeriesOptions>(SeriesModel<T, O> series, int paneIndex) {
+    if (_isYieldCurve) {
+      if (series is! LineSeriesModel && series is! AreaSeriesModel) {
+        throw UnsupportedError('Yield curve charts only support line and area series');
+      }
+    }
     final api = SeriesApi<T, O>._(this, series);
     _seriesApis[series] = api;
     _model.addSeries(series, paneIndex: paneIndex);
@@ -167,7 +247,7 @@ class ChartController {
   void unsubscribeDblClick(ChartEventHandler handler) => _dblClickHandlers.remove(handler);
 
   /// Shows the crosshair at [price] / [time] of [series], e.g. to sync two charts.
-  void setCrosshairPosition(double price, int time, SeriesApi series) {
+  void setCrosshairPosition(double price, num time, SeriesApi series) {
     final s = series._series;
     final paneIndex = _model.paneIndexOf(s);
     final x = _timeScaleApi.timeToCoordinate(time);
@@ -176,6 +256,9 @@ class ChartController {
   }
 
   void clearCrosshairPosition() => _model.setCrosshairPosition(null, null);
+
+  /// Size of pane [paneIndex] in logical pixels.
+  Size paneSize([int paneIndex = 0]) => Size(_model.paneWidth, _model.panes[paneIndex].height);
 
   /// Renders the chart to an image. The chart must be on screen.
   Future<ui.Image> takeScreenshot() {
@@ -233,8 +316,8 @@ class BarsInfo {
   final double barsAfter;
 
   /// Time of the first/last series bar inside the range.
-  final int? from;
-  final int? to;
+  final num? from;
+  final num? to;
 }
 
 /// Handle of a custom price line.
@@ -268,18 +351,71 @@ class SeriesApi<T extends SeriesData, O extends SeriesOptions> {
     _model.seriesOptionsChanged(_series);
   }
 
-  /// Replaces all data. [data] must be sorted by strictly ascending time.
-  void setData(List<T> data) => _model.setSeriesData<T>(_series, data);
+  /// Replaces all data. Items are [T] or [WhitespaceData], sorted by
+  /// strictly ascending time.
+  void setData(List<SeriesData> data) => _model.setSeriesData(_series, data);
 
   /// Updates the last bar if [item] has the same time, appends it otherwise.
-  /// Updating bars older than the last one is not supported, as upstream.
-  void update(T item) => _model.updateSeries<T>(_series, item);
+  /// [item] is a [T] or [WhitespaceData]. Updating bars older than the last
+  /// one is not supported, as upstream.
+  void update(SeriesData item) => _model.updateSeries(_series, item);
 
-  /// A copy of the series data.
-  List<T> data() => List.unmodifiable(_series.data);
+  /// The series data as given, including whitespace.
+  List<SeriesData> data() => List.unmodifiable(_series.allItems);
 
-  /// Data at a logical index, or `null` when this series has no bar there.
-  T? dataByIndex(int logicalIndex) => _series.itemAt(logicalIndex);
+  /// Data at a logical index. Without a bar there, returns `null` or the
+  /// nearest bar in [mismatchDirection].
+  T? dataByIndex(int logicalIndex, [MismatchDirection mismatchDirection = MismatchDirection.none]) {
+    final exact = _series.itemAt(logicalIndex);
+    if (exact != null || mismatchDirection == MismatchDirection.none || _series.data.isEmpty) return exact;
+    final pos = _series.lowerBound(logicalIndex);
+    if (mismatchDirection == MismatchDirection.nearestLeft) return pos > 0 ? _series.data[pos - 1] : null;
+    return pos < _series.data.length ? _series.data[pos] : null;
+  }
+
+  /// Last value of the series: of the whole data when [globalLast], else of
+  /// the visible range.
+  ({double price, bool noData, T? item})? lastValueData([bool globalLast = true]) {
+    final item = globalLast ? _series.lastItem : _series.priceLineItem(_model.timeScale.visibleStrictRange());
+    if (item == null) return (price: 0, noData: true, item: null);
+    return (price: _series.closeValue(item), noData: false, item: item);
+  }
+
+  SeriesType seriesType() => switch (_series) {
+        CandlestickSeriesModel() => SeriesType.candlestick,
+        BarSeriesModel() => SeriesType.bar,
+        LineSeriesModel() => SeriesType.line,
+        AreaSeriesModel() => SeriesType.area,
+        BaselineSeriesModel() => SeriesType.baseline,
+        HistogramSeriesModel() => SeriesType.histogram,
+        _ => SeriesType.custom,
+      };
+
+  /// Position of the series in its pane's drawing order (0 = bottom).
+  int seriesOrder() => _model.panes[_model.paneIndexOf(_series)].series.indexOf(_series);
+
+  void setSeriesOrder(int order) {
+    final pane = _model.panes[_model.paneIndexOf(_series)];
+    pane.series.remove(_series);
+    pane.series.insert(order.clamp(0, pane.series.length), _series);
+    _model.invalidate();
+  }
+
+  final Map<DataChangedHandler, void Function(SeriesModel)> _dataHandlers = {};
+
+  /// Fires after [setData] / [update] of this series.
+  void subscribeDataChanged(DataChangedHandler handler) {
+    void listener(SeriesModel s) {
+      if (s == _series) handler();
+    }
+
+    _dataHandlers[handler] = listener;
+    _model.dataChangedListeners.add(listener);
+  }
+
+  void unsubscribeDataChanged(DataChangedHandler handler) {
+    _model.dataChangedListeners.remove(_dataHandlers.remove(handler));
+  }
 
   /// Y coordinate in pane logical pixels, `null` when the scale is empty.
   double? priceToCoordinate(double price) => _series.priceScale.isEmpty ? null : _series.priceToCoordinate(price);
@@ -459,7 +595,7 @@ class TimeScaleApi {
   }
 
   /// Visible range as UTC seconds, clamped to the data.
-  ({int from, int to})? getVisibleRange() {
+  ({num from, num to})? getVisibleRange() {
     final range = _ts.visibleStrictRange();
     if (range == null || _ts.pointsCount == 0) return null;
     final last = _ts.pointsCount - 1;
@@ -468,8 +604,8 @@ class TimeScaleApi {
     return (from: _ts.times[from], to: _ts.times[to]);
   }
 
-  /// Shows the bars between [from] and [to] (UTC seconds).
-  void setVisibleRange(int from, int to) {
+  /// Shows the bars between [from] and [to] (UTC seconds on a time chart).
+  void setVisibleRange(num from, num to) {
     final a = _ts.timeToIndex(from, findNearest: true);
     final b = _ts.timeToIndex(to, findNearest: true);
     if (a == null || b == null) return;
@@ -513,7 +649,10 @@ class TimeScaleApi {
     _model.sizeListeners.remove(listener);
   }
 
-  double? timeToCoordinate(int time) {
+  /// Index of [time] on the time scale; with [findNearest], of the nearest point.
+  int? timeToIndex(num time, {bool findNearest = false}) => _ts.timeToIndex(time, findNearest: findNearest);
+
+  double? timeToCoordinate(num time) {
     final index = _ts.timeToIndex(time);
     return index == null ? null : _ts.indexToCoordinate(index);
   }
@@ -522,7 +661,7 @@ class TimeScaleApi {
 
   double coordinateToLogical(double x) => _ts.coordinateToFloatIndex(x);
 
-  int? coordinateToTime(double x) => _ts.indexToTime(_ts.coordinateToIndex(x));
+  num? coordinateToTime(double x) => _ts.indexToTime(_ts.coordinateToIndex(x));
 
   /// Width of the time scale (pane width) in logical pixels.
   double width() => _ts.width;

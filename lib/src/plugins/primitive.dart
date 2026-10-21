@@ -57,13 +57,13 @@ abstract class PrimitiveContext {
   Color get backgroundColor;
 
   /// X of a bar time, `null` when the time isn't on the time scale.
-  double? timeToCoordinate(int time);
+  double? timeToCoordinate(num time);
 
   /// X of a logical index (may be fractional).
   double logicalToCoordinate(double logical);
 
   /// Logical index of a time, `null` when the time isn't on the time scale.
-  int? timeToIndex(int time);
+  int? timeToIndex(num time);
 
   /// Y of a price on the series' price scale (series primitives) or the
   /// pane's default price scale (pane primitives).

@@ -124,7 +124,7 @@ class PriceScale {
   double _fontSize = 12;
   PriceRange? _priceRange;
   PriceFormatter _formatter = PriceFormatter(const PriceFormat.price());
-  PriceFormatterFn? _formatterOverride;
+  LocalizationOptions _localization = const LocalizationOptions();
   LogFormula _logFormula = _defLogFormula;
 
   /// Base value of the scale's main series (first visible value), used for
@@ -196,19 +196,36 @@ class PriceScale {
     }
   }
 
-  void setFormatter(PriceFormatter formatter, PriceFormatterFn? override) {
+  void setFormatter(PriceFormatter formatter, LocalizationOptions localization) {
     _formatter = formatter;
-    _formatterOverride = override;
+    _localization = localization;
     _marksValid = false;
   }
 
   /// Formats a value expressed in display units (price, or percent in the
   /// percentage modes).
   String formatLogical(double value) {
-    if (isPercentage) return '${_formatPercent(value)}%';
+    if (isPercentage) return _localization.percentageFormatter?.call(value) ?? '${_formatPercent(value)}%';
     if (isIndexedTo100) return _formatPercent(value);
-    return (_formatterOverride ?? _formatter.call)(value);
+    return (_localization.priceFormatter ?? _formatter.call)(value);
   }
+
+  /// Formats tick mark values, using the tick mark formatters of
+  /// [LocalizationOptions] when set.
+  List<String> _formatTickmarks(List<double> values) {
+    if (isPercentage) {
+      final f = _localization.tickmarksPercentageFormatter;
+      if (f != null) return f(values);
+    } else if (!isIndexedTo100) {
+      final f = _localization.tickmarksPriceFormatter;
+      if (f != null) return f(values);
+    }
+    return values.map(formatLogical).toList();
+  }
+
+  bool get hasVisibleEdgeMarks => _options.ensureEdgeTickMarksVisible && isAutoScale;
+
+  double get edgeMarksPadding => _fontSize / 2;
 
   String _formatPercent(double v) {
     final text = v.abs().toStringAsFixed(2);
@@ -439,15 +456,57 @@ class PriceScale {
     final sign = high >= low ? 1 : -1;
     double? prevCoord;
     final marks = <PriceMark>[];
+    final firstSpan = span;
     for (var logical = high - mod; logical > low; logical -= span) {
       final coord = displayToCoordinate(logical);
       // Needed for log scale, where marks get denser towards the bottom.
       if (prevCoord != null && (coord - prevCoord).abs() < _tickMarkHeight()) continue;
       if (coord < minCoord || coord > maxCoord) continue;
-      marks.add(PriceMark(coord, formatLogical(logical), logical));
+      marks.add(PriceMark(coord, '', logical));
       prevCoord = coord;
       if (isLog) span = _tickSpan(logical * sign, low);
     }
+
+    if (hasVisibleEdgeMarks && _shouldApplyEdgeMarks(firstSpan, low, high)) {
+      final padding = edgeMarksPadding;
+      _applyEdgeMarks(marks, firstSpan, minCoord, maxCoord, padding, padding * 2);
+    }
+
+    final labels = _formatTickmarks([for (final m in marks) m.logical]);
+    for (var i = 0; i < marks.length; i++) {
+      marks[i].label = labels[i];
+    }
     return marks;
+  }
+
+  bool _shouldApplyEdgeMarks(double span, double low, double high) {
+    final range = priceRange;
+    if (range == null) return false;
+    return (range.min - low < span) && (high - range.max < span);
+  }
+
+  /// Port of upstream's `_applyEdgeMarks`: adds marks at the top and bottom
+  /// edges, dropping regular marks too close to them.
+  void _applyEdgeMarks(List<PriceMark> marks, double span, double minCoord, double maxCoord, double minPadding,
+      double maxPadding) {
+    final topMark = _boundaryMark(minCoord, minPadding, maxPadding);
+    final bottomMark = _boundaryMark(maxCoord, -maxPadding, -minPadding);
+    final spanPx = displayToCoordinate(0) - displayToCoordinate(span);
+    if (marks.isNotEmpty && marks.first.coord - topMark.coord < spanPx / 2) marks.removeAt(0);
+    if (marks.isNotEmpty && bottomMark.coord - marks.last.coord < spanPx / 2) marks.removeLast();
+    marks
+      ..insert(0, topMark)
+      ..add(bottomMark);
+  }
+
+  PriceMark _boundaryMark(double coord, double minPadding, double maxPadding) {
+    final avgPadding = (minPadding + maxPadding) / 2;
+    final value1 = coordinateToDisplay(coord + minPadding);
+    final value2 = coordinateToDisplay(coord + maxPadding);
+    final minValue = math.min(value1, value2), maxValue = math.max(value1, value2);
+    final valueSpan = math.max(0.1, _tickSpan(maxValue, minValue));
+    final value = coordinateToDisplay(coord + avgPadding);
+    final rounded = value - (value % valueSpan);
+    return PriceMark(displayToCoordinate(rounded), '', rounded);
   }
 }
