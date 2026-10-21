@@ -48,10 +48,15 @@ class ChartEventParams {
     this.paneIndex,
     this.seriesData = const {},
     this.hoveredInfo,
+    this.price,
   });
 
   /// What is under the pointer.
   final HoveredInfo? hoveredInfo;
+
+  /// Price at [point] on the pane's default price scale, `null` when the
+  /// scale is empty or there is no point.
+  final double? price;
 
   /// The series under the pointer.
   SeriesApi? get hoveredSeries => hoveredInfo?.series;
@@ -77,6 +82,79 @@ class ChartEventParams {
 }
 
 typedef ChartEventHandler = void Function(ChartEventParams params);
+
+/// Phase of a [ChartPointerEvent].
+enum ChartPointerPhase {
+  /// The gesture started. Return `true` from the handler to take it over.
+  down,
+
+  /// The pointer moved during a gesture the handler took.
+  move,
+
+  /// The pointer lifted at the end of a gesture the handler took.
+  up,
+
+  /// The gesture was cancelled (e.g. a second finger turned it into a pinch).
+  cancel,
+}
+
+/// What started a [ChartPointerEvent].
+enum ChartPointerSource {
+  /// A one-finger touch drag or a mouse drag in a pane.
+  drag,
+
+  /// A touch long press in a pane, with [TrackingModeOptions.longPressCrosshair]
+  /// turned off.
+  longPress,
+}
+
+/// A pointer gesture in a pane, for tools that draw on or edit the chart.
+///
+/// Delivered through [ChartController.subscribePointer]. A handler that
+/// returns `true` for [ChartPointerPhase.down] takes the gesture: the chart
+/// doesn't scroll or zoom, and the handler alone receives the following
+/// [ChartPointerPhase.move] and [ChartPointerPhase.up] (or
+/// [ChartPointerPhase.cancel]) events.
+class ChartPointerEvent {
+  const ChartPointerEvent({
+    required this.phase,
+    required this.source,
+    required this.paneIndex,
+    required this.point,
+    required this.logical,
+    this.time,
+    this.price,
+    this.hoveredInfo,
+  });
+
+  final ChartPointerPhase phase;
+  final ChartPointerSource source;
+
+  /// Pane the gesture started in; later points are relative to it even when
+  /// the pointer leaves it.
+  final int paneIndex;
+
+  /// Pane coordinates in logical pixels.
+  final Offset point;
+
+  /// Fractional logical index under the pointer (between bars, before the
+  /// first or after the last bar too).
+  final double logical;
+
+  /// Horizontal value of the nearest bar, `null` outside the data.
+  final num? time;
+
+  /// Price at [point] on the pane's default price scale, `null` when the
+  /// scale is empty.
+  final double? price;
+
+  /// What is under the pointer; only set for [ChartPointerPhase.down].
+  final HoveredInfo? hoveredInfo;
+}
+
+/// Return `true` from a [ChartPointerPhase.down] event to take the gesture.
+/// The return value is ignored for other phases.
+typedef ChartPointerHandler = bool Function(ChartPointerEvent event);
 typedef LogicalRangeChangeHandler = void Function(LogicalRange? range);
 typedef TimeRangeChangeHandler = void Function(({num from, num to})? range);
 typedef DataChangedHandler = void Function();
@@ -321,6 +399,7 @@ class ChartController {
       logical: p.logical,
       point: p.point,
       paneIndex: p.paneIndex,
+      price: _priceAt(p.paneIndex, p.point),
       hoveredInfo: hit == null
           ? null
           : HoveredInfo(
@@ -341,7 +420,78 @@ class ChartController {
     }
   }
 
+  double? _priceAt(int? paneIndex, Offset? point) {
+    if (paneIndex == null || point == null || paneIndex < 0 || paneIndex >= _model.panes.length) return null;
+    final scale = _model.panes[paneIndex].defaultPriceScale;
+    return scale.isEmpty ? null : scale.coordinateToPrice(point.dy);
+  }
+
+  HoveredInfo? _hoveredInfo(int paneIndex, Offset point) {
+    final hit = _model.hitTest(paneIndex, point);
+    if (hit == null) return null;
+    return HoveredInfo(
+      type: hit.type,
+      sourceKind: hit.sourceKind,
+      objectKind: hit.kind,
+      series: hit.series == null ? null : _seriesApis[hit.series],
+      objectId: hit.objectId,
+      paneIndex: paneIndex,
+    );
+  }
+
+  final List<ChartPointerHandler> _pointerHandlers = [];
+  ChartPointerHandler? _pointerCaptor;
+
+  /// Pointer gestures in panes, for drawing and editing tools. See
+  /// [ChartPointerEvent].
+  void subscribePointer(ChartPointerHandler handler) => _pointerHandlers.add(handler);
+
+  void unsubscribePointer(ChartPointerHandler handler) {
+    _pointerHandlers.remove(handler);
+    if (_pointerCaptor == handler) _pointerCaptor = null;
+  }
+
+  /// Whether anyone listens to pointer gestures.
+  @internal
+  bool get hasPointerHandlers => _pointerHandlers.isNotEmpty;
+
+  /// Called by the widget. For [ChartPointerPhase.down], offers the gesture to
+  /// the handlers (latest first) and returns whether one took it; for the
+  /// other phases, forwards to the handler that took it.
+  @internal
+  bool handlePointer(ChartPointerPhase phase, ChartPointerSource source, int paneIndex, Offset point) {
+    if (paneIndex < 0 || paneIndex >= _model.panes.length) return false;
+    final ts = _model.timeScale;
+    final event = ChartPointerEvent(
+      phase: phase,
+      source: source,
+      paneIndex: paneIndex,
+      point: point,
+      logical: ts.coordinateToFloatIndex(point.dx),
+      time: ts.indexToTime(ts.coordinateToIndex(point.dx)),
+      price: _priceAt(paneIndex, point),
+      hoveredInfo: phase == ChartPointerPhase.down ? _hoveredInfo(paneIndex, point) : null,
+    );
+    if (phase == ChartPointerPhase.down) {
+      _pointerCaptor = null;
+      for (final h in _pointerHandlers.reversed.toList()) {
+        if (h(event)) {
+          _pointerCaptor = h;
+          return true;
+        }
+      }
+      return false;
+    }
+    final captor = _pointerCaptor;
+    if (captor == null) return false;
+    captor(event);
+    if (phase == ChartPointerPhase.up || phase == ChartPointerPhase.cancel) _pointerCaptor = null;
+    return true;
+  }
+
   void dispose() {
+    _pointerHandlers.clear();
+    _pointerCaptor = null;
     _crosshairMoveHandlers.clear();
     _clickHandlers.clear();
     _dblClickHandlers.clear();
@@ -595,6 +745,18 @@ class PaneApi {
   ];
 
   PriceScaleApi priceScale(String id) => PriceScaleApi._(_model, _pane, id);
+
+  /// Y of [price] on the pane's default price scale, `null` when it is empty.
+  double? priceToCoordinate(double price) {
+    final scale = _pane.defaultPriceScale;
+    return scale.isEmpty ? null : scale.priceToCoordinate(price);
+  }
+
+  /// Price at [y] on the pane's default price scale, `null` when it is empty.
+  double? coordinateToPrice(double y) {
+    final scale = _pane.defaultPriceScale;
+    return scale.isEmpty ? null : scale.coordinateToPrice(y);
+  }
 
   // Like upstream's `IPaneApi.addSeries`: add a series to this pane.
   CandlestickSeriesApi addCandlestickSeries([CandlestickSeriesOptions o = const CandlestickSeriesOptions()]) =>

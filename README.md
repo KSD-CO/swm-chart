@@ -41,6 +41,7 @@ Everything in Lightweight Charts v5.2.1 that applies to Flutter is ported:
 | Last value labels, price line source, custom price lines, base line, last price animation | ✅ |
 | Hit testing: `hoveredSeries` / `hoveredObjectId`, `hoveredSeriesOnTop` | ✅ |
 | Plugins: primitives API, series markers, up/down markers, text & image watermarks | ✅ |
+| Beyond upstream: **drawing tools** with an editor, band fill, price levels, volume profile, pointer capture | ✅ |
 | Localization: locale, date format, month names, price/percentage/tick mark formatters | ✅ |
 | Events: crosshair move, click, double click, visible logical/time range, size, data changed | ✅ |
 | Gestures: pan + kinetic, pinch, long-press crosshair, axis drag, double-tap reset, mouse wheel — each switchable like `handleScroll` / `handleScale` | ✅ |
@@ -123,6 +124,41 @@ add it with `chart.addCustomSeries(view)`.
 Custom drawings: extend `ChartPrimitive` (override `paint`, `priceAxisLabels`,
 `timeAxisLabels`, `autoscaleInfo`) and attach it with
 `series.attachPrimitive(...)` or `pane.attachPrimitive(...)`.
+
+Overlays beyond upstream: `BandFillPrimitive` (Bollinger, Keltner, an
+Ichimoku cloud with a second colour where the lines cross),
+`PriceLevelsPrimitive` (pivots, support / resistance, Fibonacci zones, with
+optional axis labels and hit ids) and `VolumeProfilePrimitive` (horizontal
+volume bins with a POC).
+
+### Drawing tools
+
+`DrawingEditor` puts a drawing layer on a pane and edits it with the pointer:
+
+```dart
+final editor = DrawingEditor(chart,
+    onCreated: (d) => save(d), onChanged: (d) => save(d));
+
+// pick a tool: taps place the anchors, or drag out a two-point tool
+editor.tool = (id, anchors) => TrendLineDrawing(id: id, anchors: anchors, extendRight: true);
+
+// without a tool: tap selects, drag moves, drag a handle reshapes
+editor.deleteSelected();
+```
+
+Built in: trend line / ray / extended line / arrow, horizontal line and ray,
+vertical line, cross line, rectangle, ellipse, parallel channel, Fibonacci
+retracement, text, price & date measurement, multi-point paths with labels
+(Elliott waves, XABCD) and freehand. Anchors are a fractional logical index
+and a price, so drawings can extend past the last bar. For anything else,
+extend `Drawing` (`anchorCount`, `paint`, `hitDistance`). Set `snap` for a
+magnet, `keepTool` to draw several in a row, and
+`TrackingModeOptions(longPressCrosshair: false)` to edit with long presses.
+
+Lower level: `chart.subscribePointer` offers each drag (and long press) in a
+pane to your handler; return `true` on `down` to take it, and the chart
+won't scroll. `PaneApi.priceToCoordinate` / `coordinateToPrice` and the
+`price` on click events convert between pixels and prices.
 
 The API names follow upstream (`addCandlestickSeries`, `setData`, `update`,
 `timeScale().fitContent()`, `scrollToRealTime()`, `subscribeCrosshairMove`, …),

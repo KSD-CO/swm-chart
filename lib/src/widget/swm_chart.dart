@@ -28,7 +28,7 @@ class _Hit {
   final Offset local;
 }
 
-enum _DragMode { none, scroll, pinch, priceAxisScale, timeAxisScale, separator }
+enum _DragMode { none, scroll, pinch, priceAxisScale, timeAxisScale, separator, captured }
 
 /// Touch area around a pane separator, in logical pixels.
 const double _separatorHitSlop = 8;
@@ -43,6 +43,10 @@ const double _separatorHitSlop = 8;
 /// * drag a price axis to scale prices, double-tap it to re-enable auto-scale;
 /// * drag the time axis to change bar spacing, double-tap it to reset;
 /// * drag the separator between panes to resize them.
+///
+/// Drawing and editing tools can take over pane drags (and, with
+/// [TrackingModeOptions.longPressCrosshair] off, long presses) through
+/// [ChartController.subscribePointer].
 ///
 /// With a mouse the cursor shows what a drag would do: `resizeRow` on
 /// separators, `resizeUpDown` on price axes, `resizeLeftRight` on the time
@@ -95,6 +99,12 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
   int? _hoverSeparator;
   MouseCursor _cursor = MouseCursor.defer;
   bool _mouseCrosshair = false;
+
+  /// Pane of the drag / long press a pointer handler took, and where the
+  /// pointer last was in it.
+  int? _capturedPane;
+  Offset _capturedPoint = Offset.zero;
+  bool _longPressCaptured = false;
 
   _Hit? _lastTap;
   Duration? _lastTapTime;
@@ -235,6 +245,15 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
       case _Region.pane:
         if (_model.hasCrosshair) _model.setCrosshairPosition(null, null);
         _crosshairPinned = false;
+        // A drawing / editing tool may take a one-pointer drag.
+        if (d.pointerCount == 1 &&
+            widget.controller.hasPointerHandlers &&
+            widget.controller.handlePointer(ChartPointerPhase.down, ChartPointerSource.drag, hit.index, hit.local)) {
+          _mode = _DragMode.captured;
+          _capturedPane = hit.index;
+          _capturedPoint = hit.local;
+          return;
+        }
         _scrollTime = isMouse ? o.handleScroll.pressedMouseMove : o.handleScroll.horzTouchDrag;
         _scrollPrice = isMouse ? o.handleScroll.pressedMouseMove : o.handleScroll.vertTouchDrag;
         if (d.pointerCount >= 2 && o.handleScale.pinch) {
@@ -279,6 +298,18 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
     final y = d.localFocalPoint.dy - paneTop;
     switch (_mode) {
       case _DragMode.none:
+        return;
+      case _DragMode.captured:
+        final pane = _capturedPane;
+        if (pane == null || pane >= _model.panes.length) return;
+        if (d.pointerCount > 1) {
+          widget.controller.handlePointer(ChartPointerPhase.cancel, ChartPointerSource.drag, pane, _capturedPoint);
+          _mode = _DragMode.none;
+          _capturedPane = null;
+          return;
+        }
+        _capturedPoint = Offset(x, d.localFocalPoint.dy - _model.panes[pane].top);
+        widget.controller.handlePointer(ChartPointerPhase.move, ChartPointerSource.drag, pane, _capturedPoint);
         return;
       case _DragMode.separator:
         _model.resizePane(hit.index, d.localFocalPoint.dy - _dragStartY);
@@ -331,6 +362,12 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
       case _DragMode.separator:
         _model.endPaneResize();
         setState(() => _activeSeparator = null);
+      case _DragMode.captured:
+        final pane = _capturedPane;
+        if (pane != null) {
+          widget.controller.handlePointer(ChartPointerPhase.up, ChartPointerSource.drag, pane, _capturedPoint);
+        }
+        _capturedPane = null;
       case _DragMode.none:
       case _DragMode.pinch:
         break;
@@ -369,11 +406,31 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
     final hit = _hitTest(d.localPosition);
     if (hit.region != _Region.pane) return;
     _stopKinetic();
+    if (!_model.options.trackingMode.longPressCrosshair) {
+      // Offered to pointer handlers instead of showing the crosshair.
+      _longPressCaptured =
+          widget.controller.hasPointerHandlers &&
+          widget.controller.handlePointer(ChartPointerPhase.down, ChartPointerSource.longPress, hit.index, hit.local);
+      if (_longPressCaptured) {
+        _capturedPane = hit.index;
+        _capturedPoint = hit.local;
+      }
+      return;
+    }
     _crosshairPinned = true;
     _model.setCrosshairPosition(hit.index, hit.local);
   }
 
   void _onLongPressEnd(LongPressEndDetails d) {
+    if (_longPressCaptured) {
+      final pane = _capturedPane;
+      if (pane != null) {
+        widget.controller.handlePointer(ChartPointerPhase.up, ChartPointerSource.longPress, pane, _capturedPoint);
+      }
+      _longPressCaptured = false;
+      _capturedPane = null;
+      return;
+    }
     if (_model.options.trackingMode.exitMode == TrackingModeExitMode.onTouchEnd) {
       _model.setCrosshairPosition(null, null);
       _crosshairPinned = false;
@@ -381,6 +438,13 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
   }
 
   void _onLongPressMove(LongPressMoveUpdateDetails d) {
+    if (_longPressCaptured) {
+      final pane = _capturedPane;
+      if (pane == null || pane >= _model.panes.length) return;
+      _capturedPoint = Offset(d.localPosition.dx - _model.leftAxisWidth, d.localPosition.dy - _model.panes[pane].top);
+      widget.controller.handlePointer(ChartPointerPhase.move, ChartPointerSource.longPress, pane, _capturedPoint);
+      return;
+    }
     if (!_crosshairPinned) return;
     final hit = _hitTest(d.localPosition);
     if (hit.region == _Region.pane) _model.setCrosshairPosition(hit.index, hit.local);

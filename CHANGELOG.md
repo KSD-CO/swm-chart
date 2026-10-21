@@ -1,3 +1,19 @@
+## 0.6.0
+
+* Drawing tools (`DrawingEditor`, `DrawingsPrimitive`, `Drawing`): trend
+  lines, rays and arrows, horizontal / vertical / cross lines, rectangles,
+  ellipses, parallel channels, Fibonacci retracements, text, price & date
+  measurements, labelled multi-point paths (Elliott, XABCD) and freehand.
+  Create by taps or a drag, select, move, reshape by handles, delete; snap
+  hook for magnets; extend `Drawing` for custom tools.
+* Overlays: `BandFillPrimitive`, `PriceLevelsPrimitive`,
+  `VolumeProfilePrimitive`.
+* Pointer capture: `ChartController.subscribePointer` / `ChartPointerEvent`
+  lets a handler take a drag or long press in a pane instead of the chart.
+* `TrackingModeOptions.longPressCrosshair` to hand long presses to pointer
+  handlers.
+* `PaneApi.priceToCoordinate` / `coordinateToPrice`; `ChartEventParams.price`.
+
 ## 0.5.1
 
 * Screenshots on pub.dev and in the README (`tool/screenshots.sh`).

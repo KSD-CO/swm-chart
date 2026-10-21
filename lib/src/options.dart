@@ -572,9 +572,14 @@ enum TrackingModeExitMode {
 
 /// Touch crosshair behaviour after a long press.
 class TrackingModeOptions {
-  const TrackingModeOptions({this.exitMode = TrackingModeExitMode.onNextTap});
+  const TrackingModeOptions({this.exitMode = TrackingModeExitMode.onNextTap, this.longPressCrosshair = true});
 
   final TrackingModeExitMode exitMode;
+
+  /// Whether a touch long press shows the crosshair. Turn it off to receive
+  /// long presses as [ChartPointerSource.longPress] pointer events instead
+  /// (e.g. for a measuring tool).
+  final bool longPressCrosshair;
 }
 
 class ChartOptions {
