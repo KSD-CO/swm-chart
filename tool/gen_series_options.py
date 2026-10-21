@@ -1,3 +1,5 @@
+# Generates lib/src/series_options.dart.
+# Usage: python3 tool/gen_series_options.py > lib/src/series_options.dart && dart format lib/src/series_options.dart
 import sys
 common = [
  ("title","String","''",None),

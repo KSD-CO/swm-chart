@@ -135,39 +135,25 @@ class LayoutOptions {
 }
 
 class GridLineOptions {
-  const GridLineOptions({
-    this.color = const Color(0xFFD6DCDE),
-    this.style = LineStyle.solid,
-    this.visible = true,
-  });
+  const GridLineOptions({this.color = const Color(0xFFD6DCDE), this.style = LineStyle.solid, this.visible = true});
 
   final Color color;
   final LineStyle style;
   final bool visible;
 
   GridLineOptions copyWith({Color? color, LineStyle? style, bool? visible}) {
-    return GridLineOptions(
-      color: color ?? this.color,
-      style: style ?? this.style,
-      visible: visible ?? this.visible,
-    );
+    return GridLineOptions(color: color ?? this.color, style: style ?? this.style, visible: visible ?? this.visible);
   }
 }
 
 class GridOptions {
-  const GridOptions({
-    this.vertLines = const GridLineOptions(),
-    this.horzLines = const GridLineOptions(),
-  });
+  const GridOptions({this.vertLines = const GridLineOptions(), this.horzLines = const GridLineOptions()});
 
   final GridLineOptions vertLines;
   final GridLineOptions horzLines;
 
   GridOptions copyWith({GridLineOptions? vertLines, GridLineOptions? horzLines}) {
-    return GridOptions(
-      vertLines: vertLines ?? this.vertLines,
-      horzLines: horzLines ?? this.horzLines,
-    );
+    return GridOptions(vertLines: vertLines ?? this.vertLines, horzLines: horzLines ?? this.horzLines);
   }
 }
 
@@ -350,15 +336,19 @@ class TimeScaleOptions {
 
   /// Margin from the last bar to the right edge, in bars.
   final double rightOffset;
+
   /// Margin from the last bar to the right edge in pixels; overrides [rightOffset].
   final double? rightOffsetPixels;
+
   /// Distance between bars in logical pixels.
   final double barSpacing;
   final double minBarSpacing;
+
   /// 0 means "half of the chart width".
   final double maxBarSpacing;
   final bool fixLeftEdge;
   final bool fixRightEdge;
+
   /// Keep the visible range (not the bar spacing) when the chart is resized.
   final bool lockVisibleTimeRangeOnResize;
   final bool rightBarStaysOnScroll;
@@ -367,23 +357,32 @@ class TimeScaleOptions {
   final Color borderColor;
   final bool timeVisible;
   final bool secondsVisible;
+
   /// Keep following the last bar when a new one arrives (only while it is visible).
   final bool shiftVisibleRangeOnNewBar;
+
   /// Also follow when a whitespace point at the end is replaced by data.
   final bool allowShiftVisibleRangeOnWhitespaceReplacement;
+
   /// Draw small ticks at the labels.
   final bool ticksVisible;
   final int tickMarkMaxCharacterLength;
+
   /// Only keep tick marks evenly spaced.
   final bool uniformDistribution;
+
   /// Minimum height of the time axis.
   final double minimumHeight;
+
   /// Draw the heaviest tick marks (e.g. a new day) in bold.
   final bool allowBoldLabels;
+
   /// The crosshair and tick marks skip whitespace points.
   final bool ignoreWhitespaceIndices;
+
   /// Merge bars that would be narrower than a device pixel, for speed with large data sets.
   final bool enableConflation;
+
   /// Values above 1 conflate earlier (smoother sparklines).
   final double conflationThresholdFactor;
 
@@ -440,7 +439,8 @@ class TimeScaleOptions {
       timeVisible: timeVisible ?? this.timeVisible,
       secondsVisible: secondsVisible ?? this.secondsVisible,
       shiftVisibleRangeOnNewBar: shiftVisibleRangeOnNewBar ?? this.shiftVisibleRangeOnNewBar,
-      allowShiftVisibleRangeOnWhitespaceReplacement: allowShiftVisibleRangeOnWhitespaceReplacement ?? this.allowShiftVisibleRangeOnWhitespaceReplacement,
+      allowShiftVisibleRangeOnWhitespaceReplacement:
+          allowShiftVisibleRangeOnWhitespaceReplacement ?? this.allowShiftVisibleRangeOnWhitespaceReplacement,
       ticksVisible: ticksVisible ?? this.ticksVisible,
       tickMarkMaxCharacterLength: tickMarkMaxCharacterLength ?? this.tickMarkMaxCharacterLength,
       uniformDistribution: uniformDistribution ?? this.uniformDistribution,
@@ -655,20 +655,15 @@ class ChartOptions {
 /// How prices of a series are formatted and how fine the price tick marks are.
 class PriceFormat {
   /// Decimal price with [precision] digits, rounded to [minMove].
-  const PriceFormat.price({this.precision = 2, this.minMove = 0.01})
-      : type = PriceFormatType.price,
-        formatter = null;
+  const PriceFormat.price({this.precision = 2, this.minMove = 0.01}) : type = PriceFormatType.price, formatter = null;
 
   /// Abbreviated volume (1.2K, 3.4M, 5B).
-  const PriceFormat.volume({this.precision = 2})
-      : type = PriceFormatType.volume,
-        minMove = 1,
-        formatter = null;
+  const PriceFormat.volume({this.precision = 2}) : type = PriceFormatType.volume, minMove = 1, formatter = null;
 
   /// Fully custom formatting.
   const PriceFormat.custom(PriceFormatterFn this.formatter, {this.minMove = 0.01})
-      : type = PriceFormatType.custom,
-        precision = 2;
+    : type = PriceFormatType.custom,
+      precision = 2;
 
   final PriceFormatType type;
   final int precision;

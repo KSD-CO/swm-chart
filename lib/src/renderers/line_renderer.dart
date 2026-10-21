@@ -60,11 +60,7 @@ void strokeLine(
     // A single point: a horizontal tick as wide as a bar, like upstream.
     final half = ctx.timeScale.barSpacing * pr / 2;
     paint.color = colorOf(from);
-    ctx.canvas.drawLine(
-      Offset(points.xs[0] - half, points.ys[0]),
-      Offset(points.xs[0] + half, points.ys[0]),
-      paint,
-    );
+    ctx.canvas.drawLine(Offset(points.xs[0] - half, points.ys[0]), Offset(points.xs[0] + half, points.ys[0]), paint);
     return;
   }
 

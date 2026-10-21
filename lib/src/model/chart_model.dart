@@ -43,14 +43,7 @@ class CrosshairState {
 
 /// Payload of crosshair-move and click events.
 class ModelEventParams {
-  const ModelEventParams({
-    this.time,
-    this.logical,
-    this.point,
-    this.paneIndex,
-    this.seriesData = const {},
-    this.hit,
-  });
+  const ModelEventParams({this.time, this.logical, this.point, this.paneIndex, this.seriesData = const {}, this.hit});
 
   /// What is under the pointer, if anything.
   final HitTestResult? hit;
@@ -79,7 +72,7 @@ class PriceAxisLabelSpec {
 
 class ChartModel extends ChangeNotifier {
   ChartModel(this._options, {this.behavior = const TimeHorzScaleBehavior()})
-      : timeScale = TimeScale(_options.timeScale) {
+    : timeScale = TimeScale(_options.timeScale) {
     if (_options.addDefaultPane) panes.add(Pane(_options));
   }
 
@@ -169,8 +162,8 @@ class ChartModel extends ChangeNotifier {
   Duration get now => _clock.elapsed;
 
   void applyOptions(ChartOptions options) {
-    final fontChanged = options.layout.fontSize != _options.layout.fontSize ||
-        options.layout.fontFamily != _options.layout.fontFamily;
+    final fontChanged =
+        options.layout.fontSize != _options.layout.fontSize || options.layout.fontFamily != _options.layout.fontFamily;
     _options = options;
     timeScale.applyOptions(options.timeScale);
     for (final p in panes) {
@@ -354,7 +347,8 @@ class ChartModel extends ChangeNotifier {
     final previous = s.lastItem;
     final kind = s.update(item);
     final last = s.lastItem;
-    if (last != null && (previous == null || kind != SeriesUpdateKind.replaced || s.closeValue(previous) != s.closeValue(last))) {
+    if (last != null &&
+        (previous == null || kind != SeriesUpdateKind.replaced || s.closeValue(previous) != s.closeValue(last))) {
       s.lastUpdateTime = now;
     }
     final time = item.time;
@@ -465,7 +459,8 @@ class ChartModel extends ChangeNotifier {
       final isLeftBarShiftToLeft = oldFirstTime > newFirstTime;
       final isSeriesPointsAdded = newBaseIndex != null && newBaseIndex > currentBaseIndex;
       final isSeriesPointsAddedToRight = isSeriesPointsAdded && !isLeftBarShiftToLeft;
-      final needShift = isLastSeriesBarVisible &&
+      final needShift =
+          isLastSeriesBarVisible &&
           (!replacedWhitespace || timeScale.options.allowShiftVisibleRangeOnWhitespaceReplacement) &&
           timeScale.options.shiftVisibleRangeOnNewBar;
       if (isSeriesPointsAddedToRight && !needShift) {
@@ -575,8 +570,14 @@ class ChartModel extends ChangeNotifier {
       if (!ps.isEmpty && _options.crosshair.horzLine.labelVisible) {
         final top = ps.coordinateToDisplay(1);
         final bottom = ps.coordinateToDisplay(ps.height - 2);
-        maxWidth = math.max(maxWidth, measureText(ps.formatLogical(math.min(top, bottom).floorToDouble() + 0.11111111111111)));
-        maxWidth = math.max(maxWidth, measureText(ps.formatLogical(math.max(top, bottom).ceilToDouble() - 0.11111111111111)));
+        maxWidth = math.max(
+          maxWidth,
+          measureText(ps.formatLogical(math.min(top, bottom).floorToDouble() + 0.11111111111111)),
+        );
+        maxWidth = math.max(
+          maxWidth,
+          measureText(ps.formatLogical(math.max(top, bottom).ceilToDouble() - 0.11111111111111)),
+        );
       }
     }
     if (maxWidth == 0) maxWidth = 34; // DefaultOptimalWidth
@@ -640,8 +641,9 @@ class ChartModel extends ChangeNotifier {
     }
   }
 
-  String formatSeriesPrice(SeriesModel s, double price) =>
-      s.priceScale.isPercentLike ? s.formatPrice(price) : (_options.localization.priceFormatter ?? s.formatter.call)(price);
+  String formatSeriesPrice(SeriesModel s, double price) => s.priceScale.isPercentLike
+      ? s.formatPrice(price)
+      : (_options.localization.priceFormatter ?? s.formatter.call)(price);
 
   String formatTime(num time) => behavior.formatHorzItem(time, _options);
 
@@ -660,23 +662,27 @@ class ChartModel extends ChangeNotifier {
       final item = s.priceLineItem(visible);
       if (s.visible && s.options.lastValueVisible && item != null) {
         final price = s.closeValue(item);
-        labels.add(PriceAxisLabelSpec(
-          s.priceToCoordinate(price),
-          formatSeriesPrice(s, price),
-          s.options.priceLineColor ?? s.itemColor(item),
-          title: s.options.title,
-        ));
+        labels.add(
+          PriceAxisLabelSpec(
+            s.priceToCoordinate(price),
+            formatSeriesPrice(s, price),
+            s.options.priceLineColor ?? s.itemColor(item),
+            title: s.options.title,
+          ),
+        );
       }
       for (final line in s.priceLines) {
         final o = line.options;
         if (!o.axisLabelVisible) continue;
-        labels.add(PriceAxisLabelSpec(
-          s.priceToCoordinate(o.price),
-          formatSeriesPrice(s, o.price),
-          o.axisLabelColor ?? o.color,
-          textColor: o.axisLabelTextColor,
-          title: o.title,
-        ));
+        labels.add(
+          PriceAxisLabelSpec(
+            s.priceToCoordinate(o.price),
+            formatSeriesPrice(s, o.price),
+            o.axisLabelColor ?? o.color,
+            textColor: o.axisLabelTextColor,
+            title: o.title,
+          ),
+        );
       }
       if (s.primitives.isNotEmpty) {
         final ctx = primitiveContext(pane, s);
@@ -781,9 +787,7 @@ class ChartModel extends ChangeNotifier {
     return best ?? index;
   }
 
-  Map<SeriesModel, SeriesData> _dataAt(int index) => {
-        for (final s in series) s: ?s.itemAt(index),
-      };
+  Map<SeriesModel, SeriesData> _dataAt(int index) => {for (final s in series) s: ?s.itemAt(index)};
 
   ModelEventParams _eventParams(CrosshairState? c) {
     if (c == null) return const ModelEventParams();

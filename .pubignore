@@ -1,0 +1,9 @@
+# Not needed by package users.
+tool/
+example/android/
+example/ios/
+example/macos/
+example/build/
+example/.dart_tool/
+build/
+.dart_tool/

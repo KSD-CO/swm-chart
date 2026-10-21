@@ -49,15 +49,7 @@ void drawHorizontalLine(
 }
 
 /// Vertical line in bitmap coordinates. [width] is in physical pixels.
-void drawVerticalLine(
-  Canvas canvas,
-  Paint paint,
-  double x,
-  double top,
-  double bottom,
-  double width,
-  LineStyle style,
-) {
+void drawVerticalLine(Canvas canvas, Paint paint, double x, double top, double bottom, double width, LineStyle style) {
   final correction = (width.round() % 2 == 1) ? 0.5 : 0.0;
   final xx = x + correction;
   paint
@@ -102,7 +94,15 @@ void fillRect(Canvas canvas, Paint paint, double x, double y, double w, double h
   canvas.drawRect(Rect.fromLTWH(x, y, w, h), paint);
 }
 
-void fillRectInnerBorder(Canvas canvas, Paint paint, double x, double y, double width, double height, double borderWidth) {
+void fillRectInnerBorder(
+  Canvas canvas,
+  Paint paint,
+  double x,
+  double y,
+  double width,
+  double height,
+  double borderWidth,
+) {
   fillRect(canvas, paint, x + borderWidth, y, width - borderWidth * 2, borderWidth);
   fillRect(canvas, paint, x + borderWidth, y + height - borderWidth, width - borderWidth * 2, borderWidth);
   fillRect(canvas, paint, x, y, borderWidth, height);

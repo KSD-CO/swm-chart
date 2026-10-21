@@ -62,22 +62,12 @@ void paintArea(SeriesPaintContext ctx, AreaSeriesModel series) {
   final pr = ctx.pixelRatio;
 
   final baseY = o.invertFilledArea ? 0.0 : ctx.paneSize.height * pr;
-  final (top, bottom) = o.relativeGradient
-      ? _gradientBounds(ctx, points, true)
-      : (0.0, ctx.paneSize.height * pr);
+  final (top, bottom) = o.relativeGradient ? _gradientBounds(ctx, points, true) : (0.0, ctx.paneSize.height * pr);
 
-  _fillArea<(Color, Color)>(
-    ctx,
-    series,
-    points,
-    from,
-    baseY,
-    (i) {
-      final d = items.data[i];
-      return (d.topColor ?? o.topColor, d.bottomColor ?? o.bottomColor);
-    },
-    (style) => Gradient.linear(Offset(0, top), Offset(0, bottom), [style.$1, style.$2]),
-  );
+  _fillArea<(Color, Color)>(ctx, series, points, from, baseY, (i) {
+    final d = items.data[i];
+    return (d.topColor ?? o.topColor, d.bottomColor ?? o.bottomColor);
+  }, (style) => Gradient.linear(Offset(0, top), Offset(0, bottom), [style.$1, style.$2]));
 
   Color colorOf(int i) => series.lineColor(items.data[i]);
   if (o.lineVisible) strokeLine(ctx, series, points, from, colorOf);
@@ -97,28 +87,15 @@ void paintBaseline(SeriesPaintContext ctx, BaselineSeriesModel series) {
   final (top, bottom) = _gradientBounds(ctx, points, o.relativeGradient);
   final ratio = ((baseY - top) / (bottom - top)).clamp(0.0, 1.0);
 
-  _fillArea<(Color, Color, Color, Color)>(
-    ctx,
-    series,
-    points,
-    from,
-    baseY,
-    (i) {
-      final d = items.data[i];
-      return (
-        d.topFillColor1 ?? o.topFillColor1,
-        d.topFillColor2 ?? o.topFillColor2,
-        d.bottomFillColor1 ?? o.bottomFillColor1,
-        d.bottomFillColor2 ?? o.bottomFillColor2,
-      );
-    },
-    (s) => Gradient.linear(
-      Offset(0, top),
-      Offset(0, bottom),
-      [s.$1, s.$2, s.$3, s.$4],
-      [0, ratio, ratio, 1],
-    ),
-  );
+  _fillArea<(Color, Color, Color, Color)>(ctx, series, points, from, baseY, (i) {
+    final d = items.data[i];
+    return (
+      d.topFillColor1 ?? o.topFillColor1,
+      d.topFillColor2 ?? o.topFillColor2,
+      d.bottomFillColor1 ?? o.bottomFillColor1,
+      d.bottomFillColor2 ?? o.bottomFillColor2,
+    );
+  }, (s) => Gradient.linear(Offset(0, top), Offset(0, bottom), [s.$1, s.$2, s.$3, s.$4], [0, ratio, ratio, 1]));
 
   if (o.lineVisible) {
     // The line takes the top color above the base value and the bottom

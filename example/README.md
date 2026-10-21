@@ -1,17 +1,12 @@
-# swm_chart_example
+# Stock World Monitor Charts example
 
-A new Flutter project.
+A trading screen (candles, volume, SMA, RSI pane with buy/sell markers,
+live updates, history lazy-loading, log/percentage scales, dark mode), a
+yield curve and an options chain built with `swm_chart`.
 
-## Getting Started
+```sh
+flutter run
+```
 
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+`integration_test/` holds a gesture test and a frame-timing benchmark
+(`perf_test.dart`, run in profile mode).

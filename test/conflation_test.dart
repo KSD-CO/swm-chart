@@ -7,7 +7,10 @@ import 'package:swm_chart/swm_chart.dart';
 /// Straight port of upstream's DataConflater for OHLC rows: level 2 from
 /// the data in pairs (a trailing odd row folded into the previous chunk),
 /// level 2k from level k.
-List<(int, double, double, double, double)> referenceLevel(List<(int, double, double, double, double)> rows, int level) {
+List<(int, double, double, double, double)> referenceLevel(
+  List<(int, double, double, double, double)> rows,
+  int level,
+) {
   List<(int, double, double, double, double)> pairs(List<(int, double, double, double, double)> src) {
     final out = <(int, double, double, double, double)>[];
     for (var i = 0; i < src.length; i += 2) {
@@ -32,13 +35,19 @@ List<(int, double, double, double, double)> referenceLevel(List<(int, double, do
 }
 
 List<(int, double, double, double, double)> rowsOf(SeriesItems<CandlestickData> items) => [
-      for (var i = 0; i < items.length; i++)
-        (items.indices[i], items.data[i].open, items.data[i].high, items.data[i].low, items.data[i].close),
-    ];
+  for (var i = 0; i < items.length; i++)
+    (items.indices[i], items.data[i].open, items.data[i].high, items.data[i].low, items.data[i].close),
+];
 
 CandlestickData bar(int i, math.Random r) {
   final o = r.nextDouble() * 100;
-  return CandlestickData(time: i, open: o, high: o + r.nextDouble() * 10, low: o - r.nextDouble() * 10, close: r.nextDouble() * 100);
+  return CandlestickData(
+    time: i,
+    open: o,
+    high: o + r.nextDouble() * 10,
+    low: o - r.nextDouble() * 10,
+    close: r.nextDouble() * 100,
+  );
 }
 
 void main() {
@@ -105,7 +114,9 @@ void main() {
 
   test('per-series conflationThresholdFactor', () {
     final chart = ChartController(
-      options: const ChartOptions(timeScale: TimeScaleOptions(enableConflation: true, barSpacing: 0.3, minBarSpacing: 0.01)),
+      options: const ChartOptions(
+        timeScale: TimeScaleOptions(enableConflation: true, barSpacing: 0.3, minBarSpacing: 0.01),
+      ),
     );
     final ts = chart.model.timeScale;
     expect(ts.conflationFactor(2), 1); // 0.3 >= 0.5 / 1? no: threshold 0.5 -> factor 1

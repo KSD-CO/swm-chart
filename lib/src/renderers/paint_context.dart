@@ -23,14 +23,14 @@ class SeriesPaintContext {
   final int conflationFactor;
 
   SeriesPaintContext withConflationFactor(int factor) => SeriesPaintContext(
-        canvas: canvas,
-        pixelRatio: pixelRatio,
-        timeScale: timeScale,
-        visibleRange: visibleRange,
-        paneSize: paneSize,
-        backgroundColor: backgroundColor,
-        conflationFactor: factor,
-      );
+    canvas: canvas,
+    pixelRatio: pixelRatio,
+    timeScale: timeScale,
+    visibleRange: visibleRange,
+    paneSize: paneSize,
+    backgroundColor: backgroundColor,
+    conflationFactor: factor,
+  );
 
   final Canvas canvas;
   final double pixelRatio;

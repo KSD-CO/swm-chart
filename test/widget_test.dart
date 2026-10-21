@@ -7,9 +7,9 @@ const _day = 86400;
 const _t0 = 1704067200;
 
 List<CandlestickData> _bars(int count) => List.generate(count, (i) {
-      final o = 100.0 + (i % 20);
-      return CandlestickData(time: _t0 + i * _day, open: o, high: o + 3, low: o - 3, close: i.isEven ? o + 1 : o - 1);
-    });
+  final o = 100.0 + (i % 20);
+  return CandlestickData(time: _t0 + i * _day, open: o, high: o + 3, low: o - 3, close: i.isEven ? o + 1 : o - 1);
+});
 
 Future<ChartController> _pump(WidgetTester tester) async {
   final chart = ChartController();
@@ -17,7 +17,13 @@ Future<ChartController> _pump(WidgetTester tester) async {
   chart.addLineSeries(const LineSeriesOptions(lineStyle: LineStyle.dashed)).setData([
     for (var i = 0; i < 500; i++) LineData(time: _t0 + i * _day, value: 100.0 + (i % 20)),
   ]);
-  await tester.pumpWidget(MaterialApp(home: Scaffold(body: SizedBox(width: 400, height: 300, child: SwmChart(controller: chart)))));
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        body: SizedBox(width: 400, height: 300, child: SwmChart(controller: chart)),
+      ),
+    ),
+  );
   addTearDown(chart.dispose);
   return chart;
 }
@@ -82,19 +88,41 @@ Future<ChartController> _pumpAll(WidgetTester tester) async {
   final chart = ChartController(options: const ChartOptions(leftPriceScale: PriceScaleOptions(visible: true)));
   final candles = chart.addCandlestickSeries()..setData(_bars(300));
   createSeriesMarkers(candles, [
-    SeriesMarker(time: _t0 + 290 * _day, position: SeriesMarkerPosition.aboveBar, shape: SeriesMarkerShape.arrowDown, color: Colors.red, text: 'Sell'),
-    SeriesMarker(time: _t0 + 295 * _day, position: SeriesMarkerPosition.belowBar, shape: SeriesMarkerShape.circle, color: Colors.green),
+    SeriesMarker(
+      time: _t0 + 290 * _day,
+      position: SeriesMarkerPosition.aboveBar,
+      shape: SeriesMarkerShape.arrowDown,
+      color: Colors.red,
+      text: 'Sell',
+    ),
+    SeriesMarker(
+      time: _t0 + 295 * _day,
+      position: SeriesMarkerPosition.belowBar,
+      shape: SeriesMarkerShape.circle,
+      color: Colors.green,
+    ),
   ]);
   candles.createPriceLine(const PriceLineOptions(price: 110, title: 'TP'));
   chart.addBarSeries(const BarSeriesOptions(priceScaleId: 'left')).setData([
     for (var i = 0; i < 300; i++) BarData(time: _t0 + i * _day, open: 10, high: 12, low: 8, close: 11),
   ]);
-  chart.addAreaSeries(const AreaSeriesOptions(lineType: LineType.curved, lastPriceAnimation: LastPriceAnimationMode.continuous), 1)
+  chart
+      .addAreaSeries(
+        const AreaSeriesOptions(lineType: LineType.curved, lastPriceAnimation: LastPriceAnimationMode.continuous),
+        1,
+      )
       .setData([for (var i = 0; i < 300; i++) AreaData(time: _t0 + i * _day, value: (i % 30).toDouble())]);
-  chart.addBaselineSeries(const BaselineSeriesOptions(baseValue: 15, lineType: LineType.withSteps), 2)
-      .setData([for (var i = 0; i < 300; i++) BaselineData(time: _t0 + i * _day, value: (i % 30).toDouble())]);
+  chart.addBaselineSeries(const BaselineSeriesOptions(baseValue: 15, lineType: LineType.withSteps), 2).setData([
+    for (var i = 0; i < 300; i++) BaselineData(time: _t0 + i * _day, value: (i % 30).toDouble()),
+  ]);
   createTextWatermark(chart.panes()[0], const TextWatermarkOptions(lines: [TextWatermarkLine(text: 'SWM')]));
-  await tester.pumpWidget(MaterialApp(home: Scaffold(body: SizedBox(width: 400, height: 600, child: SwmChart(controller: chart)))));
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        body: SizedBox(width: 400, height: 600, child: SwmChart(controller: chart)),
+      ),
+    ),
+  );
   addTearDown(chart.dispose);
   return chart;
 }

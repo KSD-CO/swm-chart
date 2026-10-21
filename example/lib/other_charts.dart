@@ -21,22 +21,30 @@ class _YieldCurveScreenState extends State<YieldCurveScreen> {
   @override
   void initState() {
     super.initState();
-    _chart.addAreaSeries(const AreaSeriesOptions(
-      lineColor: Color(0xFF2962FF),
-      topColor: Color(0x552962FF),
-      bottomColor: Color(0x002962FF),
-      lineWidth: 2,
-      lineType: LineType.curved,
-      pointMarkersVisible: true,
-      title: 'Today',
-    )).setData([for (var i = 0; i < _maturities.length; i++) AreaData(time: _maturities[i], value: _today[i])]);
-    _chart.addLineSeries(const LineSeriesOptions(
-      color: Color(0xFFFF9800),
-      lineWidth: 2,
-      lineStyle: LineStyle.dashed,
-      lineType: LineType.curved,
-      title: '1Y ago',
-    )).setData([for (var i = 0; i < _maturities.length; i++) LineData(time: _maturities[i], value: _yearAgo[i])]);
+    _chart
+        .addAreaSeries(
+          const AreaSeriesOptions(
+            lineColor: Color(0xFF2962FF),
+            topColor: Color(0x552962FF),
+            bottomColor: Color(0x002962FF),
+            lineWidth: 2,
+            lineType: LineType.curved,
+            pointMarkersVisible: true,
+            title: 'Today',
+          ),
+        )
+        .setData([for (var i = 0; i < _maturities.length; i++) AreaData(time: _maturities[i], value: _today[i])]);
+    _chart
+        .addLineSeries(
+          const LineSeriesOptions(
+            color: Color(0xFFFF9800),
+            lineWidth: 2,
+            lineStyle: LineStyle.dashed,
+            lineType: LineType.curved,
+            title: '1Y ago',
+          ),
+        )
+        .setData([for (var i = 0; i < _maturities.length; i++) LineData(time: _maturities[i], value: _yearAgo[i])]);
     _chart.timeScale().fitContent(); // applied once the chart is laid out
   }
 
@@ -70,16 +78,23 @@ class _OptionsChainScreenState extends State<OptionsChainScreen> {
     _chart.addLineSeries(const LineSeriesOptions(color: Color(0xFF7E57C2), lineWidth: 2, title: 'IV %')).setData([
       for (final k in strikes) LineData(time: k, value: 18 + 0.02 * (k - spot) * (k - spot) / 2.5),
     ]);
-    _chart.addHistogramSeries(
-      const HistogramSeriesOptions(priceScaleId: 'oi', priceFormat: PriceFormat.volume(), lastValueVisible: false, priceLineVisible: false),
-    ).setData([
-      for (final k in strikes)
-        HistogramData(
-          time: k,
-          value: 5000 / (1 + ((k - spot) / 8) * ((k - spot) / 8)),
-          color: k < spot ? const Color(0x8026A69A) : const Color(0x80EF5350),
-        ),
-    ]);
+    _chart
+        .addHistogramSeries(
+          const HistogramSeriesOptions(
+            priceScaleId: 'oi',
+            priceFormat: PriceFormat.volume(),
+            lastValueVisible: false,
+            priceLineVisible: false,
+          ),
+        )
+        .setData([
+          for (final k in strikes)
+            HistogramData(
+              time: k,
+              value: 5000 / (1 + ((k - spot) / 8) * ((k - spot) / 8)),
+              color: k < spot ? const Color(0x8026A69A) : const Color(0x80EF5350),
+            ),
+        ]);
     _chart.priceScale('oi').applyOptions(const PriceScaleOptions(scaleMargins: ScaleMargins(top: 0.7, bottom: 0)));
     _chart.timeScale().fitContent(); // applied once the chart is laid out
   }

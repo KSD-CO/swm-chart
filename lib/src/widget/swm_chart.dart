@@ -222,7 +222,9 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
       case _DragMode.scroll:
         if (!_dragIsMouse && _panAxis == null) {
           final delta = d.localFocalPoint - _panStart;
-          if (delta.distance > kTouchSlop) _panAxis = delta.dx.abs() >= delta.dy.abs() ? Axis.horizontal : Axis.vertical;
+          if (delta.distance > kTouchSlop) {
+            _panAxis = delta.dx.abs() >= delta.dy.abs() ? Axis.horizontal : Axis.vertical;
+          }
         }
         final timeAllowed = _dragIsMouse || _panAxis != Axis.vertical;
         final priceAllowed = _dragIsMouse || _panAxis == Axis.vertical;
@@ -332,7 +334,8 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
     final hit = _hitTest(d.localPosition);
     final now = _clock.elapsed;
     final last = _lastTap;
-    final isDoubleTap = last != null &&
+    final isDoubleTap =
+        last != null &&
         last.region == hit.region &&
         last.index == hit.index &&
         _lastTapTime != null &&

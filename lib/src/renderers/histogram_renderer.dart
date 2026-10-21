@@ -102,8 +102,13 @@ void paintHistogram(SeriesPaintContext ctx, HistogramSeriesModel series) {
       top = topHistogramBase;
       bottom = y - tickWidth ~/ 2 + tickWidth;
     }
-    batch.add(lefts[j].toDouble(), top.toDouble(), (rights[j] - lefts[j] + 1).toDouble(), (bottom - top).toDouble(),
-        colors[j]);
+    batch.add(
+      lefts[j].toDouble(),
+      top.toDouble(),
+      (rights[j] - lefts[j] + 1).toDouble(),
+      (bottom - top).toDouble(),
+      colors[j],
+    );
   }
   batch.flush(ctx.canvas);
 }

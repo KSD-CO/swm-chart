@@ -28,14 +28,14 @@ int optimalCandlestickWidth(double barSpacing, double pixelRatio) {
 /// Visible candles in structure-of-arrays form: no object per candle.
 class _Bars {
   _Bars(this.length)
-      : x = Float64List(length),
-        openY = Float64List(length),
-        highY = Float64List(length),
-        lowY = Float64List(length),
-        closeY = Float64List(length),
-        barColor = Int32List(length),
-        borderColor = Int32List(length),
-        wickColor = Int32List(length);
+    : x = Float64List(length),
+      openY = Float64List(length),
+      highY = Float64List(length),
+      lowY = Float64List(length),
+      closeY = Float64List(length),
+      barColor = Int32List(length),
+      borderColor = Int32List(length),
+      wickColor = Int32List(length);
 
   final int length;
   final Float64List x;
@@ -173,14 +173,7 @@ void _drawBorder(RectBatch batch, _Bars bars, int barWidth, double barSpacing, d
   }
 }
 
-void _drawCandles(
-  RectBatch batch,
-  _Bars bars,
-  int barWidth,
-  int borderWidth,
-  bool borderVisible,
-  double pr,
-) {
+void _drawCandles(RectBatch batch, _Bars bars, int barWidth, int borderWidth, bool borderVisible, double pr) {
   for (var j = 0; j < bars.length; j++) {
     var top = (math.min(bars.openY[j], bars.closeY[j]) * pr).round();
     var bottom = (math.max(bars.openY[j], bars.closeY[j]) * pr).round();
@@ -195,6 +188,12 @@ void _drawCandles(
     }
     if (top > bottom) continue;
 
-    batch.add(left.toDouble(), top.toDouble(), (right - left + 1).toDouble(), (bottom - top + 1).toDouble(), bars.barColor[j]);
+    batch.add(
+      left.toDouble(),
+      top.toDouble(),
+      (right - left + 1).toDouble(),
+      (bottom - top + 1).toDouble(),
+      bars.barColor[j],
+    );
   }
 }

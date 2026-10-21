@@ -33,10 +33,9 @@ void paintAttributionLogo(Canvas canvas, Offset origin, {required bool darkBackg
 /// Parses the subset of SVG path data used by the logo: M, L, H, V, A, Z in
 /// absolute and relative forms.
 Path parseSvgPath(String data) {
-  final tokens = RegExp(r'[MmLlHhVvAaZz]|-?(?:\d+\.?\d*|\.\d+)(?:e-?\d+)?')
-      .allMatches(data)
-      .map((m) => m.group(0)!)
-      .toList();
+  final tokens = RegExp(
+    r'[MmLlHhVvAaZz]|-?(?:\d+\.?\d*|\.\d+)(?:e-?\d+)?',
+  ).allMatches(data).map((m) => m.group(0)!).toList();
   final path = Path();
   var i = 0;
   var command = 'M';
@@ -105,8 +104,8 @@ bool isDarkTheme(Color textColor) {
 
 /// Hit area of the logo in chart coordinates.
 Rect attributionLogoRect(Rect lastPaneRect) => Rect.fromLTWH(
-      lastPaneRect.left + attributionLogoMargin,
-      lastPaneRect.bottom - attributionLogoMargin - attributionLogoHeight,
-      attributionLogoWidth,
-      attributionLogoHeight,
-    );
+  lastPaneRect.left + attributionLogoMargin,
+  lastPaneRect.bottom - attributionLogoMargin - attributionLogoHeight,
+  attributionLogoWidth,
+  attributionLogoHeight,
+);

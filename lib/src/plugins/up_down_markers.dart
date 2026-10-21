@@ -88,10 +88,10 @@ class UpDownMarkersPrimitive extends ChartPrimitive {
   }
 
   Color _color(MarkerSign sign) => switch (sign) {
-        MarkerSign.positive => _options.positiveColor,
-        MarkerSign.negative => _options.negativeColor,
-        MarkerSign.neutral => _neutralColor(),
-      };
+    MarkerSign.positive => _options.positiveColor,
+    MarkerSign.negative => _options.negativeColor,
+    MarkerSign.neutral => _neutralColor(),
+  };
 
   @override
   void paint(PrimitivePaintContext ctx) {
@@ -150,7 +150,10 @@ class UpDownMarkersPlugin<T extends SingleValueData, O extends LineLikeSeriesOpt
   void setData(List<SeriesData> data) {
     _values
       ..clear()
-      ..addEntries([for (final d in data) if (d is SingleValueData) MapEntry(d.time, d.value)]);
+      ..addEntries([
+        for (final d in data)
+          if (d is SingleValueData) MapEntry(d.time, d.value),
+      ]);
     _series.setData(data);
   }
 

@@ -54,7 +54,8 @@ class TickMarks {
   }) {
     final maxIndexesPerMark = (maxWidth / spacing).ceil();
     final filter = checkIndicesForData ? indicesWithData : null;
-    final sameParams = _cache != null &&
+    final sameParams =
+        _cache != null &&
         _cacheMaxIndexesPerMark == maxIndexesPerMark &&
         _cacheCheckIndices == checkIndicesForData &&
         _cacheIndicesWithDataId == indicesWithDataId;
@@ -108,12 +109,7 @@ class TickMarks {
       return double.negativeInfinity;
     }
 
-    final tail = _buildMarksImpl(
-      maxIndexesPerMark,
-      indicesWithData,
-      fromIndex: cutoff,
-      initialLeft: leftmostAtLeast,
-    );
+    final tail = _buildMarksImpl(maxIndexesPerMark, indicesWithData, fromIndex: cutoff, initialLeft: leftmostAtLeast);
     return [...prefix, ...tail];
   }
 

@@ -24,13 +24,15 @@ List<CandlestickData> generateBars(int count) {
   for (var i = 0; i < count; i++) {
     final open = close;
     close = math.max(1, open + (random.nextDouble() - 0.5) * 2);
-    bars.add(CandlestickData(
-      time: t0 + i * 60,
-      open: open,
-      high: math.max(open, close) + random.nextDouble(),
-      low: math.min(open, close) - random.nextDouble(),
-      close: close,
-    ));
+    bars.add(
+      CandlestickData(
+        time: t0 + i * 60,
+        open: open,
+        high: math.max(open, close) + random.nextDouble(),
+        low: math.min(open, close) - random.nextDouble(),
+        close: close,
+      ),
+    );
   }
   return bars;
 }
@@ -47,8 +49,10 @@ class BenchChart extends StatefulWidget {
 class _BenchChartState extends State<BenchChart> {
   @override
   Widget build(BuildContext context) => MaterialApp(
-        home: Scaffold(body: SizedBox(width: 800, height: 600, child: SwmChart(controller: widget.chart))),
-      );
+    home: Scaffold(
+      body: SizedBox(width: 800, height: 600, child: SwmChart(controller: widget.chart)),
+    ),
+  );
 }
 
 /// Runs [onFrame] every frame for [scenarioLength].
@@ -85,12 +89,7 @@ Future<Map<String, Object>> measureFrames(Future<void> Function() action) async 
   Map<String, double> stats(List<double> ms) {
     ms.sort();
     double pct(double p) => ms[math.min(ms.length - 1, (ms.length * p).floor())];
-    return {
-      'avg': ms.reduce((a, b) => a + b) / ms.length,
-      'p90': pct(0.9),
-      'p99': pct(0.99),
-      'worst': ms.last,
-    };
+    return {'avg': ms.reduce((a, b) => a + b) / ms.length, 'p90': pct(0.9), 'p99': pct(0.99), 'worst': ms.last};
   }
 
   double millis(Duration d) => d.inMicroseconds / 1000;
@@ -107,7 +106,8 @@ void main() {
   binding.framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
   final bars = generateBars(barCount);
   final volumes = [
-    for (final b in bars) HistogramData(time: b.time, value: (b.high - b.low) * 1000, color: b.isUp ? Colors.teal : Colors.red),
+    for (final b in bars)
+      HistogramData(time: b.time, value: (b.high - b.low) * 1000, color: b.isUp ? Colors.teal : Colors.red),
   ];
   final timings = <String, Object?>{};
   final results = <String, Object?>{};
@@ -129,7 +129,9 @@ void main() {
     return (chart, candles);
   }
 
-  testWidgets('scroll (bar spacing 6)', skip: only.isNotEmpty && !'scroll (bar spacing 6)'.contains(only), (tester) async {
+  testWidgets('scroll (bar spacing 6)', skip: only.isNotEmpty && !'scroll (bar spacing 6)'.contains(only), (
+    tester,
+  ) async {
     final (chart, _) = await setUp(tester);
     results['scroll'] = await measureFrames(() async {
       await drive((t) => chart.timeScale().scrollToPosition(-t * 5000));
@@ -137,26 +139,36 @@ void main() {
     chart.dispose();
   });
 
-  testWidgets('zoomed out, 100k visible, no conflation', skip: only.isNotEmpty && !'zoomed out, 100k visible, no conflation'.contains(only), (tester) async {
-    final (chart, _) = await setUp(tester);
-    chart.timeScale().fitContent();
-    results['zoomed_out'] = await measureFrames(() async {
-      // Small jitter so every frame repaints and re-autoscales.
-      await drive((t) => chart.timeScale().scrollToPosition(math.sin(t * 20) * 50));
-    });
-    chart.dispose();
-  });
+  testWidgets(
+    'zoomed out, 100k visible, no conflation',
+    skip: only.isNotEmpty && !'zoomed out, 100k visible, no conflation'.contains(only),
+    (tester) async {
+      final (chart, _) = await setUp(tester);
+      chart.timeScale().fitContent();
+      results['zoomed_out'] = await measureFrames(() async {
+        // Small jitter so every frame repaints and re-autoscales.
+        await drive((t) => chart.timeScale().scrollToPosition(math.sin(t * 20) * 50));
+      });
+      chart.dispose();
+    },
+  );
 
-  testWidgets('zoomed out, 100k visible, conflation', skip: only.isNotEmpty && !'zoomed out, 100k visible, conflation'.contains(only), (tester) async {
-    final (chart, _) = await setUp(tester, conflation: true);
-    chart.timeScale().fitContent();
-    results['zoomed_out_conflation'] = await measureFrames(() async {
-      await drive((t) => chart.timeScale().scrollToPosition(math.sin(t * 20) * 50));
-    });
-    chart.dispose();
-  });
+  testWidgets(
+    'zoomed out, 100k visible, conflation',
+    skip: only.isNotEmpty && !'zoomed out, 100k visible, conflation'.contains(only),
+    (tester) async {
+      final (chart, _) = await setUp(tester, conflation: true);
+      chart.timeScale().fitContent();
+      results['zoomed_out_conflation'] = await measureFrames(() async {
+        await drive((t) => chart.timeScale().scrollToPosition(math.sin(t * 20) * 50));
+      });
+      chart.dispose();
+    },
+  );
 
-  testWidgets('realtime updates every frame', skip: only.isNotEmpty && !'realtime updates every frame'.contains(only), (tester) async {
+  testWidgets('realtime updates every frame', skip: only.isNotEmpty && !'realtime updates every frame'.contains(only), (
+    tester,
+  ) async {
     final (chart, candles) = await setUp(tester);
     var last = bars.last;
     var i = 0;
@@ -164,7 +176,13 @@ void main() {
       await drive((t) {
         i++;
         if (i % 30 == 0) {
-          last = CandlestickData(time: last.time + 60, open: last.close, high: last.close, low: last.close, close: last.close);
+          last = CandlestickData(
+            time: last.time + 60,
+            open: last.close,
+            high: last.close,
+            low: last.close,
+            close: last.close,
+          );
         } else {
           final c = last.close + math.sin(i / 3);
           last = CandlestickData(

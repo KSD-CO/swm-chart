@@ -20,12 +20,7 @@ enum PrimitiveZOrder {
 
 /// A label a primitive draws on the price or time axis.
 class AxisLabel {
-  const AxisLabel({
-    required this.coordinate,
-    required this.text,
-    required this.backgroundColor,
-    this.textColor,
-  });
+  const AxisLabel({required this.coordinate, required this.text, required this.backgroundColor, this.textColor});
 
   /// Y coordinate in the pane (price axis) or X coordinate (time axis), in
   /// logical pixels.

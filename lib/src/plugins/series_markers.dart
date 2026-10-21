@@ -128,7 +128,9 @@ class SeriesMarkersPrimitive extends ChartPrimitive {
     }
     final margin = _calculateShapeHeight(barSpacing) * 1.5 + _shapeMargin(barSpacing) * 2;
     double adjusted(bool side) => side ? margin : (inBar ? (margin / 2).ceilToDouble() : 0);
-    return AutoscaleInfo(margins: AutoscaleMargins(above: adjusted(aboveBar), below: adjusted(belowBar)));
+    return AutoscaleInfo(
+      margins: AutoscaleMargins(above: adjusted(aboveBar), below: adjusted(belowBar)),
+    );
   }
 
   /// Center Y of the first marker drawn in the last frame (tests only).

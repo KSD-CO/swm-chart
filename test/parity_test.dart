@@ -8,8 +8,9 @@ import 'package:swm_chart/swm_chart.dart';
 const _day = 86400;
 const _t0 = 1704067200; // 2024-01-01T00:00:00Z
 
-List<LineData> _line(int count, [int start = 0]) =>
-    [for (var i = start; i < start + count; i++) LineData(time: _t0 + i * _day, value: i.toDouble())];
+List<LineData> _line(int count, [int start = 0]) => [
+  for (var i = start; i < start + count; i++) LineData(time: _t0 + i * _day, value: i.toDouble()),
+];
 
 double _measure(String s) => s.length * 7.0;
 
@@ -134,7 +135,10 @@ void main() {
       final chart = ChartController(
         // Edge marks only apply when the margins are smaller than a tick step.
         options: const ChartOptions(
-          rightPriceScale: PriceScaleOptions(ensureEdgeTickMarksVisible: true, scaleMargins: ScaleMargins(top: 0, bottom: 0)),
+          rightPriceScale: PriceScaleOptions(
+            ensureEdgeTickMarksVisible: true,
+            scaleMargins: ScaleMargins(top: 0, bottom: 0),
+          ),
         ),
       );
       chart.addLineSeries().setData(_line(50));
@@ -183,8 +187,20 @@ void main() {
         options: const ChartOptions(
           localization: LocalizationOptions(
             dateFormat: 'dd/MM/yyyy MMMM',
-            longMonthNames: ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8',
-              'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'],
+            longMonthNames: [
+              'Tháng 1',
+              'Tháng 2',
+              'Tháng 3',
+              'Tháng 4',
+              'Tháng 5',
+              'Tháng 6',
+              'Tháng 7',
+              'Tháng 8',
+              'Tháng 9',
+              'Tháng 10',
+              'Tháng 11',
+              'Tháng 12',
+            ],
           ),
         ),
       );
@@ -197,10 +213,12 @@ void main() {
       final chart = ChartController(
         options: ChartOptions(
           localization: const LocalizationOptions(locale: 'vi-VN'),
-          timeScale: TimeScaleOptions(tickMarkFormatter: (time, type, locale) {
-            seenLocale = locale;
-            return null;
-          }),
+          timeScale: TimeScaleOptions(
+            tickMarkFormatter: (time, type, locale) {
+              seenLocale = locale;
+              return null;
+            },
+          ),
         ),
       );
       chart.addLineSeries().setData(_line(100));
@@ -214,7 +232,8 @@ void main() {
   group('series api', () {
     test('dataByIndex mismatch directions', () {
       final chart = ChartController();
-      final a = chart.addLineSeries()..setData([LineData(time: _t0, value: 1), LineData(time: _t0 + 4 * _day, value: 2)]);
+      final a = chart.addLineSeries()
+        ..setData([LineData(time: _t0, value: 1), LineData(time: _t0 + 4 * _day, value: 2)]);
       chart.addLineSeries().setData(_line(5));
       expect(a.dataByIndex(2), isNull);
       expect(a.dataByIndex(2, MismatchDirection.nearestLeft)!.value, 1);
@@ -417,10 +436,7 @@ void apiGroup() {
 void chartOptionsGroup() {
   test('defaultVisiblePriceScaleId puts series without an id on the left', () {
     final chart = ChartController(
-      options: const ChartOptions(
-        defaultVisiblePriceScaleId: 'left',
-        leftPriceScale: PriceScaleOptions(visible: true),
-      ),
+      options: const ChartOptions(defaultVisiblePriceScaleId: 'left', leftPriceScale: PriceScaleOptions(visible: true)),
     );
     final s = chart.addLineSeries()..setData(_line(5, 1));
     expect(s.priceScale().id, 'left');
@@ -482,7 +498,9 @@ void transformGroup() {
     for (final inverted in [false, true]) {
       test('linear price transform matches priceToCoordinate ($mode, inverted: $inverted)', () {
         final chart = ChartController(
-          options: ChartOptions(rightPriceScale: PriceScaleOptions(mode: mode, invertScale: inverted)),
+          options: ChartOptions(
+            rightPriceScale: PriceScaleOptions(mode: mode, invertScale: inverted),
+          ),
         );
         final s = chart.addLineSeries()..setData(_line(50, 10));
         chart.model.layout(const Size(400, 300), 2, _measure);
@@ -531,7 +549,13 @@ void hoveredInfoGroup() {
       ]);
     candles.createPriceLine(const PriceLineOptions(price: 140, id: 'tp'));
     createSeriesMarkers(candles, [
-      SeriesMarker(time: _t0 + 10 * _day, position: SeriesMarkerPosition.aboveBar, shape: SeriesMarkerShape.circle, color: const Color(0xFF000000), id: 'm1'),
+      SeriesMarker(
+        time: _t0 + 10 * _day,
+        position: SeriesMarkerPosition.aboveBar,
+        shape: SeriesMarkerShape.circle,
+        color: const Color(0xFF000000),
+        id: 'm1',
+      ),
     ]);
     final boxes = chart.addCustomSeries(_BoxView(), const CustomSeriesOptions(), 1)
       ..setData([for (var i = 0; i < 30; i++) _RangeData(time: _t0 + i * _day, low: 10, high: 20)]);
@@ -557,14 +581,22 @@ void hoveredInfoGroup() {
     chart.model.click(1, Offset(x20, boxes.priceToCoordinate(15)!));
 
     final infos = [for (final e in events) e.hoveredInfo!];
-    expect((infos[0].type, infos[0].sourceKind, infos[0].objectKind),
-        (HoveredItemType.seriesRange, HoveredSourceKind.series, HoveredObjectKind.series));
-    expect((infos[1].type, infos[1].objectKind, infos[1].objectId),
-        (HoveredItemType.priceLine, HoveredObjectKind.customPriceLine, 'tp'));
-    expect((infos[2].type, infos[2].sourceKind, infos[2].objectKind, infos[2].objectId),
-        (HoveredItemType.marker, HoveredSourceKind.seriesPrimitive, HoveredObjectKind.seriesMarker, 'm1'));
-    expect((infos[3].type, infos[3].objectKind, infos[3].objectId, infos[3].series),
-        (HoveredItemType.custom, HoveredObjectKind.customObject, 'box-20', boxes));
+    expect(
+      (infos[0].type, infos[0].sourceKind, infos[0].objectKind),
+      (HoveredItemType.seriesRange, HoveredSourceKind.series, HoveredObjectKind.series),
+    );
+    expect(
+      (infos[1].type, infos[1].objectKind, infos[1].objectId),
+      (HoveredItemType.priceLine, HoveredObjectKind.customPriceLine, 'tp'),
+    );
+    expect(
+      (infos[2].type, infos[2].sourceKind, infos[2].objectKind, infos[2].objectId),
+      (HoveredItemType.marker, HoveredSourceKind.seriesPrimitive, HoveredObjectKind.seriesMarker, 'm1'),
+    );
+    expect(
+      (infos[3].type, infos[3].objectKind, infos[3].objectId, infos[3].series),
+      (HoveredItemType.custom, HoveredObjectKind.customObject, 'box-20', boxes),
+    );
     chart.dispose();
   });
 }

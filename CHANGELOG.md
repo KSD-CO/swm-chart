@@ -1,4 +1,15 @@
-## Unreleased
+## 0.4.0
+
+* Renamed to **Stock World Monitor Charts** (package name stays `swm_chart`).
+* Conflation now matches upstream's DataConflater: pairwise power-of-two
+  levels with incremental updates, custom series `conflationReducer`,
+  per-series `conflationThresholdFactor`, `precomputeConflationOnInit` and
+  `precomputeConflationPriority`.
+* `hoveredInfo` matches upstream: `type`, `sourceKind`, `objectKind`
+  (incl. `seriesMarker`, `customObject`); primitive `itemType` and
+  `hitTestPriority`; custom series `hitTest`.
+* New bars no longer rebuild all time scale tick marks (only the tail,
+  with identical results): realtime p99 frame build 6-14 ms -> ~2 ms.
 
 * Performance: candles, bars and histograms are drawn in one vertex batch;
   autoscale uses a chunked min/max cache; prices and indices are converted

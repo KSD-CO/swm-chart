@@ -9,12 +9,13 @@ const _day = 86400;
 const _t0 = 1704067200; // 2024-01-01T00:00:00Z
 
 List<CandlestickData> _bars(int count, {double base = 100}) => List.generate(count, (i) {
-      final o = base + i;
-      return CandlestickData(time: _t0 + i * _day, open: o, high: o + 2, low: o - 2, close: o + 1);
-    });
+  final o = base + i;
+  return CandlestickData(time: _t0 + i * _day, open: o, high: o + 2, low: o - 2, close: o + 1);
+});
 
-List<LineData> _line(int count, double Function(int) f) =>
-    [for (var i = 0; i < count; i++) LineData(time: _t0 + i * _day, value: f(i))];
+List<LineData> _line(int count, double Function(int) f) => [
+  for (var i = 0; i < count; i++) LineData(time: _t0 + i * _day, value: f(i)),
+];
 
 double _measure(String s) => s.length * 7.0;
 
@@ -25,12 +26,14 @@ class _RecordingPrimitive extends ChartPrimitive {
   void paint(PrimitivePaintContext ctx) => paints++;
 
   @override
-  List<AxisLabel> priceAxisLabels(PrimitiveContext ctx) =>
-      [AxisLabel(coordinate: 10, text: 'P', backgroundColor: const Color(0xFF000000))];
+  List<AxisLabel> priceAxisLabels(PrimitiveContext ctx) => [
+    AxisLabel(coordinate: 10, text: 'P', backgroundColor: const Color(0xFF000000)),
+  ];
 
   @override
-  List<AxisLabel> timeAxisLabels(PrimitiveContext ctx) =>
-      [AxisLabel(coordinate: 10, text: 'T', backgroundColor: const Color(0xFF000000))];
+  List<AxisLabel> timeAxisLabels(PrimitiveContext ctx) => [
+    AxisLabel(coordinate: 10, text: 'T', backgroundColor: const Color(0xFF000000)),
+  ];
 }
 
 void main() {
@@ -155,10 +158,12 @@ void main() {
   });
 
   test('left price scale', () {
-    chart.applyOptions(const ChartOptions(
-      leftPriceScale: PriceScaleOptions(visible: true),
-      rightPriceScale: PriceScaleOptions(visible: false),
-    ));
+    chart.applyOptions(
+      const ChartOptions(
+        leftPriceScale: PriceScaleOptions(visible: true),
+        rightPriceScale: PriceScaleOptions(visible: false),
+      ),
+    );
     chart.addLineSeries(const LineSeriesOptions(priceScaleId: 'left')).setData(_line(10, (i) => i.toDouble()));
     layout();
     expect(chart.priceScale('left').width(), greaterThan(0));
@@ -192,9 +197,11 @@ void main() {
   });
 
   test('autoscaleInfoProvider overrides the range', () {
-    chart.addLineSeries(LineSeriesOptions(
-      autoscaleInfoProvider: (_) => const AutoscaleInfo(priceRange: PriceRange(0, 1000)),
-    )).setData(_line(10, (i) => i.toDouble()));
+    chart
+        .addLineSeries(
+          LineSeriesOptions(autoscaleInfoProvider: (_) => const AutoscaleInfo(priceRange: PriceRange(0, 1000))),
+        )
+        .setData(_line(10, (i) => i.toDouble()));
     layout();
     expect(chart.priceScale().getVisibleRange(), const PriceRange(0, 1000));
   });
@@ -204,7 +211,12 @@ void main() {
     layout();
     final before = chart.model.panes.first.rightScale.internalHeight;
     createSeriesMarkers(s, [
-      SeriesMarker(time: _t0, position: SeriesMarkerPosition.aboveBar, shape: SeriesMarkerShape.arrowDown, color: const Color(0xFFFF0000)),
+      SeriesMarker(
+        time: _t0,
+        position: SeriesMarkerPosition.aboveBar,
+        shape: SeriesMarkerShape.arrowDown,
+        color: const Color(0xFFFF0000),
+      ),
     ]);
     layout();
     expect(chart.model.panes.first.rightScale.internalHeight, lessThan(before));
@@ -244,8 +256,9 @@ void main() {
     chart.addBarSeries().setData([
       for (var i = 0; i < 10; i++) BarData(time: _t0 + i * _day, open: 5, high: 20, low: -3, close: 6),
     ]);
-    chart.addBaselineSeries(const BaselineSeriesOptions(baseValue: 4))
-        .setData([for (var i = 0; i < 10; i++) BaselineData(time: _t0 + i * _day, value: i.toDouble())]);
+    chart.addBaselineSeries(const BaselineSeriesOptions(baseValue: 4)).setData([
+      for (var i = 0; i < 10; i++) BaselineData(time: _t0 + i * _day, value: i.toDouble()),
+    ]);
     layout();
     expect(chart.priceScale().getVisibleRange(), const PriceRange(-3, 20));
   });

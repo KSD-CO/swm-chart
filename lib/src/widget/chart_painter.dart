@@ -17,7 +17,13 @@ import 'attribution_logo.dart';
 class TextCache {
   final Map<(String, int, double, String?, FontWeight), TextPainter> _cache = {};
 
-  TextPainter get(String text, Color color, double fontSize, String? fontFamily, {FontWeight weight = FontWeight.normal}) {
+  TextPainter get(
+    String text,
+    Color color,
+    double fontSize,
+    String? fontFamily, {
+    FontWeight weight = FontWeight.normal,
+  }) {
     final key = (text, color.toARGB32(), fontSize, fontFamily, weight);
     final cached = _cache[key];
     if (cached != null) return cached;
@@ -56,7 +62,7 @@ Color contrastColor(Color background) {
 
 class ChartPainter extends CustomPainter {
   ChartPainter({required this.model, required this.pixelRatio, required this.textCache, this.activeSeparator})
-      : super(repaint: model);
+    : super(repaint: model);
 
   final ChartModel model;
   final double pixelRatio;
@@ -88,7 +94,10 @@ class ChartPainter extends CustomPainter {
       bottomColor == null
           ? (Paint()..color = _o.layout.backgroundColor)
           : (Paint()
-            ..shader = ui.Gradient.linear(Offset.zero, Offset(0, size.height), [_o.layout.backgroundColor, bottomColor])),
+              ..shader = ui.Gradient.linear(Offset.zero, Offset(0, size.height), [
+                _o.layout.backgroundColor,
+                bottomColor,
+              ])),
     );
 
     for (var i = 0; i < model.panes.length; i++) {
@@ -292,8 +301,8 @@ class ChartPainter extends CustomPainter {
       if (elapsed == null || (mode == LastPriceAnimationMode.onDataUpdate && elapsed >= lastPriceAnimationPeriod)) {
         continue;
       }
-      final t = (elapsed.inMicroseconds % lastPriceAnimationPeriod.inMicroseconds) /
-          lastPriceAnimationPeriod.inMicroseconds;
+      final t =
+          (elapsed.inMicroseconds % lastPriceAnimationPeriod.inMicroseconds) / lastPriceAnimationPeriod.inMicroseconds;
       final x = model.timeScale.indexToCoordinate(s.indices.last);
       final y = s.priceToCoordinate(last.value);
       final color = s.lineColor(last);
@@ -374,7 +383,8 @@ class ChartPainter extends CustomPainter {
       );
     }
 
-    double textX(TextPainter t) => isLeft ? left + width - 1 - tickLength - padding - t.width : left + 1 + tickLength + padding;
+    double textX(TextPainter t) =>
+        isLeft ? left + width - 1 - tickLength - padding - t.width : left + 1 + tickLength + padding;
 
     final tickPaint = Paint()..color = ps.options.borderColor;
     final tickWidth = math.max(1, pr.floor()) / pr;
@@ -505,5 +515,7 @@ class ChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(ChartPainter oldDelegate) =>
-      oldDelegate.model != model || oldDelegate.pixelRatio != pixelRatio || oldDelegate.activeSeparator != activeSeparator;
+      oldDelegate.model != model ||
+      oldDelegate.pixelRatio != pixelRatio ||
+      oldDelegate.activeSeparator != activeSeparator;
 }

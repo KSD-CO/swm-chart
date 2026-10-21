@@ -69,8 +69,13 @@ void paintBars(SeriesPaintContext ctx, BarSeriesModel series) {
         openBottom = bodyTop + bodyHeight - 1;
         openTop = openBottom - bodyWidth + 1;
       }
-      batch.add(openLeft.toDouble(), openTop.toDouble(), (bodyLeft - openLeft).toDouble(),
-          (openBottom - openTop + 1).toDouble(), color);
+      batch.add(
+        openLeft.toDouble(),
+        openTop.toDouble(),
+        (bodyLeft - openLeft).toDouble(),
+        (openBottom - openTop + 1).toDouble(),
+        color,
+      );
     }
 
     final closeRight = bodyCenter + sideWidth;
@@ -80,8 +85,13 @@ void paintBars(SeriesPaintContext ctx, BarSeriesModel series) {
       closeBottom = bodyTop + bodyHeight - 1;
       closeTop = closeBottom - bodyWidth + 1;
     }
-    batch.add(bodyRight + 1.0, closeTop.toDouble(), (closeRight - bodyRight).toDouble(),
-        (closeBottom - closeTop + 1).toDouble(), color);
+    batch.add(
+      bodyRight + 1.0,
+      closeTop.toDouble(),
+      (closeRight - bodyRight).toDouble(),
+      (closeBottom - closeTop + 1).toDouble(),
+      color,
+    );
   }
   batch.flush(ctx.canvas);
 }

@@ -48,27 +48,35 @@ abstract class SeriesOptions {
 
   final String title;
   final bool visible;
+
   /// Extra distance in logical pixels counted as hovering the series.
   final double hitTestTolerance;
+
   /// Show the last value label on the price axis.
   final bool lastValueVisible;
+
   /// Show a horizontal line at the last value.
   final bool priceLineVisible;
   final PriceLineSource priceLineSource;
   final double priceLineWidth;
+
   /// `null` means the color of the last bar.
   final Color? priceLineColor;
   final LineStyle priceLineStyle;
+
   /// Base line drawn in percentage / indexed-to-100 modes.
   final bool baseLineVisible;
   final Color baseLineColor;
   final double baseLineWidth;
   final LineStyle baseLineStyle;
   final PriceFormat priceFormat;
+
   /// `right`, `left`, or any other id for an invisible overlay scale. `null` uses the chart's `defaultVisiblePriceScaleId`.
   final String? priceScaleId;
+
   /// Overrides the autoscale range of this series.
   final AutoscaleInfoProvider? autoscaleInfoProvider;
+
   /// Overrides `TimeScaleOptions.conflationThresholdFactor` for this series.
   final double? conflationThresholdFactor;
 }
@@ -212,6 +220,7 @@ class BarSeriesOptions extends SeriesOptions {
   final Color upColor;
   final Color downColor;
   final bool openVisible;
+
   /// Draw bars 1 device pixel wide.
   final bool thinBars;
 
@@ -314,9 +323,11 @@ class LineSeriesOptions extends SeriesOptions implements LineLikeSeriesOptions {
   final bool crosshairMarkerVisible;
   @override
   final double crosshairMarkerRadius;
+
   /// `null` means the chart background color.
   @override
   final Color? crosshairMarkerBorderColor;
+
   /// `null` means the series color.
   @override
   final Color? crosshairMarkerBackgroundColor;
@@ -447,9 +458,11 @@ class AreaSeriesOptions extends SeriesOptions implements LineLikeSeriesOptions {
   final bool crosshairMarkerVisible;
   @override
   final double crosshairMarkerRadius;
+
   /// `null` means the chart background color.
   @override
   final Color? crosshairMarkerBorderColor;
+
   /// `null` means the series color.
   @override
   final Color? crosshairMarkerBackgroundColor;
@@ -460,8 +473,10 @@ class AreaSeriesOptions extends SeriesOptions implements LineLikeSeriesOptions {
   final Color topColor;
   final Color bottomColor;
   final Color lineColor;
+
   /// Fill above the line instead of below.
   final bool invertFilledArea;
+
   /// Gradient spans the visible data instead of the pane.
   final bool relativeGradient;
 
@@ -597,9 +612,11 @@ class BaselineSeriesOptions extends SeriesOptions implements LineLikeSeriesOptio
   final bool crosshairMarkerVisible;
   @override
   final double crosshairMarkerRadius;
+
   /// `null` means the chart background color.
   @override
   final Color? crosshairMarkerBorderColor;
+
   /// `null` means the series color.
   @override
   final Color? crosshairMarkerBackgroundColor;
@@ -607,6 +624,7 @@ class BaselineSeriesOptions extends SeriesOptions implements LineLikeSeriesOptio
   final double crosshairMarkerBorderWidth;
   @override
   final LastPriceAnimationMode lastPriceAnimation;
+
   /// Price separating the top and bottom areas.
   final double baseValue;
   final bool relativeGradient;
@@ -790,6 +808,7 @@ class HistogramSeriesOptions extends SeriesOptions {
   });
 
   final Color color;
+
   /// Value the columns grow from.
   final double base;
 

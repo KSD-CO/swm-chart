@@ -95,6 +95,7 @@ enum MismatchDirection {
 
 /// Type of a series, like upstream's `seriesType()`.
 enum SeriesType { candlestick, bar, line, area, baseline, histogram, custom }
+
 typedef SizeChangeHandler = void Function(double width, double height);
 
 typedef CandlestickSeriesApi = SeriesApi<CandlestickData, CandlestickSeriesOptions>;
@@ -116,12 +117,12 @@ typedef HistogramSeriesApi = SeriesApi<HistogramData, HistogramSeriesOptions>;
 class ChartController {
   /// A chart with a time axis (`createChart`).
   ChartController({ChartOptions options = const ChartOptions()})
-      : this._(ChartModel(options, behavior: const TimeHorzScaleBehavior()));
+    : this._(ChartModel(options, behavior: const TimeHorzScaleBehavior()));
 
   /// An options chart whose horizontal axis is a price (`createOptionsChart`):
   /// [SeriesData.time] is the strike price.
   ChartController.options({ChartOptions options = const ChartOptions(), int precision = 2})
-      : this._(ChartModel(options, behavior: PriceHorzScaleBehavior(precision: precision)));
+    : this._(ChartModel(options, behavior: PriceHorzScaleBehavior(precision: precision)));
 
   /// A yield curve chart (`createYieldCurveChart`): [SeriesData.time] is a
   /// duration in months and the axis is linear in months. Only line and area
@@ -167,9 +168,7 @@ class ChartController {
       final newHash = '$start~$end~$resolution';
       if (newHash == hash) return;
       hash = newHash;
-      _model.setSeriesData(whitespace, [
-        for (var t = start; t <= end; t += resolution) WhitespaceData(time: t),
-      ]);
+      _model.setSeriesData(whitespace, [for (var t = start; t <= end; t += resolution) WhitespaceData(time: t)]);
     }
 
     update(null);
@@ -201,8 +200,7 @@ class ChartController {
   CandlestickSeriesApi addCandlestickSeries([
     CandlestickSeriesOptions options = const CandlestickSeriesOptions(),
     int paneIndex = 0,
-  ]) =>
-      _add(CandlestickSeriesModel(options), paneIndex);
+  ]) => _add(CandlestickSeriesModel(options), paneIndex);
 
   BarSeriesApi addBarSeries([BarSeriesOptions options = const BarSeriesOptions(), int paneIndex = 0]) =>
       _add(BarSeriesModel(options), paneIndex);
@@ -216,22 +214,19 @@ class ChartController {
   BaselineSeriesApi addBaselineSeries([
     BaselineSeriesOptions options = const BaselineSeriesOptions(),
     int paneIndex = 0,
-  ]) =>
-      _add(BaselineSeriesModel(options), paneIndex);
+  ]) => _add(BaselineSeriesModel(options), paneIndex);
 
   /// Adds a series drawn by [view], like upstream's `addCustomSeries`.
   SeriesApi<T, CustomSeriesOptions> addCustomSeries<T extends SeriesData>(
     CustomSeriesView<T> view, [
     CustomSeriesOptions options = const CustomSeriesOptions(),
     int paneIndex = 0,
-  ]) =>
-      _add(CustomSeriesModel<T>(view, options), paneIndex);
+  ]) => _add(CustomSeriesModel<T>(view, options), paneIndex);
 
   HistogramSeriesApi addHistogramSeries([
     HistogramSeriesOptions options = const HistogramSeriesOptions(),
     int paneIndex = 0,
-  ]) =>
-      _add(HistogramSeriesModel(options), paneIndex);
+  ]) => _add(HistogramSeriesModel(options), paneIndex);
 
   SeriesApi<T, O> _add<T extends SeriesData, O extends SeriesOptions>(SeriesModel<T, O> series, int paneIndex) {
     if (_isYieldCurve) {
@@ -462,14 +457,14 @@ class SeriesApi<T extends SeriesData, O extends SeriesOptions> {
   }
 
   SeriesType seriesType() => switch (_series) {
-        CandlestickSeriesModel() => SeriesType.candlestick,
-        BarSeriesModel() => SeriesType.bar,
-        LineSeriesModel() => SeriesType.line,
-        AreaSeriesModel() => SeriesType.area,
-        BaselineSeriesModel() => SeriesType.baseline,
-        HistogramSeriesModel() => SeriesType.histogram,
-        _ => SeriesType.custom,
-      };
+    CandlestickSeriesModel() => SeriesType.candlestick,
+    BarSeriesModel() => SeriesType.bar,
+    LineSeriesModel() => SeriesType.line,
+    AreaSeriesModel() => SeriesType.area,
+    BaselineSeriesModel() => SeriesType.baseline,
+    HistogramSeriesModel() => SeriesType.histogram,
+    _ => SeriesType.custom,
+  };
 
   /// Position of the series in its pane's drawing order (0 = bottom).
   int seriesOrder() => _model.panes[_model.paneIndexOf(_series)].series.indexOf(_series);
@@ -595,9 +590,9 @@ class PaneApi {
   set preserveEmptyPane(bool value) => _pane.preserveEmpty = value;
 
   List<SeriesApi> getSeries() => [
-        for (final s in _pane.series)
-          if (_chart._seriesApis[s] != null) _chart._seriesApis[s]!,
-      ];
+    for (final s in _pane.series)
+      if (_chart._seriesApis[s] != null) _chart._seriesApis[s]!,
+  ];
 
   PriceScaleApi priceScale(String id) => PriceScaleApi._(_model, _pane, id);
 
@@ -607,9 +602,11 @@ class PaneApi {
 
   BarSeriesApi addBarSeries([BarSeriesOptions o = const BarSeriesOptions()]) => _chart.addBarSeries(o, paneIndex());
 
-  LineSeriesApi addLineSeries([LineSeriesOptions o = const LineSeriesOptions()]) => _chart.addLineSeries(o, paneIndex());
+  LineSeriesApi addLineSeries([LineSeriesOptions o = const LineSeriesOptions()]) =>
+      _chart.addLineSeries(o, paneIndex());
 
-  AreaSeriesApi addAreaSeries([AreaSeriesOptions o = const AreaSeriesOptions()]) => _chart.addAreaSeries(o, paneIndex());
+  AreaSeriesApi addAreaSeries([AreaSeriesOptions o = const AreaSeriesOptions()]) =>
+      _chart.addAreaSeries(o, paneIndex());
 
   BaselineSeriesApi addBaselineSeries([BaselineSeriesOptions o = const BaselineSeriesOptions()]) =>
       _chart.addBaselineSeries(o, paneIndex());
@@ -620,8 +617,7 @@ class PaneApi {
   SeriesApi<T, CustomSeriesOptions> addCustomSeries<T extends SeriesData>(
     CustomSeriesView<T> view, [
     CustomSeriesOptions o = const CustomSeriesOptions(),
-  ]) =>
-      _chart.addCustomSeries(view, o, paneIndex());
+  ]) => _chart.addCustomSeries(view, o, paneIndex());
 
   /// Moves this pane to [index].
   void moveTo(int index) {
@@ -798,9 +794,9 @@ class PriceScaleApi {
       if (current.visible != options.visible) {
         // Changing visibility rebuilds every pane's scale from chart options.
         final updated = current.copyWith(visible: options.visible);
-        _model.applyOptions(id == rightPriceScaleId
-            ? chart.copyWith(rightPriceScale: updated)
-            : chart.copyWith(leftPriceScale: updated));
+        _model.applyOptions(
+          id == rightPriceScaleId ? chart.copyWith(rightPriceScale: updated) : chart.copyWith(leftPriceScale: updated),
+        );
         _ps.options = options;
       }
     }
@@ -811,8 +807,8 @@ class PriceScaleApi {
   double width() => id == rightPriceScaleId
       ? _model.rightAxisWidth
       : id == leftPriceScaleId
-          ? _model.leftAxisWidth
-          : 0;
+      ? _model.leftAxisWidth
+      : 0;
 
   /// Visible range in prices (percent in the percentage modes), `null` until
   /// the chart has been laid out.

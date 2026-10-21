@@ -7,9 +7,9 @@ const _day = 86400;
 const _t0 = 1704067200; // 2024-01-01T00:00:00Z
 
 List<CandlestickData> _bars(int count, {int start = 0}) => List.generate(count, (i) {
-      final o = 100.0 + (start + i);
-      return CandlestickData(time: _t0 + (start + i) * _day, open: o, high: o + 2, low: o - 2, close: o + 1);
-    });
+  final o = 100.0 + (start + i);
+  return CandlestickData(time: _t0 + (start + i) * _day, open: o, high: o + 2, low: o - 2, close: o + 1);
+});
 
 double _measure(String s) => s.length * 7.0;
 
@@ -144,9 +144,13 @@ void main() {
   });
 
   test('price formatters', () {
-    final candles = chart.addCandlestickSeries(const CandlestickSeriesOptions(priceFormat: PriceFormat.price(precision: 3, minMove: 0.001)));
+    final candles = chart.addCandlestickSeries(
+      const CandlestickSeriesOptions(priceFormat: PriceFormat.price(precision: 3, minMove: 0.001)),
+    );
     expect(candles.priceScale().options, isNotNull);
-    final vol = chart.addHistogramSeries(const HistogramSeriesOptions(priceFormat: PriceFormat.volume(), priceScaleId: 'v'));
+    final vol = chart.addHistogramSeries(
+      const HistogramSeriesOptions(priceFormat: PriceFormat.volume(), priceScaleId: 'v'),
+    );
     chart.model.setSeriesData(chart.model.series.elementAt(0) as dynamic, _bars(1));
     vol.setData([HistogramData(time: _t0, value: 1234567)]);
     final volModel = chart.model.series.elementAt(1);

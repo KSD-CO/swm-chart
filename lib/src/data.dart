@@ -107,7 +107,7 @@ class HistogramData extends SingleValueData {
 
 class AreaData extends SingleValueData {
   const AreaData({required super.time, required super.value, this.lineColor, this.topColor, this.bottomColor})
-      : super(color: lineColor);
+    : super(color: lineColor);
 
   final Color? lineColor;
   final Color? topColor;

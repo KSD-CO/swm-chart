@@ -44,10 +44,10 @@ class TimeMark {
 
 class TimeScale {
   TimeScale(this._options)
-      : _barSpacing = _options.barSpacing,
-        _rightOffset = _options.rightOffsetPixels != null
-            ? _options.rightOffsetPixels! / _options.barSpacing
-            : _options.rightOffset {
+    : _barSpacing = _options.barSpacing,
+      _rightOffset = _options.rightOffsetPixels != null
+          ? _options.rightOffsetPixels! / _options.barSpacing
+          : _options.rightOffset {
     _tickMarks.setUniformDistribution(_options.uniformDistribution);
   }
 

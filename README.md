@@ -1,7 +1,15 @@
-# swm_chart
+# Stock World Monitor Charts
 
-Financial charts for Flutter. This is a native Dart port of
+[![pub package](https://img.shields.io/pub/v/swm_chart.svg)](https://pub.dev/packages/swm_chart)
+
+**Stock World Monitor Charts** (`swm_chart`) are high-performance financial
+charts for Flutter. The package is a native Dart port of
 [TradingView Lightweight Charts™](https://github.com/tradingview/lightweight-charts) (based on v5.2.1).
+
+```yaml
+dependencies:
+  swm_chart: ^0.4.0
+```
 
 There is no WebView. Everything is drawn with `CustomPainter`, and the
 model/renderer architecture mirrors upstream. Candles, columns and grid lines
@@ -116,6 +124,31 @@ curve and an options chain:
 
 ```sh
 cd example && flutter run
+```
+
+## Performance
+
+Frame times in profile mode with 100k candles plus 100k volume columns
+(`example/integration_test/perf_test.dart`):
+
+| Scenario | iPhone build / raster (avg, ms) | macOS build / raster (avg, ms) |
+|---|---|---|
+| Scroll at normal zoom | 1.9 / 1.4 | 1.0 / 1.2 |
+| Realtime update every frame | 2.1 / 1.9 | 1.3 / 1.7 |
+| Crosshair moving | 1.9 / 2.3 | 0.6 / 0.9 |
+| All 100k visible, conflation on | 2.4 / 2.1 | 1.1 / 1.2 |
+| All 100k visible, conflation off | 28.7 / 16.9 | 16 / 8 |
+
+When users can zoom out over tens of thousands of bars, turn on
+`TimeScaleOptions(enableConflation: true)` (optionally with
+`precomputeConflationOnInit`), as upstream recommends.
+
+Run the benchmark yourself:
+
+```sh
+cd example
+flutter drive --profile -d <device> \
+  --driver=test_driver/perf_driver.dart --target=integration_test/perf_test.dart
 ```
 
 ## Notes

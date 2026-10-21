@@ -14,7 +14,7 @@ class DemoApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'swm_chart demo',
+      title: 'Stock World Monitor Charts',
       theme: ThemeData(colorSchemeSeed: Colors.teal, useMaterial3: true),
       darkTheme: ThemeData(colorSchemeSeed: Colors.teal, brightness: Brightness.dark, useMaterial3: true),
       home: const HomeScreen(),
@@ -39,8 +39,14 @@ class _HomeScreenState extends State<HomeScreen> {
         index: _tab,
         children: [
           const TradingScreen(),
-          Scaffold(appBar: AppBar(title: const Text('Yield curve')), body: const SafeArea(child: YieldCurveScreen())),
-          Scaffold(appBar: AppBar(title: const Text('Options chain')), body: const SafeArea(child: OptionsChainScreen())),
+          Scaffold(
+            appBar: AppBar(title: const Text('Yield curve')),
+            body: const SafeArea(child: YieldCurveScreen()),
+          ),
+          Scaffold(
+            appBar: AppBar(title: const Text('Options chain')),
+            body: const SafeArea(child: OptionsChainScreen()),
+          ),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -170,20 +176,24 @@ class _TradingScreenState extends State<TradingScreen> {
       ),
     );
     _main = _createMain(_type);
-    _sma = _chart.addLineSeries(const LineSeriesOptions(
-      color: Color(0xFFFF9800),
-      lineWidth: 1,
-      lastValueVisible: false,
-      priceLineVisible: false,
-      crosshairMarkerVisible: false,
-      title: 'SMA 20',
-    ));
-    _volume = _chart.addHistogramSeries(const HistogramSeriesOptions(
-      priceScaleId: 'volume',
-      priceFormat: PriceFormat.volume(),
-      lastValueVisible: false,
-      priceLineVisible: false,
-    ));
+    _sma = _chart.addLineSeries(
+      const LineSeriesOptions(
+        color: Color(0xFFFF9800),
+        lineWidth: 1,
+        lastValueVisible: false,
+        priceLineVisible: false,
+        crosshairMarkerVisible: false,
+        title: 'SMA 20',
+      ),
+    );
+    _volume = _chart.addHistogramSeries(
+      const HistogramSeriesOptions(
+        priceScaleId: 'volume',
+        priceFormat: PriceFormat.volume(),
+        lastValueVisible: false,
+        priceLineVisible: false,
+      ),
+    );
     // Volume lives in the bottom 20% of the main pane.
     _chart.priceScale('volume').applyOptions(const PriceScaleOptions(scaleMargins: ScaleMargins(top: 0.8, bottom: 0)));
 
@@ -202,14 +212,18 @@ class _TradingScreenState extends State<TradingScreen> {
     _chart.panes()[0].setStretchFactor(3);
     _rsi.createPriceLine(const PriceLineOptions(price: 70, color: Color(0x99EF5350), lineStyle: LineStyle.dashed));
     _rsi.createPriceLine(const PriceLineOptions(price: 30, color: Color(0x9926A69A), lineStyle: LineStyle.dashed));
-    _chart.priceScale('right', 1).applyOptions(const PriceScaleOptions(scaleMargins: ScaleMargins(top: 0.1, bottom: 0.1)));
+    _chart
+        .priceScale('right', 1)
+        .applyOptions(const PriceScaleOptions(scaleMargins: ScaleMargins(top: 0.1, bottom: 0.1)));
 
     _watermark = createTextWatermark(
       _chart.panes()[0],
-      const TextWatermarkOptions(lines: [
-        TextWatermarkLine(text: 'BTC/USD', color: Color(0x1F808080), fontSize: 44, fontWeight: FontWeight.bold),
-        TextWatermarkLine(text: '5m · swm_chart', color: Color(0x1F808080), fontSize: 16),
-      ]),
+      const TextWatermarkOptions(
+        lines: [
+          TextWatermarkLine(text: 'BTC/USD', color: Color(0x1F808080), fontSize: 44, fontWeight: FontWeight.bold),
+          TextWatermarkLine(text: '5m · swm_chart', color: Color(0x1F808080), fontSize: 16),
+        ],
+      ),
     );
 
     final now = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
@@ -228,13 +242,15 @@ class _TradingScreenState extends State<TradingScreen> {
       MainType.candles => _chart.addCandlestickSeries(const CandlestickSeriesOptions(borderVisible: false)),
       MainType.bars => _chart.addBarSeries(),
       MainType.line => _chart.addLineSeries(const LineSeriesOptions(lineWidth: 2, lineType: LineType.curved)),
-      MainType.area => _chart.addAreaSeries(const AreaSeriesOptions(
+      MainType.area => _chart.addAreaSeries(
+        const AreaSeriesOptions(
           lineColor: Color(0xFF2962FF),
           topColor: Color(0x662962FF),
           bottomColor: Color(0x002962FF),
           lineWidth: 2,
           lastPriceAnimation: LastPriceAnimationMode.continuous,
-        )),
+        ),
+      ),
       MainType.baseline => _chart.addBaselineSeries(const BaselineSeriesOptions(lineWidth: 2)),
     };
     _markers = createSeriesMarkers(api);
@@ -243,12 +259,12 @@ class _TradingScreenState extends State<TradingScreen> {
 
   /// Converts a bar to the data type of the main series.
   SeriesData _mainItem(CandlestickData b) => switch (_type) {
-        MainType.candles => b,
-        MainType.bars => BarData(time: b.time, open: b.open, high: b.high, low: b.low, close: b.close),
-        MainType.line => LineData(time: b.time, value: b.close),
-        MainType.area => AreaData(time: b.time, value: b.close),
-        MainType.baseline => BaselineData(time: b.time, value: b.close),
-      };
+    MainType.candles => b,
+    MainType.bars => BarData(time: b.time, open: b.open, high: b.high, low: b.low, close: b.close),
+    MainType.line => LineData(time: b.time, value: b.close),
+    MainType.area => AreaData(time: b.time, value: b.close),
+    MainType.baseline => BaselineData(time: b.time, value: b.close),
+  };
 
   void _setMainData() {
     final api = _main;
@@ -283,11 +299,8 @@ class _TradingScreenState extends State<TradingScreen> {
     }
   }
 
-  HistogramData _volumeFor(CandlestickData bar) => HistogramData(
-        time: bar.time,
-        value: _feed.volume(),
-        color: (bar.isUp ? _up : _down).withValues(alpha: 0.5),
-      );
+  HistogramData _volumeFor(CandlestickData bar) =>
+      HistogramData(time: bar.time, value: _feed.volume(), color: (bar.isUp ? _up : _down).withValues(alpha: 0.5));
 
   List<double> get _closes => _bars.map((b) => b.close).toList();
 
@@ -324,21 +337,25 @@ class _TradingScreenState extends State<TradingScreen> {
       final prev = r[i - 1], cur = r[i];
       if (prev == null || cur == null) continue;
       if (prev < 30 && cur >= 30) {
-        markers.add(SeriesMarker(
-          time: _bars[i].time,
-          position: SeriesMarkerPosition.belowBar,
-          shape: SeriesMarkerShape.arrowUp,
-          color: _up,
-          text: 'Buy',
-        ));
+        markers.add(
+          SeriesMarker(
+            time: _bars[i].time,
+            position: SeriesMarkerPosition.belowBar,
+            shape: SeriesMarkerShape.arrowUp,
+            color: _up,
+            text: 'Buy',
+          ),
+        );
       } else if (prev > 70 && cur <= 70) {
-        markers.add(SeriesMarker(
-          time: _bars[i].time,
-          position: SeriesMarkerPosition.aboveBar,
-          shape: SeriesMarkerShape.arrowDown,
-          color: _down,
-          text: 'Sell',
-        ));
+        markers.add(
+          SeriesMarker(
+            time: _bars[i].time,
+            position: SeriesMarkerPosition.aboveBar,
+            shape: SeriesMarkerShape.arrowDown,
+            color: _down,
+            text: 'Sell',
+          ),
+        );
       }
     }
     return markers;
@@ -426,25 +443,34 @@ class _TradingScreenState extends State<TradingScreen> {
     final border = dark ? const Color(0xFF2A2E39) : const Color(0xFFD6DCDE);
     final label = dark ? const Color(0xFF363A45) : const Color(0xFF131722);
     final o = _chart.options;
-    _chart.applyOptions(o.copyWith(
-      layout: o.layout.copyWith(
-        backgroundColor: bg,
-        textColor: text,
-        panes: PaneOptions(separatorColor: border),
+    _chart.applyOptions(
+      o.copyWith(
+        layout: o.layout.copyWith(
+          backgroundColor: bg,
+          textColor: text,
+          panes: PaneOptions(separatorColor: border),
+        ),
+        crosshair: o.crosshair.copyWith(
+          vertLine: o.crosshair.vertLine.copyWith(labelBackgroundColor: label),
+          horzLine: o.crosshair.horzLine.copyWith(labelBackgroundColor: label),
+        ),
+        grid: GridOptions(
+          vertLines: GridLineOptions(color: grid),
+          horzLines: GridLineOptions(color: grid),
+        ),
+        rightPriceScale: o.rightPriceScale.copyWith(borderColor: border, mode: _mode),
+        timeScale: o.timeScale.copyWith(borderColor: border),
       ),
-      crosshair: o.crosshair.copyWith(
-        vertLine: o.crosshair.vertLine.copyWith(labelBackgroundColor: label),
-        horzLine: o.crosshair.horzLine.copyWith(labelBackgroundColor: label),
-      ),
-      grid: GridOptions(vertLines: GridLineOptions(color: grid), horzLines: GridLineOptions(color: grid)),
-      rightPriceScale: o.rightPriceScale.copyWith(borderColor: border, mode: _mode),
-      timeScale: o.timeScale.copyWith(borderColor: border),
-    ));
+    );
     // applyOptions resets every pane's right scale; restore the RSI pane's.
-    _chart.priceScale('right', 1).applyOptions(_chart.priceScale('right', 1).options.copyWith(
-          mode: PriceScaleMode.normal,
-          scaleMargins: const ScaleMargins(top: 0.1, bottom: 0.1),
-        ));
+    _chart
+        .priceScale('right', 1)
+        .applyOptions(
+          _chart
+              .priceScale('right', 1)
+              .options
+              .copyWith(mode: PriceScaleMode.normal, scaleMargins: const ScaleMargins(top: 0.1, bottom: 0.1)),
+        );
   }
 
   @override
@@ -483,18 +509,14 @@ class _TradingScreenState extends State<TradingScreen> {
             icon: const Icon(Icons.candlestick_chart),
             initialValue: _type,
             onSelected: _switchType,
-            itemBuilder: (_) => [
-              for (final t in MainType.values) PopupMenuItem(value: t, child: Text(t.name)),
-            ],
+            itemBuilder: (_) => [for (final t in MainType.values) PopupMenuItem(value: t, child: Text(t.name))],
           ),
           PopupMenuButton<PriceScaleMode>(
             tooltip: 'Price scale mode',
             icon: const Icon(Icons.straighten),
             initialValue: _mode,
             onSelected: _switchMode,
-            itemBuilder: (_) => [
-              for (final m in PriceScaleMode.values) PopupMenuItem(value: m, child: Text(m.name)),
-            ],
+            itemBuilder: (_) => [for (final m in PriceScaleMode.values) PopupMenuItem(value: m, child: Text(m.name))],
           ),
           IconButton(
             tooltip: 'Fit content',
@@ -561,9 +583,16 @@ class _Legend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text.rich(TextSpan(children: [
-      TextSpan(text: '$label '),
-      TextSpan(text: value.toStringAsFixed(2), style: TextStyle(color: color)),
-    ]));
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(text: '$label '),
+          TextSpan(
+            text: value.toStringAsFixed(2),
+            style: TextStyle(color: color),
+          ),
+        ],
+      ),
+    );
   }
 }

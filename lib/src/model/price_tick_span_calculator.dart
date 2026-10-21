@@ -57,7 +57,8 @@ class PriceTickSpanCalculator {
     while (true) {
       // The second part matters for very small values like 1e-10,
       // where greaterOrEqual alone fails.
-      final largerMinMovement = _greaterOrEqual(resultTickSpan, minMovement, _tickSpanEpsilon) &&
+      final largerMinMovement =
+          _greaterOrEqual(resultTickSpan, minMovement, _tickSpanEpsilon) &&
           resultTickSpan > (minMovement + _tickSpanEpsilon);
       final largerMaxTickSpan = _greaterOrEqual(resultTickSpan, maxTickSpan * c, _tickSpanEpsilon);
       final larger1 = _greaterOrEqual(resultTickSpan, 1, _tickSpanEpsilon);

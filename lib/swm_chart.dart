@@ -1,4 +1,5 @@
-/// High-performance financial charts for Flutter.
+/// Stock World Monitor Charts: high-performance financial charts for
+/// Flutter.
 ///
 /// A native Dart port of TradingView Lightweight Charts™
 /// (https://github.com/tradingview/lightweight-charts).

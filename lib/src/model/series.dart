@@ -486,13 +486,13 @@ class BarSeriesModel extends OhlcSeriesModel<BarData, BarSeriesOptions> {
 
   @override
   BarData conflateGroup(List<BarData> g) => BarData(
-        time: g.first.time,
-        open: g.first.open,
-        high: g.map((d) => d.high).reduce(math.max),
-        low: g.map((d) => d.low).reduce(math.min),
-        close: g.last.close,
-        color: g.last.color,
-      );
+    time: g.first.time,
+    open: g.first.open,
+    high: g.map((d) => d.high).reduce(math.max),
+    low: g.map((d) => d.low).reduce(math.min),
+    close: g.last.close,
+    color: g.last.color,
+  );
 
   @override
   void paint(SeriesPaintContext ctx) => paintBars(ctx, this);
@@ -640,12 +640,18 @@ class CustomSeriesModel<T extends SeriesData> extends SeriesModel<T, CustomSerie
 
   @override
   T mergeItems(T a, int aIndex, T b, int bIndex) => view.conflationReducer!(
-        CustomConflationContext(data: a, index: aIndex, priceValues: view.priceValues(a)),
-        CustomConflationContext(data: b, index: bIndex, priceValues: view.priceValues(b)),
-      );
+    CustomConflationContext(data: a, index: aIndex, priceValues: view.priceValues(a)),
+    CustomConflationContext(data: b, index: bIndex, priceValues: view.priceValues(b)),
+  );
 
-  CustomSeriesDrawContext<T> _drawContext(Canvas? canvas, Size paneSize, double pixelRatio, TimeScale ts,
-      IndexRange visible, SeriesItems<T> items) {
+  CustomSeriesDrawContext<T> _drawContext(
+    Canvas? canvas,
+    Size paneSize,
+    double pixelRatio,
+    TimeScale ts,
+    IndexRange visible,
+    SeriesItems<T> items,
+  ) {
     var (from, to) = items.itemsInRange(visible);
     from = math.max(0, from - 1);
     to = math.min(items.length, to + 1);
@@ -674,14 +680,16 @@ class CustomSeriesModel<T extends SeriesData> extends SeriesModel<T, CustomSerie
     // Custom views draw in logical pixels; the series canvas is in bitmap pixels.
     ctx.canvas.save();
     ctx.canvas.scale(ctx.pixelRatio);
-    view.draw(_drawContext(
-      ctx.canvas,
-      ctx.paneSize,
-      ctx.pixelRatio,
-      ctx.timeScale,
-      ctx.visibleRange,
-      renderItems(ctx.conflationFactor),
-    ));
+    view.draw(
+      _drawContext(
+        ctx.canvas,
+        ctx.paneSize,
+        ctx.pixelRatio,
+        ctx.timeScale,
+        ctx.visibleRange,
+        renderItems(ctx.conflationFactor),
+      ),
+    );
     ctx.canvas.restore();
   }
 }

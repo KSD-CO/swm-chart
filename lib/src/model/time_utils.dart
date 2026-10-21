@@ -76,9 +76,7 @@ void fillWeightsForPoints(List<num> times, List<int> weights, [int startIndex = 
 
 TickMarkType weightToTickMarkType(int weight, bool timeVisible, bool secondsVisible) {
   if (weight <= TickMarkWeight.second) {
-    return timeVisible
-        ? (secondsVisible ? TickMarkType.timeWithSeconds : TickMarkType.time)
-        : TickMarkType.dayOfMonth;
+    return timeVisible ? (secondsVisible ? TickMarkType.timeWithSeconds : TickMarkType.time) : TickMarkType.dayOfMonth;
   }
   if (weight < TickMarkWeight.day) {
     return timeVisible ? TickMarkType.time : TickMarkType.dayOfMonth;

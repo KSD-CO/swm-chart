@@ -298,11 +298,13 @@ class PriceScale {
     setInternalRange(range);
   }
 
-  double _topMarginPx() =>
-      isInverted ? _options.scaleMargins.bottom * _height + _marginBelow : _options.scaleMargins.top * _height + _marginAbove;
+  double _topMarginPx() => isInverted
+      ? _options.scaleMargins.bottom * _height + _marginBelow
+      : _options.scaleMargins.top * _height + _marginAbove;
 
-  double _bottomMarginPx() =>
-      isInverted ? _options.scaleMargins.top * _height + _marginAbove : _options.scaleMargins.bottom * _height + _marginBelow;
+  double _bottomMarginPx() => isInverted
+      ? _options.scaleMargins.top * _height + _marginAbove
+      : _options.scaleMargins.bottom * _height + _marginBelow;
 
   double get internalHeight => _height - _topMarginPx() - _bottomMarginPx();
 
@@ -509,8 +511,14 @@ class PriceScale {
 
   /// Port of upstream's `_applyEdgeMarks`: adds marks at the top and bottom
   /// edges, dropping regular marks too close to them.
-  void _applyEdgeMarks(List<PriceMark> marks, double span, double minCoord, double maxCoord, double minPadding,
-      double maxPadding) {
+  void _applyEdgeMarks(
+    List<PriceMark> marks,
+    double span,
+    double minCoord,
+    double maxCoord,
+    double minPadding,
+    double maxPadding,
+  ) {
     final topMark = _boundaryMark(minCoord, minPadding, maxPadding);
     final bottomMark = _boundaryMark(maxCoord, -maxPadding, -minPadding);
     final spanPx = displayToCoordinate(0) - displayToCoordinate(span);

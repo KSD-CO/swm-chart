@@ -38,12 +38,12 @@ class HitTestResult {
 
   /// Upstream's `hoveredTargetObjectKind`.
   HoveredObjectKind get kind => switch (type) {
-        HoveredItemType.custom => objectId != null ? HoveredObjectKind.customObject : HoveredObjectKind.series,
-        HoveredItemType.priceLine => HoveredObjectKind.customPriceLine,
-        HoveredItemType.marker => HoveredObjectKind.seriesMarker,
-        HoveredItemType.primitive => HoveredObjectKind.primitive,
-        _ => HoveredObjectKind.series,
-      };
+    HoveredItemType.custom => objectId != null ? HoveredObjectKind.customObject : HoveredObjectKind.series,
+    HoveredItemType.priceLine => HoveredObjectKind.customPriceLine,
+    HoveredItemType.marker => HoveredObjectKind.seriesMarker,
+    HoveredItemType.primitive => HoveredObjectKind.primitive,
+    _ => HoveredObjectKind.series,
+  };
   final SeriesModel? series;
   final Object? objectId;
   final double distance;
@@ -75,16 +75,16 @@ HitTestResult? hitTestSeries(SeriesModel series, TimeScale ts, IndexRange visibl
   final index = ts.coordinateToIndex(x);
 
   HitTestResult result(double distance, HitTestPriority p) => HitTestResult(
-        type: switch (p) {
-          HitTestPriority.range => HoveredItemType.seriesRange,
-          HitTestPriority.line => HoveredItemType.seriesLine,
-          HitTestPriority.point => HoveredItemType.seriesPoint,
-        },
-        sourceKind: HoveredSourceKind.series,
-        series: series,
-        distance: distance,
-        priority: p,
-      );
+    type: switch (p) {
+      HitTestPriority.range => HoveredItemType.seriesRange,
+      HitTestPriority.line => HoveredItemType.seriesLine,
+      HitTestPriority.point => HoveredItemType.seriesPoint,
+    },
+    sourceKind: HoveredSourceKind.series,
+    series: series,
+    distance: distance,
+    priority: p,
+  );
 
   if (series is CustomSeriesModel) return _hitTestCustom(series, ts, visible, x, y);
 
@@ -171,10 +171,10 @@ HitTestResult? _hitTestCustom(CustomSeriesModel series, TimeScale ts, IndexRange
 }
 
 HitTestPriority _primitivePriority(PrimitiveHitTestResult r) => switch (r.hitTestPriority) {
-      0 => HitTestPriority.range,
-      1 => HitTestPriority.line,
-      _ => HitTestPriority.point,
-    };
+  0 => HitTestPriority.range,
+  1 => HitTestPriority.line,
+  _ => HitTestPriority.point,
+};
 
 HoveredItemType _primitiveType(PrimitiveHitTestResult r) =>
     r.itemType == PrimitiveItemType.marker ? HoveredItemType.marker : HoveredItemType.primitive;
@@ -198,14 +198,16 @@ HitTestResult? hitTestPane(
   for (final p in pane.primitives) {
     final r = p.hitTest(contextFor(null), x, y);
     if (r != null) {
-      consider(HitTestResult(
-        type: _primitiveType(r),
-        sourceKind: HoveredSourceKind.panePrimitive,
-        objectId: r.externalId,
-        distance: r.distance,
-        priority: _primitivePriority(r),
-        zOrder: r.zOrder,
-      ));
+      consider(
+        HitTestResult(
+          type: _primitiveType(r),
+          sourceKind: HoveredSourceKind.panePrimitive,
+          objectId: r.externalId,
+          distance: r.distance,
+          priority: _primitivePriority(r),
+          zOrder: r.zOrder,
+        ),
+      );
     }
   }
   for (final s in pane.series) {
@@ -213,15 +215,17 @@ HitTestResult? hitTestPane(
     for (final p in s.primitives) {
       final r = p.hitTest(contextFor(s), x, y);
       if (r != null) {
-        consider(HitTestResult(
-          type: _primitiveType(r),
-          sourceKind: HoveredSourceKind.seriesPrimitive,
-          series: s,
-          objectId: r.externalId,
-          distance: r.distance,
-          priority: _primitivePriority(r),
-          zOrder: r.zOrder,
-        ));
+        consider(
+          HitTestResult(
+            type: _primitiveType(r),
+            sourceKind: HoveredSourceKind.seriesPrimitive,
+            series: s,
+            objectId: r.externalId,
+            distance: r.distance,
+            priority: _primitivePriority(r),
+            zOrder: r.zOrder,
+          ),
+        );
       }
     }
     for (final line in s.priceLines) {
@@ -229,14 +233,16 @@ HitTestResult? hitTestPane(
       if (!o.lineVisible) continue;
       final d = (s.priceToCoordinate(o.price) - y).abs();
       if (d <= o.lineWidth / 2 + s.options.hitTestTolerance) {
-        consider(HitTestResult(
-          type: HoveredItemType.priceLine,
-          sourceKind: HoveredSourceKind.series,
-          series: s,
-          objectId: o.id,
-          distance: d,
-          priority: HitTestPriority.line,
-        ));
+        consider(
+          HitTestResult(
+            type: HoveredItemType.priceLine,
+            sourceKind: HoveredSourceKind.series,
+            series: s,
+            objectId: o.id,
+            distance: d,
+            priority: HitTestPriority.line,
+          ),
+        );
       }
     }
     consider(hitTestSeries(s, ts, visible, x, y));
