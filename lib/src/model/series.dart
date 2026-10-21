@@ -72,10 +72,18 @@ abstract class SeriesModel<T extends SeriesData, O extends SeriesOptions> {
   List<T> _data = <T>[];
 
   /// Time scale index of every item in [_data].
-  List<int> _indices = const [];
+  List<int> _indices = <int>[];
 
   /// Bumped on every data change; used by caches (conflation).
   int dataVersion = 0;
+
+  // Min/max per chunk of [_minMaxChunk] items, so autoscale over a wide
+  // visible range costs O(n / chunk) instead of O(n), like upstream's
+  // plot list min/max cache. Chunks from [_minMaxDirtyFrom] on are stale.
+  static const int _minMaxChunk = 64;
+  final List<double> _chunkMin = [];
+  final List<double> _chunkMax = [];
+  int _minMaxDirtyFrom = 0;
 
   SeriesItems<T>? _conflatedCache;
   (int, int, List<int>)? _conflatedKey;
@@ -133,6 +141,7 @@ abstract class SeriesModel<T extends SeriesData, O extends SeriesOptions> {
     _all = List<SeriesData>.of(data);
     _data = [for (final d in data) ?_valueItem(d)];
     dataVersion++;
+    _minMaxDirtyFrom = 0;
   }
 
   /// Replaces the last item when [item] has the same time, appends it when
@@ -140,6 +149,8 @@ abstract class SeriesModel<T extends SeriesData, O extends SeriesOptions> {
   SeriesUpdateKind update(SeriesData item) {
     _checkType<T>(item);
     dataVersion++;
+    // Only the last item changes (or one is appended).
+    _minMaxDirtyFrom = math.min(_minMaxDirtyFrom, math.max(0, _data.length - 1));
     if (_all.isNotEmpty) {
       final last = _all.last;
       if (item.time < last.time) {
@@ -177,6 +188,7 @@ abstract class SeriesModel<T extends SeriesData, O extends SeriesOptions> {
     _all = _all.sublist(0, _all.length - n);
     _data = [for (final d in _all) ?_valueItem(d)];
     dataVersion++;
+    _minMaxDirtyFrom = 0;
     return removed;
   }
 
@@ -258,6 +270,9 @@ abstract class SeriesModel<T extends SeriesData, O extends SeriesOptions> {
 
   double priceToCoordinate(double price) => priceScale.priceToCoordinate(price, baseValue);
 
+  /// `y = a * price + b`, or `null` when the scale isn't linear (log).
+  (double, double)? priceTransform() => priceScale.linearTransform(baseValue);
+
   double coordinateToPrice(double y) => priceScale.coordinateToPrice(y, baseValue);
 
   String formatPrice(double price) => priceScale.formatPrice(price, baseValue);
@@ -273,19 +288,53 @@ abstract class SeriesModel<T extends SeriesData, O extends SeriesOptions> {
   /// Color of the item, used for the last value label and price line.
   Color itemColor(T item);
 
+  void _updateMinMaxChunks() {
+    final chunks = (_data.length + _minMaxChunk - 1) ~/ _minMaxChunk;
+    final firstDirty = math.min(_minMaxDirtyFrom ~/ _minMaxChunk, _chunkMin.length);
+    _chunkMin.length = math.min(_chunkMin.length, firstDirty);
+    _chunkMax.length = _chunkMin.length;
+    for (var c = firstDirty; c < chunks; c++) {
+      var min = double.infinity, max = double.negativeInfinity;
+      final end = math.min((c + 1) * _minMaxChunk, _data.length);
+      for (var i = c * _minMaxChunk; i < end; i++) {
+        final item = _data[i];
+        min = math.min(min, minValue(item));
+        max = math.max(max, maxValue(item));
+      }
+      _chunkMin.add(min);
+      _chunkMax.add(max);
+    }
+    _minMaxDirtyFrom = _data.length;
+  }
+
+  /// Min and max of items `[from, to)`.
+  (double, double) _minMax(int from, int to) {
+    if (_minMaxDirtyFrom < _data.length) _updateMinMaxChunks();
+    var min = double.infinity, max = double.negativeInfinity;
+    var i = from;
+    while (i < to) {
+      if (i % _minMaxChunk == 0 && i + _minMaxChunk <= to) {
+        final c = i ~/ _minMaxChunk;
+        min = math.min(min, _chunkMin[c]);
+        max = math.max(max, _chunkMax[c]);
+        i += _minMaxChunk;
+      } else {
+        final item = _data[i];
+        min = math.min(min, minValue(item));
+        max = math.max(max, maxValue(item));
+        i++;
+      }
+    }
+    return (min, max);
+  }
+
   /// Default autoscale: data range plus primitives' ranges and margins.
   AutoscaleInfo? baseAutoscaleInfo(IndexRange range) {
     PriceRange? priceRange;
     if (_data.isNotEmpty) {
       final (from, to) = itemsInRange(range);
       if (from < to) {
-        var min = double.infinity;
-        var max = double.negativeInfinity;
-        for (var i = from; i < to; i++) {
-          final item = _data[i];
-          min = math.min(min, minValue(item));
-          max = math.max(max, maxValue(item));
-        }
+        final (min, max) = _minMax(from, to);
         priceRange = PriceRange(min, max);
       }
     }

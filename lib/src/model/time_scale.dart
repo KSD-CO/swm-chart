@@ -209,6 +209,12 @@ class TimeScale {
     return _width - (deltaFromRight + 0.5) * _barSpacing - 1;
   }
 
+  /// `x = a * index + b`, the inverse-free form of [indexToCoordinate].
+  (double, double) indexTransform() {
+    if (isEmpty) return (0, 0);
+    return (_barSpacing, _width - (baseIndex + _rightOffset + 0.5) * _barSpacing - 1);
+  }
+
   double coordinateToFloatIndex(double x) {
     final deltaFromRight = (_width - 1 - x) / _barSpacing;
     final index = baseIndex + _rightOffset - deltaFromRight;

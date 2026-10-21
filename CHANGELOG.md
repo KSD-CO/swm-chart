@@ -1,3 +1,16 @@
+## Unreleased
+
+* Performance: candles, bars and histograms are drawn in one vertex batch;
+  autoscale uses a chunked min/max cache; prices and indices are converted
+  with precomputed linear transforms; new bars are appended in place.
+  Zooming out to 100k candles without conflation went from ~1.3 s to ~12 ms
+  of raster time per frame (macOS, profile). Rendering is pixel-identical.
+* Touch pans lock to their dominant direction, so horizontal swipes no
+  longer drift a manual price scale.
+* The TradingView attribution logo is now opt-in (`layout.attributionLogo`).
+* Example: macOS target and a frame-timing benchmark
+  (`example/integration_test/perf_test.dart`).
+
 ## 0.3.0
 
 * Yield curve (`ChartController.yieldCurve`) and options

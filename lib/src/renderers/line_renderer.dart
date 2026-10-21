@@ -1,5 +1,6 @@
 // Port of lightweight-charts src/renderers/line-renderer.ts
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui';
 
 import '../data.dart';
@@ -23,8 +24,15 @@ import 'walk_line.dart';
   if (from >= to) return null;
   final pr = ctx.pixelRatio;
   final ts = ctx.timeScale;
-  final xs = List<double>.generate(to - from, (i) => ts.indexToCoordinate(items.indices[from + i]) * pr);
-  final ys = List<double>.generate(to - from, (i) => series.priceToCoordinate(items.data[from + i].value) * pr);
+  final (xa, xb) = ts.indexTransform();
+  final linear = series.priceTransform();
+  final n = to - from;
+  final xs = Float64List(n), ys = Float64List(n);
+  for (var i = 0; i < n; i++) {
+    xs[i] = (xa * items.indices[from + i] + xb) * pr;
+    final v = items.data[from + i].value;
+    ys[i] = (linear != null ? linear.$1 * v + linear.$2 : series.priceToCoordinate(v)) * pr;
+  }
   return (LinePoints(xs, ys), from, items);
 }
 

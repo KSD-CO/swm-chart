@@ -75,6 +75,7 @@ void main() {
   });
 
   _allWidgetTests();
+  panLockTests();
 }
 
 Future<ChartController> _pumpAll(WidgetTester tester) async {
@@ -142,5 +143,24 @@ void _allWidgetTests() {
     final image = await tester.runAsync(chart.takeScreenshot);
     expect(image!.width, greaterThan(0));
     image.dispose();
+  });
+}
+
+void panLockTests() {
+  testWidgets('horizontal touch pan does not drift a manual price scale', (tester) async {
+    final chart = await _pump(tester);
+    chart.priceScale().setAutoScale(false);
+    await tester.pump();
+    final before = chart.priceScale().getVisibleRange()!;
+    final scrollBefore = chart.timeScale().scrollPosition();
+    // Mostly horizontal, with some vertical wobble.
+    await tester.dragFrom(const Offset(200, 150), const Offset(-120, 25));
+    await tester.pumpAndSettle();
+    expect(chart.priceScale().getVisibleRange(), before);
+    expect(chart.timeScale().scrollPosition(), isNot(scrollBefore));
+    // A vertical pan moves the manual scale.
+    await tester.dragFrom(const Offset(200, 150), const Offset(0, 60));
+    await tester.pumpAndSettle();
+    expect(chart.priceScale().getVisibleRange(), isNot(before));
   });
 }

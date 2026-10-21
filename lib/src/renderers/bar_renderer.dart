@@ -1,6 +1,5 @@
 // Port of lightweight-charts src/renderers/bars-renderer.ts
 import 'dart:math' as math;
-import 'dart:ui';
 
 import '../model/series.dart';
 import 'draw_utils.dart';
@@ -28,18 +27,21 @@ void paintBars(SeriesPaintContext ctx, BarSeriesModel series) {
   final barLineWidth = o.thinBars ? math.min(barWidth, pr.floor()) : barWidth;
   final drawOpenClose = barLineWidth <= barWidth && barSpacing >= (1.5 * pr).floor();
 
-  final paint = Paint()..isAntiAlias = false;
-  final canvas = ctx.canvas;
+  final batch = RectBatch.shared..reset();
+  final (xa, xb) = ts.indexTransform();
+  final linear = series.priceTransform();
+  double y(double price) => linear != null ? linear.$1 * price + linear.$2 : series.priceToCoordinate(price);
+  final upColor = o.upColor.toARGB32(), downColor = o.downColor.toARGB32();
 
   for (var i = from; i < to; i++) {
     final d = items.data[i];
-    paint.color = series.itemColor(d);
+    final color = d.color?.toARGB32() ?? (d.isUp ? upColor : downColor);
 
-    final x = ts.indexToCoordinate(items.indices[i]);
-    final openY = series.priceToCoordinate(d.open);
-    final highY = series.priceToCoordinate(d.high);
-    final lowY = series.priceToCoordinate(d.low);
-    final closeY = series.priceToCoordinate(d.close);
+    final x = xa * items.indices[i] + xb;
+    final openY = y(d.open);
+    final highY = y(d.high);
+    final lowY = y(d.low);
+    final closeY = y(d.close);
 
     final bodyWidthHalf = (barLineWidth * 0.5).floor();
     final bodyCenter = (x * pr).round();
@@ -53,7 +55,7 @@ void paintBars(SeriesPaintContext ctx, BarSeriesModel series) {
     final bodyBottom = (low * pr).round() + bodyWidthHalf;
     final bodyHeight = math.max(bodyBottom - bodyTop, barLineWidth);
 
-    fillRect(canvas, paint, bodyLeft.toDouble(), bodyTop.toDouble(), bodyWidth.toDouble(), bodyHeight.toDouble());
+    batch.add(bodyLeft.toDouble(), bodyTop.toDouble(), bodyWidth.toDouble(), bodyHeight.toDouble(), color);
 
     if (!drawOpenClose) continue;
     final sideWidth = (barWidth * 1.5).ceil();
@@ -66,8 +68,8 @@ void paintBars(SeriesPaintContext ctx, BarSeriesModel series) {
         openBottom = bodyTop + bodyHeight - 1;
         openTop = openBottom - bodyWidth + 1;
       }
-      fillRect(canvas, paint, openLeft.toDouble(), openTop.toDouble(), (bodyLeft - openLeft).toDouble(),
-          (openBottom - openTop + 1).toDouble());
+      batch.add(openLeft.toDouble(), openTop.toDouble(), (bodyLeft - openLeft).toDouble(),
+          (openBottom - openTop + 1).toDouble(), color);
     }
 
     final closeRight = bodyCenter + sideWidth;
@@ -77,7 +79,8 @@ void paintBars(SeriesPaintContext ctx, BarSeriesModel series) {
       closeBottom = bodyTop + bodyHeight - 1;
       closeTop = closeBottom - bodyWidth + 1;
     }
-    fillRect(canvas, paint, bodyRight + 1.0, closeTop.toDouble(), (closeRight - bodyRight).toDouble(),
-        (closeBottom - closeTop + 1).toDouble());
+    batch.add(bodyRight + 1.0, closeTop.toDouble(), (closeRight - bodyRight).toDouble(),
+        (closeBottom - closeTop + 1).toDouble(), color);
   }
+  batch.flush(ctx.canvas);
 }

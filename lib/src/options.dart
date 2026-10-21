@@ -80,7 +80,7 @@ class LayoutOptions {
     this.fontFamily,
     this.panes = const PaneOptions(),
     this.backgroundBottomColor,
-    this.attributionLogo = true,
+    this.attributionLogo = false,
   });
 
   /// Background, or the top color of a vertical gradient when
@@ -90,9 +90,10 @@ class LayoutOptions {
   /// Bottom color of a vertical background gradient.
   final Color? backgroundBottomColor;
 
-  /// Show the TradingView attribution logo, as upstream does by default.
-  /// The Apache 2.0 NOTICE of Lightweight Charts requires attribution; if
-  /// you hide the logo, credit TradingView elsewhere in your app.
+  /// Show the TradingView attribution logo at the bottom left of the last
+  /// pane. Off by default; the Apache 2.0 NOTICE of Lightweight Charts still
+  /// requires crediting TradingView (with a link to tradingview.com)
+  /// somewhere in your app, e.g. an About screen.
   final bool attributionLogo;
   final Color textColor;
   final double fontSize;

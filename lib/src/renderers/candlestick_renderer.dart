@@ -1,6 +1,6 @@
 // Port of lightweight-charts src/renderers/candlesticks-renderer.ts
 import 'dart:math' as math;
-import 'dart:ui';
+import 'dart:typed_data';
 
 import '../model/series.dart';
 import 'draw_utils.dart';
@@ -24,17 +24,27 @@ int optimalCandlestickWidth(double barSpacing, double pixelRatio) {
   return math.max(pixelRatio.floor(), optimal);
 }
 
-class _Bar {
-  _Bar(this.x, this.openY, this.highY, this.lowY, this.closeY, this.barColor, this.borderColor, this.wickColor);
+/// Visible candles in structure-of-arrays form: no object per candle.
+class _Bars {
+  _Bars(this.length)
+      : x = Float64List(length),
+        openY = Float64List(length),
+        highY = Float64List(length),
+        lowY = Float64List(length),
+        closeY = Float64List(length),
+        barColor = Int32List(length),
+        borderColor = Int32List(length),
+        wickColor = Int32List(length);
 
-  final double x;
-  final double openY;
-  final double highY;
-  final double lowY;
-  final double closeY;
-  final Color barColor;
-  final Color borderColor;
-  final Color wickColor;
+  final int length;
+  final Float64List x;
+  final Float64List openY;
+  final Float64List highY;
+  final Float64List lowY;
+  final Float64List closeY;
+  final Int32List barColor;
+  final Int32List borderColor;
+  final Int32List wickColor;
 }
 
 void paintCandlesticks(SeriesPaintContext ctx, CandlestickSeriesModel series) {
@@ -44,20 +54,28 @@ void paintCandlesticks(SeriesPaintContext ctx, CandlestickSeriesModel series) {
 
   final o = series.options;
   final ts = ctx.timeScale;
-  final bars = <_Bar>[];
+  final (xa, xb) = ts.indexTransform();
+  final linear = series.priceTransform();
+  final pa = linear?.$1 ?? 0, pb = linear?.$2 ?? 0;
+  double y(double price) => linear != null ? pa * price + pb : series.priceToCoordinate(price);
+
+  final up = o.upColor.toARGB32(), down = o.downColor.toARGB32();
+  final borderUp = o.borderUpColor.toARGB32(), borderDown = o.borderDownColor.toARGB32();
+  final wickUp = o.wickUpColor.toARGB32(), wickDown = o.wickDownColor.toARGB32();
+
+  final bars = _Bars(to - from);
   for (var i = from; i < to; i++) {
     final d = items.data[i];
-    final up = d.isUp;
-    bars.add(_Bar(
-      ts.indexToCoordinate(items.indices[i]),
-      series.priceToCoordinate(d.open),
-      series.priceToCoordinate(d.high),
-      series.priceToCoordinate(d.low),
-      series.priceToCoordinate(d.close),
-      d.color ?? (up ? o.upColor : o.downColor),
-      d.borderColor ?? (up ? o.borderUpColor : o.borderDownColor),
-      d.wickColor ?? (up ? o.wickUpColor : o.wickDownColor),
-    ));
+    final isUp = d.isUp;
+    final j = i - from;
+    bars.x[j] = xa * items.indices[i] + xb;
+    bars.openY[j] = y(d.open);
+    bars.highY[j] = y(d.high);
+    bars.lowY[j] = y(d.low);
+    bars.closeY[j] = y(d.close);
+    bars.barColor[j] = d.color?.toARGB32() ?? (isUp ? up : down);
+    bars.borderColor[j] = d.borderColor?.toARGB32() ?? (isUp ? borderUp : borderDown);
+    bars.wickColor[j] = d.wickColor?.toARGB32() ?? (isUp ? wickUp : wickDown);
   }
 
   final pr = ctx.pixelRatio;
@@ -69,32 +87,31 @@ void paintCandlesticks(SeriesPaintContext ctx, CandlestickSeriesModel series) {
     if (wickWidth % 2 != barWidth % 2) barWidth--;
   }
 
-  final paint = Paint()..isAntiAlias = false;
-  final canvas = ctx.canvas;
-
-  if (o.wickVisible) _drawWicks(canvas, paint, bars, barWidth, ts.barSpacing, pr);
-  if (o.borderVisible) _drawBorder(canvas, paint, bars, barWidth, ts.barSpacing, pr);
+  // All rectangles go into one vertex batch, in upstream's drawing order:
+  // wicks, borders, bodies.
+  final batch = RectBatch.shared..reset();
+  if (o.wickVisible) _drawWicks(batch, bars, barWidth, ts.barSpacing, pr);
+  if (o.borderVisible) _drawBorder(batch, bars, barWidth, ts.barSpacing, pr);
 
   final borderWidth = _calculateBorderWidth(barWidth, pr);
   if (!o.borderVisible || barWidth > borderWidth * 2) {
-    _drawCandles(canvas, paint, bars, barWidth, borderWidth, o.borderVisible, pr);
+    _drawCandles(batch, bars, barWidth, borderWidth, o.borderVisible, pr);
   }
+  batch.flush(ctx.canvas);
 }
 
-void _drawWicks(Canvas canvas, Paint paint, List<_Bar> bars, int barWidth, double barSpacing, double pr) {
+void _drawWicks(RectBatch batch, _Bars bars, int barWidth, double barSpacing, double pr) {
   var wickWidth = math.min(pr.floor(), (barSpacing * pr).floor());
   wickWidth = math.max(pr.floor(), math.min(wickWidth, barWidth));
   final wickOffset = (wickWidth * 0.5).floor();
 
   int? prevEdge;
-  for (final bar in bars) {
-    paint.color = bar.wickColor;
-
-    final top = (math.min(bar.openY, bar.closeY) * pr).round();
-    final bottom = (math.max(bar.openY, bar.closeY) * pr).round();
-    final high = (bar.highY * pr).round();
-    final low = (bar.lowY * pr).round();
-    final scaledX = (pr * bar.x).round();
+  for (var j = 0; j < bars.length; j++) {
+    final top = (math.min(bars.openY[j], bars.closeY[j]) * pr).round();
+    final bottom = (math.max(bars.openY[j], bars.closeY[j]) * pr).round();
+    final high = (bars.highY[j] * pr).round();
+    final low = (bars.lowY[j] * pr).round();
+    final scaledX = (pr * bars.x[j]).round();
 
     var left = scaledX - wickOffset;
     final right = left + wickWidth - 1;
@@ -104,8 +121,8 @@ void _drawWicks(Canvas canvas, Paint paint, List<_Bar> bars, int barWidth, doubl
     }
     final width = (right - left + 1).toDouble();
 
-    fillRect(canvas, paint, left.toDouble(), high.toDouble(), width, (top - high).toDouble());
-    fillRect(canvas, paint, left.toDouble(), bottom + 1.0, width, (low - bottom).toDouble());
+    batch.add(left.toDouble(), high.toDouble(), width, (top - high).toDouble(), bars.wickColor[j]);
+    batch.add(left.toDouble(), bottom + 1.0, width, (low - bottom).toDouble(), bars.wickColor[j]);
     prevEdge = right;
   }
 }
@@ -123,19 +140,17 @@ int _calculateBorderWidth(int barWidth, double pr) {
   return res;
 }
 
-void _drawBorder(Canvas canvas, Paint paint, List<_Bar> bars, int barWidth, double barSpacing, double pr) {
+void _drawBorder(RectBatch batch, _Bars bars, int barWidth, double barSpacing, double pr) {
   final borderWidth = _calculateBorderWidth(barWidth, pr);
 
   int? prevEdge;
-  for (final bar in bars) {
-    paint.color = bar.borderColor;
-
-    var left = (bar.x * pr).round() - (barWidth * 0.5).floor();
+  for (var j = 0; j < bars.length; j++) {
+    var left = (bars.x[j] * pr).round() - (barWidth * 0.5).floor();
     // Calculate right before patching left.
     final right = left + barWidth - 1;
 
-    final top = (math.min(bar.openY, bar.closeY) * pr).round();
-    final bottom = (math.max(bar.openY, bar.closeY) * pr).round();
+    final top = (math.min(bars.openY[j], bars.closeY[j]) * pr).round();
+    final bottom = (math.max(bars.openY[j], bars.closeY[j]) * pr).round();
 
     if (prevEdge != null) {
       left = math.max(prevEdge + 1, left);
@@ -144,27 +159,26 @@ void _drawBorder(Canvas canvas, Paint paint, List<_Bar> bars, int barWidth, doub
     final width = (right - left + 1).toDouble();
     final height = (bottom - top + 1).toDouble();
     if (barSpacing * pr > 2 * borderWidth) {
-      fillRectInnerBorder(canvas, paint, left.toDouble(), top.toDouble(), width, height, borderWidth.toDouble());
+      batch.addInnerBorder(left.toDouble(), top.toDouble(), width, height, borderWidth.toDouble(), bars.borderColor[j]);
     } else {
-      fillRect(canvas, paint, left.toDouble(), top.toDouble(), width, height);
+      batch.add(left.toDouble(), top.toDouble(), width, height, bars.borderColor[j]);
     }
     prevEdge = right;
   }
 }
 
 void _drawCandles(
-  Canvas canvas,
-  Paint paint,
-  List<_Bar> bars,
+  RectBatch batch,
+  _Bars bars,
   int barWidth,
   int borderWidth,
   bool borderVisible,
   double pr,
 ) {
-  for (final bar in bars) {
-    var top = (math.min(bar.openY, bar.closeY) * pr).round();
-    var bottom = (math.max(bar.openY, bar.closeY) * pr).round();
-    var left = (bar.x * pr).round() - (barWidth * 0.5).floor();
+  for (var j = 0; j < bars.length; j++) {
+    var top = (math.min(bars.openY[j], bars.closeY[j]) * pr).round();
+    var bottom = (math.max(bars.openY[j], bars.closeY[j]) * pr).round();
+    var left = (bars.x[j] * pr).round() - (barWidth * 0.5).floor();
     var right = left + barWidth - 1;
 
     if (borderVisible) {
@@ -175,7 +189,6 @@ void _drawCandles(
     }
     if (top > bottom) continue;
 
-    paint.color = bar.barColor;
-    fillRect(canvas, paint, left.toDouble(), top.toDouble(), (right - left + 1).toDouble(), (bottom - top + 1).toDouble());
+    batch.add(left.toDouble(), top.toDouble(), (right - left + 1).toDouble(), (bottom - top + 1).toDouble(), bars.barColor[j]);
   }
 }

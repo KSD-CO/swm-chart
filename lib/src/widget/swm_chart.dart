@@ -73,6 +73,11 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
   bool _scrollTime = true;
   bool _scrollPrice = true;
   bool _dragIsMouse = false;
+
+  /// Touch pans lock to their dominant direction once it is clear, so a
+  /// horizontal swipe doesn't drift a manual price scale (and vice versa).
+  Axis? _panAxis;
+  Offset _panStart = Offset.zero;
   int? _activeSeparator;
 
   _Hit? _lastTap;
@@ -175,6 +180,8 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
           _pinchAnchorIndex = _model.timeScale.coordinateToFloatIndex(hit.local.dx);
         } else if (_scrollTime || _scrollPrice) {
           _mode = _DragMode.scroll;
+          _panAxis = null;
+          _panStart = start;
           _model.timeScale.startScroll(hit.local.dx);
           for (final ps in _paneScales(hit.index)) {
             ps.startScroll(hit.local.dy);
@@ -213,8 +220,14 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
       case _DragMode.separator:
         _model.resizePane(hit.index, d.localFocalPoint.dy - _dragStartY);
       case _DragMode.scroll:
-        if (_scrollTime) ts.scrollTo(x);
-        if (_scrollPrice) {
+        if (!_dragIsMouse && _panAxis == null) {
+          final delta = d.localFocalPoint - _panStart;
+          if (delta.distance > kTouchSlop) _panAxis = delta.dx.abs() >= delta.dy.abs() ? Axis.horizontal : Axis.vertical;
+        }
+        final timeAllowed = _dragIsMouse || _panAxis != Axis.vertical;
+        final priceAllowed = _dragIsMouse || _panAxis == Axis.vertical;
+        if (_scrollTime && timeAllowed) ts.scrollTo(x);
+        if (_scrollPrice && priceAllowed) {
           for (final ps in _paneScales(hit.index)) {
             ps.scrollTo(y);
           }

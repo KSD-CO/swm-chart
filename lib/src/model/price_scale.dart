@@ -351,6 +351,28 @@ class PriceScale {
 
   double _internalToDisplay(double v) => isLog ? fromLog(v, _logFormula) : v;
 
+  /// `coordinate = a * price + b` for the current frame, or `null` in
+  /// logarithmic mode. Renderers use it to convert thousands of prices
+  /// without per-call overhead.
+  (double, double)? linearTransform([double? base]) {
+    if (isEmpty || isLog) return null;
+    final range = _priceRange!;
+    // internal = k * price + m in normal and percentage modes.
+    double k = 1, m = 0;
+    final b0 = base ?? baseValue ?? 1;
+    if (isPercentage || isIndexedTo100) {
+      final sign = b0 < 0 ? -1.0 : 1.0;
+      k = sign * 100 / b0;
+      m = sign * (isIndexedTo100 ? 0 : -100);
+    }
+    // invCoordinate = bottomMargin + (internalHeight - 1) * (internal - min) / length
+    final scale = (internalHeight - 1) / range.length;
+    final inv0 = _bottomMarginPx() - scale * range.min;
+    // coordinate = inverted ? inv : height - 1 - inv
+    final ia = scale * k, ib = scale * m + inv0;
+    return isInverted ? (ia, ib) : (-ia, _height - 1 - ib);
+  }
+
   /// [base] is the first visible value of the series the price belongs to;
   /// only used in the percentage modes.
   double priceToCoordinate(double price, [double? base]) =>

@@ -189,17 +189,20 @@ class _TradingScreenState extends State<TradingScreen> {
 
     // RSI in its own pane, a third of the main pane's height.
     _rsi = _chart.addLineSeries(
-      const LineSeriesOptions(color: Color(0xFF7E57C2), lineWidth: 1.5, priceLineVisible: false, title: 'RSI 14'),
+      LineSeriesOptions(
+        color: const Color(0xFF7E57C2),
+        lineWidth: 1.5,
+        priceLineVisible: false,
+        title: 'RSI 14',
+        // Fixed 0..100 while staying auto-scaled, so drags can't shift it.
+        autoscaleInfoProvider: (_) => const AutoscaleInfo(priceRange: PriceRange(0, 100)),
+      ),
       1,
     );
     _chart.panes()[0].setStretchFactor(3);
     _rsi.createPriceLine(const PriceLineOptions(price: 70, color: Color(0x99EF5350), lineStyle: LineStyle.dashed));
     _rsi.createPriceLine(const PriceLineOptions(price: 30, color: Color(0x9926A69A), lineStyle: LineStyle.dashed));
-    _chart.priceScale('right', 1).applyOptions(const PriceScaleOptions(
-      autoScale: false,
-      scaleMargins: ScaleMargins(top: 0.1, bottom: 0.1),
-    ));
-    _chart.priceScale('right', 1).setVisibleRange(const PriceRange(0, 100));
+    _chart.priceScale('right', 1).applyOptions(const PriceScaleOptions(scaleMargins: ScaleMargins(top: 0.1, bottom: 0.1)));
 
     _watermark = createTextWatermark(
       _chart.panes()[0],
@@ -437,13 +440,11 @@ class _TradingScreenState extends State<TradingScreen> {
       rightPriceScale: o.rightPriceScale.copyWith(borderColor: border, mode: _mode),
       timeScale: o.timeScale.copyWith(borderColor: border),
     ));
-    // applyOptions resets every pane's right scale; restore the RSI range.
+    // applyOptions resets every pane's right scale; restore the RSI pane's.
     _chart.priceScale('right', 1).applyOptions(_chart.priceScale('right', 1).options.copyWith(
-          autoScale: false,
           mode: PriceScaleMode.normal,
           scaleMargins: const ScaleMargins(top: 0.1, bottom: 0.1),
         ));
-    _chart.priceScale('right', 1).setVisibleRange(const PriceRange(0, 100));
   }
 
   @override

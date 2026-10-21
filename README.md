@@ -27,7 +27,7 @@ Everything in Lightweight Charts v5.2.1 that applies to Flutter is ported:
 | Localization: locale, date format, month names, price/percentage/tick mark formatters | ✅ |
 | Events: crosshair move, click, double click, visible logical/time range, size, data changed | ✅ |
 | Gestures: pan + kinetic, pinch, long-press crosshair, axis drag, double-tap reset, mouse wheel — each switchable like `handleScroll` / `handleScale` | ✅ |
-| Attribution logo, `takeScreenshot` | ✅ |
+| Attribution logo (opt-in), `takeScreenshot` | ✅ |
 
 Not applicable in Flutter: `autoSize`/`resize`/`width`/`height` (the widget
 takes its parent's size), `chartElement`, `colorSpace`, `colorParsers`.
@@ -136,7 +136,6 @@ cd example && flutter run
 Apache License 2.0 (see `LICENSE` and `NOTICE`). The code is derived from
 TradingView Lightweight Charts™. Upstream's NOTICE requires apps that use it
 to show attribution to TradingView with a link to
-https://www.tradingview.com/. Like upstream, the chart shows the TradingView
-logo by default (`layout.attributionLogo`); pass
-`SwmChart(onAttributionLogoTap: ...)` to open the link. If you hide the logo,
-credit TradingView elsewhere in your app.
+https://www.tradingview.com/, e.g. on an About screen. The chart can show
+the TradingView logo for you (`layout.attributionLogo: true`, off by default;
+pass `SwmChart(onAttributionLogoTap: ...)` to open the link).

@@ -348,19 +348,20 @@ class ChartModel extends ChangeNotifier {
       case SeriesUpdateKind.appendedWhitespace:
         final hasValue = kind == SeriesUpdateKind.appended;
         if (_times.isEmpty || time > _times.last) {
-          // Fast path: a new point to the right of everything.
-          final times = List<num>.of(_times)..add(time);
-          final weights = List<int>.of(_weights)..add(0);
+          // Fast path: a new point to the right of everything. Append in
+          // place: copying 100k-point lists per new bar adds up.
+          final times = _times..add(time);
+          final weights = _weights..add(0);
           behavior.fillWeights(times, weights, times.length - 1);
           if (times.length == 1 && behavior is TimeHorzScaleBehavior) weights[0] = TickMarkWeight.day;
-          if (hasValue) s.setIndices(List<int>.of(s.indices)..add(times.length - 1));
+          if (hasValue) s.indices.add(times.length - 1);
           _applyTimeline(times, weights, times.length - 1);
         } else {
           final index = timeScale.timeToIndex(time);
           if (index != null && (s.indices.isEmpty || index > s.indices.last)) {
             // Another series already has this time; only this series' indices grow.
             if (hasValue) {
-              s.setIndices(List<int>.of(s.indices)..add(index));
+              s.indices.add(index);
               _applyTimeline(_times, _weights, _times.length, replacedWhitespace: true);
             }
           } else {
@@ -380,11 +381,11 @@ class ChartModel extends ChangeNotifier {
       }
     }
     final times = all.toList()..sort();
-    final weights = List<int>.filled(times.length, 0);
+    final weights = List<int>.filled(times.length, 0, growable: true);
     behavior.fillWeights(times, weights, 0);
 
     for (final s in series) {
-      final indices = List<int>.filled(s.data.length, 0);
+      final indices = List<int>.filled(s.data.length, 0, growable: true);
       var j = 0;
       for (var i = 0; i < s.data.length; i++) {
         final t = s.data[i].time;

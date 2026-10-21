@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:swm_chart/src/model/time_scale.dart' show IndexRange;
 import 'package:swm_chart/src/widget/attribution_logo.dart';
 import 'package:swm_chart/swm_chart.dart';
 
@@ -243,6 +244,8 @@ void main() {
   extraGroups();
   apiGroup();
   chartOptionsGroup();
+  perfStructuresGroup();
+  transformGroup();
 
   test('attribution logo path parses and is placed at the bottom left', () {
     final path = parseSvgPath('M0 0h10v10H0Z');
@@ -443,4 +446,57 @@ void chartOptionsGroup() {
     expect(order.last, chart.model.series.first);
     chart.dispose();
   });
+}
+
+void perfStructuresGroup() {
+  test('chunked min/max autoscale matches a full scan after updates', () {
+    final chart = ChartController();
+    final s = chart.addLineSeries();
+    var values = [for (var i = 0; i < 1000; i++) ((i * 7919) % 1000).toDouble()];
+    s.setData([for (var i = 0; i < values.length; i++) LineData(time: i, value: values[i])]);
+    final model = chart.model.series.first;
+    void check(int left, int right) {
+      final info = model.baseAutoscaleInfo(IndexRange(left, right))!;
+      final slice = values.sublist(left, right + 1);
+      expect(info.priceRange!.min, slice.reduce((a, b) => a < b ? a : b));
+      expect(info.priceRange!.max, slice.reduce((a, b) => a > b ? a : b));
+    }
+
+    for (final r in [(0, 999), (3, 70), (64, 127), (100, 900), (990, 999)]) {
+      check(r.$1, r.$2);
+    }
+    // Replace the last value and append new ones.
+    s.update(const LineData(time: 999, value: 5000));
+    values[999] = 5000;
+    check(900, 999);
+    s.update(const LineData(time: 1000, value: -42));
+    values = [...values, -42];
+    check(0, 1000);
+    chart.dispose();
+  });
+}
+
+void transformGroup() {
+  for (final mode in [PriceScaleMode.normal, PriceScaleMode.percentage, PriceScaleMode.indexedTo100]) {
+    for (final inverted in [false, true]) {
+      test('linear price transform matches priceToCoordinate ($mode, inverted: $inverted)', () {
+        final chart = ChartController(
+          options: ChartOptions(rightPriceScale: PriceScaleOptions(mode: mode, invertScale: inverted)),
+        );
+        final s = chart.addLineSeries()..setData(_line(50, 10));
+        chart.model.layout(const Size(400, 300), 2, _measure);
+        final model = chart.model.series.first;
+        final (a, b) = model.priceTransform()!;
+        for (final p in [10.0, 25.5, 59.0, 100.0]) {
+          expect(a * p + b, closeTo(s.priceToCoordinate(p)!, 1e-6));
+        }
+        final ts = chart.model.timeScale;
+        final (ia, ib) = ts.indexTransform();
+        for (final i in [0, 17, 49]) {
+          expect(ia * i + ib, closeTo(ts.indexToCoordinate(i), 1e-9));
+        }
+        chart.dispose();
+      });
+    }
+  }
 }
