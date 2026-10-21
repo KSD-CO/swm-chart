@@ -85,8 +85,12 @@ abstract class SeriesModel<T extends SeriesData, O extends SeriesOptions> {
   final List<double> _chunkMax = [];
   int _minMaxDirtyFrom = 0;
 
-  SeriesItems<T>? _conflatedCache;
-  (int, int, List<int>)? _conflatedKey;
+  // Conflation levels (2, 4, ... 512) built like upstream's DataConflater:
+  // level 2 from the data, level 2k from level k. Items from
+  // [_conflationDirtyFrom] on changed since they were built.
+  final Map<int, SeriesItems<T>> _levels = {};
+  List<int>? _levelsIndices;
+  int _conflationDirtyFrom = 0;
 
   final List<PriceLine> priceLines = [];
   final List<ChartPrimitive> primitives = [];
@@ -142,6 +146,7 @@ abstract class SeriesModel<T extends SeriesData, O extends SeriesOptions> {
     _data = [for (final d in data) ?_valueItem(d)];
     dataVersion++;
     _minMaxDirtyFrom = 0;
+    _levels.clear();
   }
 
   /// Replaces the last item when [item] has the same time, appends it when
@@ -151,6 +156,7 @@ abstract class SeriesModel<T extends SeriesData, O extends SeriesOptions> {
     dataVersion++;
     // Only the last item changes (or one is appended).
     _minMaxDirtyFrom = math.min(_minMaxDirtyFrom, math.max(0, _data.length - 1));
+    _conflationDirtyFrom = math.min(_conflationDirtyFrom, math.max(0, _data.length - 1));
     if (_all.isNotEmpty) {
       final last = _all.last;
       if (item.time < last.time) {
@@ -189,6 +195,7 @@ abstract class SeriesModel<T extends SeriesData, O extends SeriesOptions> {
     _data = [for (final d in _all) ?_valueItem(d)];
     dataVersion++;
     _minMaxDirtyFrom = 0;
+    _levels.clear();
     return removed;
   }
 
@@ -196,32 +203,96 @@ abstract class SeriesModel<T extends SeriesData, O extends SeriesOptions> {
   /// this series type doesn't support conflation.
   T? conflateGroup(List<T> g) => null;
 
-  /// Items to draw. With [factor] > 1, groups of [factor] consecutive items
-  /// are merged like upstream's `DataConflater`, the last group absorbing
-  /// the remainder; each group sits at its first item's index.
+  /// Whether this series can be conflated.
+  bool get supportsConflation => true;
+
+  /// Merges two consecutive (possibly already merged) items; [aIndex] and
+  /// [bIndex] are their logical indices. Upstream's `_mergeTwoRows`:
+  /// first open/time, extreme high/low, last close.
+  T mergeItems(T a, int aIndex, T b, int bIndex) => conflateGroup([a, b]) as T;
+
+  /// Upstream's `_normalizeConflationLevel`: the smallest power of two
+  /// >= [barsToMerge], between 2 and 512.
+  static int normalizeConflationLevel(int barsToMerge) {
+    var level = 2;
+    while (level < barsToMerge && level < 512) {
+      level *= 2;
+    }
+    return level;
+  }
+
+  /// Items to draw: the data, or its conflation level for [factor].
   SeriesItems<T> renderItems(int factor) {
-    if (factor <= 1 || _data.length < 2 || conflateGroup(_data.sublist(0, 1)) == null) {
-      return SeriesItems(_data, _indices);
+    final base = SeriesItems(_data, _indices);
+    if (factor <= 1 || _data.length < 2 || !supportsConflation) return base;
+    if (!identical(_levelsIndices, _indices)) {
+      // The time scale was rebuilt: indices changed for every item.
+      _levels.clear();
+      _levelsIndices = _indices;
     }
-    final key = (dataVersion, factor, _indices);
-    final cached = _conflatedCache;
-    if (cached != null && _conflatedKey != null && _conflatedKey!.$1 == key.$1 && _conflatedKey!.$2 == factor &&
-        identical(_conflatedKey!.$3, _indices)) {
-      return cached;
+    if (_levels.isEmpty) {
+      _conflationDirtyFrom = _data.length;
+    } else if (_conflationDirtyFrom < _data.length) {
+      _updateLevelsFrom(_conflationDirtyFrom, base);
     }
-    final data = <T>[];
-    final indices = <int>[];
-    var start = 0;
-    while (start < _data.length) {
-      var end = math.min(start + factor, _data.length);
-      // Fold a short remainder into the last group.
-      if (_data.length - end < factor && _data.length - end > 0) end = _data.length;
-      data.add(conflateGroup(_data.sublist(start, end)) as T);
-      indices.add(_indices[start]);
-      start = end;
+    return _level(normalizeConflationLevel(factor), base);
+  }
+
+  /// Conflation levels currently cached.
+  Iterable<int> get cachedConflationLevels => _levels.keys;
+
+  /// Builds [levels] ahead of time (`precomputeConflationOnInit`).
+  void precomputeConflation(Iterable<int> levels) {
+    if (_data.length < 2 || !supportsConflation) return;
+    for (final level in levels) {
+      if (level > 1) renderItems(level);
     }
-    _conflatedKey = key;
-    return _conflatedCache = SeriesItems(data, indices);
+  }
+
+  SeriesItems<T> _level(int level, SeriesItems<T> base) {
+    final cached = _levels[level];
+    if (cached != null) return cached;
+    final source = level == 2 ? base : _level(level ~/ 2, base);
+    final result = SeriesItems<T>(<T>[], <int>[]);
+    _mergePairs(source, result, 0);
+    return _levels[level] = result;
+  }
+
+  /// Upstream's `_buildChunksFromData` with a merge factor of 2, writing
+  /// [target] from chunk [fromChunk] on: pairs of items, and a final odd
+  /// item folded into the previous chunk.
+  void _mergePairs(SeriesItems<T> source, SeriesItems<T> target, int fromChunk) {
+    target.data.length = fromChunk;
+    target.indices.length = fromChunk;
+    final n = source.length;
+    for (var i = fromChunk * 2; i < n; i += 2) {
+      if (i + 1 < n) {
+        target.data.add(mergeItems(source.data[i], source.indices[i], source.data[i + 1], source.indices[i + 1]));
+        target.indices.add(source.indices[i]);
+      } else if (target.data.isEmpty) {
+        target.data.add(source.data[i]);
+        target.indices.add(source.indices[i]);
+      } else {
+        final last = target.data.length - 1;
+        target.data[last] = mergeItems(target.data[last], target.indices[last], source.data[i], source.indices[i]);
+      }
+    }
+  }
+
+  /// Like upstream's `updateLastConflatedChunk`: after the items from
+  /// [from] changed, rebuild only the trailing chunks of every level.
+  void _updateLevelsFrom(int from, SeriesItems<T> base) {
+    var dirty = from;
+    for (var level = 2; level <= 512; level *= 2) {
+      final target = _levels[level];
+      if (target == null) break;
+      final source = level == 2 ? base : _levels[level ~/ 2]!;
+      // One chunk earlier: it may hold a folded odd remainder.
+      final fromChunk = math.max(0, dirty ~/ 2 - 1);
+      _mergePairs(source, target, fromChunk);
+      dirty = fromChunk;
+    }
+    _conflationDirtyFrom = _data.length;
   }
 
   /// First item position whose time scale index is >= [index].
@@ -565,25 +636,51 @@ class CustomSeriesModel<T extends SeriesData> extends SeriesModel<T, CustomSerie
   Color itemColor(T item) => options.color;
 
   @override
-  void paint(SeriesPaintContext ctx) {
-    var (from, to) = itemsInRange(ctx.visibleRange);
+  bool get supportsConflation => view.conflationReducer != null;
+
+  @override
+  T mergeItems(T a, int aIndex, T b, int bIndex) => view.conflationReducer!(
+        CustomConflationContext(data: a, index: aIndex, priceValues: view.priceValues(a)),
+        CustomConflationContext(data: b, index: bIndex, priceValues: view.priceValues(b)),
+      );
+
+  CustomSeriesDrawContext<T> _drawContext(Canvas? canvas, Size paneSize, double pixelRatio, TimeScale ts,
+      IndexRange visible, SeriesItems<T> items) {
+    var (from, to) = items.itemsInRange(visible);
     from = math.max(0, from - 1);
-    to = math.min(data.length, to + 1);
-    final bars = [
-      for (var i = from; i < to; i++)
-        CustomBarItem<T>(x: ctx.timeScale.indexToCoordinate(indices[i]), index: indices[i], data: data[i]),
-    ];
+    to = math.min(items.length, to + 1);
+    return CustomSeriesDrawContext<T>(
+      canvas: canvas ?? Canvas(PictureRecorder()),
+      paneSize: paneSize,
+      pixelRatio: pixelRatio,
+      barSpacing: ts.barSpacing,
+      bars: [
+        for (var i = from; i < to; i++)
+          CustomBarItem<T>(x: ts.indexToCoordinate(items.indices[i]), index: items.indices[i], data: items.data[i]),
+      ],
+      options: options,
+      priceToCoordinate: priceToCoordinate,
+    );
+  }
+
+  /// Delegates to [CustomSeriesView.hitTest].
+  CustomSeriesHitTestResult? hitTest(TimeScale ts, IndexRange visible, double x, double y) {
+    final ctx = _drawContext(null, Size(ts.width, priceScale.height), 1, ts, visible, renderItems(1));
+    return view.hitTest(ctx, x, y);
+  }
+
+  @override
+  void paint(SeriesPaintContext ctx) {
     // Custom views draw in logical pixels; the series canvas is in bitmap pixels.
     ctx.canvas.save();
     ctx.canvas.scale(ctx.pixelRatio);
-    view.draw(CustomSeriesDrawContext<T>(
-      canvas: ctx.canvas,
-      paneSize: ctx.paneSize,
-      pixelRatio: ctx.pixelRatio,
-      barSpacing: ctx.timeScale.barSpacing,
-      bars: bars,
-      options: options,
-      priceToCoordinate: priceToCoordinate,
+    view.draw(_drawContext(
+      ctx.canvas,
+      ctx.paneSize,
+      ctx.pixelRatio,
+      ctx.timeScale,
+      ctx.visibleRange,
+      renderItems(ctx.conflationFactor),
     ));
     ctx.canvas.restore();
   }

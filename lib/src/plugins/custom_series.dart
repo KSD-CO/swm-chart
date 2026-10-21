@@ -43,6 +43,32 @@ class CustomSeriesDrawContext<T extends SeriesData> {
   final double Function(double price) priceToCoordinate;
 }
 
+/// An item passed to [CustomSeriesView.conflationReducer].
+class CustomConflationContext<T extends SeriesData> {
+  const CustomConflationContext({required this.data, required this.index, required this.priceValues});
+
+  final T data;
+
+  /// Logical index of the item (of the first merged item for conflated ones).
+  final int index;
+
+  /// [CustomSeriesView.priceValues] of [data].
+  final List<double> priceValues;
+
+  num get time => data.time;
+}
+
+/// Result of [CustomSeriesView.hitTest], like `CustomSeriesHitTestResult`.
+class CustomSeriesHitTestResult {
+  const CustomSeriesHitTestResult({required this.distance, this.objectId});
+
+  /// Distance from the pointer in logical pixels; closer hits win.
+  final double distance;
+
+  /// Reported as `hoveredObjectId` (objectKind `customObject`).
+  final Object? objectId;
+}
+
 /// Defines how a custom series is drawn, like upstream's
 /// `ICustomSeriesPaneView`. Add it with `ChartController.addCustomSeries`.
 abstract class CustomSeriesView<T extends SeriesData> {
@@ -54,4 +80,13 @@ abstract class CustomSeriesView<T extends SeriesData> {
   bool isWhitespace(T item) => false;
 
   void draw(CustomSeriesDrawContext<T> ctx);
+
+  /// Merges two consecutive items into one when the time scale conflates
+  /// bars, like upstream's `conflationReducer`. `null` (the default) means
+  /// this series is never conflated.
+  T Function(CustomConflationContext<T> a, CustomConflationContext<T> b)? get conflationReducer => null;
+
+  /// Whether the series is under ([x], [y]) (pane coordinates). `null`
+  /// (the default) means not hit.
+  CustomSeriesHitTestResult? hitTest(CustomSeriesDrawContext<T> ctx, double x, double y) => null;
 }

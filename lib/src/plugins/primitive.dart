@@ -37,9 +37,24 @@ class AxisLabel {
   final Color? textColor;
 }
 
-/// Result of [ChartPrimitive.hitTest].
+/// What a primitive hit is, like upstream's `PrimitiveHoveredItem.itemType`.
+enum PrimitiveItemType { marker, primitive }
+
+/// Result of [ChartPrimitive.hitTest], like upstream's `PrimitiveHoveredItem`.
 class PrimitiveHitTestResult {
-  const PrimitiveHitTestResult({required this.externalId, this.zOrder = PrimitiveZOrder.normal, this.distance = 0});
+  const PrimitiveHitTestResult({
+    required this.externalId,
+    this.zOrder = PrimitiveZOrder.normal,
+    this.distance = 0,
+    this.hitTestPriority,
+    this.itemType = PrimitiveItemType.primitive,
+  });
+
+  /// Among hits on the same z-order: 0 for ranges, 1 for lines, 2 for
+  /// points (higher wins). `null` counts as a point.
+  final int? hitTestPriority;
+
+  final PrimitiveItemType itemType;
 
   /// Reported as `hoveredObjectId` in chart events.
   final Object? externalId;

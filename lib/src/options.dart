@@ -36,6 +36,19 @@ enum PriceScaleMode {
   indexedTo100,
 }
 
+/// When precomputed conflation levels are built, like the Prioritized Task
+/// Scheduling priorities upstream uses.
+enum ConflationPriority {
+  /// When the app is idle.
+  background,
+
+  /// Soon, ahead of other idle work.
+  userVisible,
+
+  /// As soon as possible.
+  userBlocking,
+}
+
 /// Pulsing animation of the last price for line-like series.
 enum LastPriceAnimationMode { disabled, continuous, onDataUpdate }
 
@@ -330,6 +343,8 @@ class TimeScaleOptions {
     this.ignoreWhitespaceIndices = false,
     this.enableConflation = false,
     this.conflationThresholdFactor = 1,
+    this.precomputeConflationOnInit = false,
+    this.precomputeConflationPriority = ConflationPriority.background,
     this.tickMarkFormatter,
   });
 
@@ -371,6 +386,13 @@ class TimeScaleOptions {
   final bool enableConflation;
   /// Values above 1 conflate earlier (smoother sparklines).
   final double conflationThresholdFactor;
+
+  /// Build every conflation level right after `setData`, in a scheduled
+  /// task, so the first zoom out doesn't pay for it.
+  final bool precomputeConflationOnInit;
+
+  /// Scheduling priority of [precomputeConflationOnInit].
+  final ConflationPriority precomputeConflationPriority;
   final TickMarkFormatter? tickMarkFormatter;
 
   TimeScaleOptions copyWith({
@@ -398,6 +420,8 @@ class TimeScaleOptions {
     bool? ignoreWhitespaceIndices,
     bool? enableConflation,
     double? conflationThresholdFactor,
+    bool? precomputeConflationOnInit,
+    ConflationPriority? precomputeConflationPriority,
     TickMarkFormatter? tickMarkFormatter,
   }) {
     return TimeScaleOptions(
@@ -425,6 +449,8 @@ class TimeScaleOptions {
       ignoreWhitespaceIndices: ignoreWhitespaceIndices ?? this.ignoreWhitespaceIndices,
       enableConflation: enableConflation ?? this.enableConflation,
       conflationThresholdFactor: conflationThresholdFactor ?? this.conflationThresholdFactor,
+      precomputeConflationOnInit: precomputeConflationOnInit ?? this.precomputeConflationOnInit,
+      precomputeConflationPriority: precomputeConflationPriority ?? this.precomputeConflationPriority,
       tickMarkFormatter: tickMarkFormatter ?? this.tickMarkFormatter,
     );
   }

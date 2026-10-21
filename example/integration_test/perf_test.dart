@@ -71,6 +71,36 @@ Future<void> drive(void Function(double t) onFrame) async {
   await done.future;
 }
 
+/// Collects engine frame timings while [action] runs. Unlike
+/// `watchPerformance`, this needs no VM service, so it works on devices.
+Future<Map<String, Object>> measureFrames(Future<void> Function() action) async {
+  final timings = <FrameTiming>[];
+  void collect(List<FrameTiming> t) => timings.addAll(t);
+  SchedulerBinding.instance.addTimingsCallback(collect);
+  await action();
+  // Timings are reported in batches; give the engine time to flush them.
+  await Future<void>.delayed(const Duration(milliseconds: 500));
+  SchedulerBinding.instance.removeTimingsCallback(collect);
+
+  Map<String, double> stats(List<double> ms) {
+    ms.sort();
+    double pct(double p) => ms[math.min(ms.length - 1, (ms.length * p).floor())];
+    return {
+      'avg': ms.reduce((a, b) => a + b) / ms.length,
+      'p90': pct(0.9),
+      'p99': pct(0.99),
+      'worst': ms.last,
+    };
+  }
+
+  double millis(Duration d) => d.inMicroseconds / 1000;
+  return {
+    'frames': timings.length,
+    'build': stats([for (final t in timings) millis(t.buildDuration)]),
+    'raster': stats([for (final t in timings) millis(t.rasterDuration)]),
+  };
+}
+
 void main() {
   const only = String.fromEnvironment('ONLY');
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -80,6 +110,8 @@ void main() {
     for (final b in bars) HistogramData(time: b.time, value: (b.high - b.low) * 1000, color: b.isUp ? Colors.teal : Colors.red),
   ];
   final timings = <String, Object?>{};
+  final results = <String, Object?>{};
+  tearDownAll(() => binding.reportData = {'frames': results, 'misc': timings});
 
   Future<(ChartController, CandlestickSeriesApi)> setUp(WidgetTester tester, {bool conflation = false}) async {
     final chart = ChartController(
@@ -99,28 +131,28 @@ void main() {
 
   testWidgets('scroll (bar spacing 6)', skip: only.isNotEmpty && !'scroll (bar spacing 6)'.contains(only), (tester) async {
     final (chart, _) = await setUp(tester);
-    await binding.watchPerformance(() async {
+    results['scroll'] = await measureFrames(() async {
       await drive((t) => chart.timeScale().scrollToPosition(-t * 5000));
-    }, reportKey: 'scroll');
+    });
     chart.dispose();
   });
 
   testWidgets('zoomed out, 100k visible, no conflation', skip: only.isNotEmpty && !'zoomed out, 100k visible, no conflation'.contains(only), (tester) async {
     final (chart, _) = await setUp(tester);
     chart.timeScale().fitContent();
-    await binding.watchPerformance(() async {
+    results['zoomed_out'] = await measureFrames(() async {
       // Small jitter so every frame repaints and re-autoscales.
       await drive((t) => chart.timeScale().scrollToPosition(math.sin(t * 20) * 50));
-    }, reportKey: 'zoomed_out');
+    });
     chart.dispose();
   });
 
   testWidgets('zoomed out, 100k visible, conflation', skip: only.isNotEmpty && !'zoomed out, 100k visible, conflation'.contains(only), (tester) async {
     final (chart, _) = await setUp(tester, conflation: true);
     chart.timeScale().fitContent();
-    await binding.watchPerformance(() async {
+    results['zoomed_out_conflation'] = await measureFrames(() async {
       await drive((t) => chart.timeScale().scrollToPosition(math.sin(t * 20) * 50));
-    }, reportKey: 'zoomed_out_conflation');
+    });
     chart.dispose();
   });
 
@@ -128,7 +160,7 @@ void main() {
     final (chart, candles) = await setUp(tester);
     var last = bars.last;
     var i = 0;
-    await binding.watchPerformance(() async {
+    results['realtime'] = await measureFrames(() async {
       await drive((t) {
         i++;
         if (i % 30 == 0) {
@@ -145,19 +177,18 @@ void main() {
         }
         candles.update(last);
       });
-    }, reportKey: 'realtime');
+    });
     chart.dispose();
   });
 
   testWidgets('crosshair moving', skip: only.isNotEmpty && !'crosshair moving'.contains(only), (tester) async {
     final (chart, candles) = await setUp(tester);
-    await binding.watchPerformance(() async {
+    results['crosshair'] = await measureFrames(() async {
       await drive((t) {
         final bar = bars[barCount - 1 - (t * 100).floor()];
         chart.setCrosshairPosition(bar.close, bar.time, candles);
       });
-    }, reportKey: 'crosshair');
+    });
     chart.dispose();
-    binding.reportData = {...?binding.reportData, 'misc': timings};
   });
 }

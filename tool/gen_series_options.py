@@ -16,6 +16,7 @@ common = [
  ("priceFormat","PriceFormat","PriceFormat.price()",None),
  ("priceScaleId","String?",None,"`right`, `left`, or any other id for an invisible overlay scale. `null` uses the chart's `defaultVisiblePriceScaleId`."),
  ("autoscaleInfoProvider","AutoscaleInfoProvider?",None,"Overrides the autoscale range of this series."),
+ ("conflationThresholdFactor","double?",None,"Overrides `TimeScaleOptions.conflationThresholdFactor` for this series."),
 ]
 linelike = [
  ("lineWidth","double","3",None),

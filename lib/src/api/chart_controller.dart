@@ -6,7 +6,7 @@ import 'package:meta/meta.dart';
 
 import '../data.dart';
 import '../model/chart_model.dart';
-import '../model/hit_test.dart' show HoveredObjectKind;
+import '../model/hit_test.dart' show HoveredItemType, HoveredObjectKind, HoveredSourceKind;
 import '../model/horz_scale_behavior.dart';
 import '../model/pane.dart';
 import '../model/price_line.dart';
@@ -20,8 +20,17 @@ import '../series_options.dart';
 
 /// What is under the pointer, like upstream's `HoveredInfo`.
 class HoveredInfo {
-  const HoveredInfo({required this.objectKind, this.series, this.objectId, this.paneIndex});
+  const HoveredInfo({
+    required this.type,
+    required this.sourceKind,
+    required this.objectKind,
+    this.series,
+    this.objectId,
+    this.paneIndex,
+  });
 
+  final HoveredItemType type;
+  final HoveredSourceKind sourceKind;
   final HoveredObjectKind objectKind;
   final SeriesApi? series;
 
@@ -320,6 +329,8 @@ class ChartController {
       hoveredInfo: hit == null
           ? null
           : HoveredInfo(
+              type: hit.type,
+              sourceKind: hit.sourceKind,
               objectKind: hit.kind,
               series: hit.series == null ? null : _seriesApis[hit.series],
               objectId: hit.objectId,

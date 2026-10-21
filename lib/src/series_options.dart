@@ -43,6 +43,7 @@ abstract class SeriesOptions {
     required this.priceFormat,
     required this.priceScaleId,
     required this.autoscaleInfoProvider,
+    required this.conflationThresholdFactor,
   });
 
   final String title;
@@ -68,6 +69,8 @@ abstract class SeriesOptions {
   final String? priceScaleId;
   /// Overrides the autoscale range of this series.
   final AutoscaleInfoProvider? autoscaleInfoProvider;
+  /// Overrides `TimeScaleOptions.conflationThresholdFactor` for this series.
+  final double? conflationThresholdFactor;
 }
 
 /// Options shared by line, area and baseline series.
@@ -104,6 +107,7 @@ class CandlestickSeriesOptions extends SeriesOptions {
     super.priceFormat = const PriceFormat.price(),
     super.priceScaleId,
     super.autoscaleInfoProvider,
+    super.conflationThresholdFactor,
     this.upColor = const Color(0xFF26A69A),
     this.downColor = const Color(0xFFEF5350),
     this.wickVisible = true,
@@ -140,6 +144,7 @@ class CandlestickSeriesOptions extends SeriesOptions {
     PriceFormat? priceFormat,
     String? priceScaleId,
     AutoscaleInfoProvider? autoscaleInfoProvider,
+    double? conflationThresholdFactor,
     Color? upColor,
     Color? downColor,
     bool? wickVisible,
@@ -166,6 +171,7 @@ class CandlestickSeriesOptions extends SeriesOptions {
       priceFormat: priceFormat ?? this.priceFormat,
       priceScaleId: priceScaleId ?? this.priceScaleId,
       autoscaleInfoProvider: autoscaleInfoProvider ?? this.autoscaleInfoProvider,
+      conflationThresholdFactor: conflationThresholdFactor ?? this.conflationThresholdFactor,
       upColor: upColor ?? this.upColor,
       downColor: downColor ?? this.downColor,
       wickVisible: wickVisible ?? this.wickVisible,
@@ -196,6 +202,7 @@ class BarSeriesOptions extends SeriesOptions {
     super.priceFormat = const PriceFormat.price(),
     super.priceScaleId,
     super.autoscaleInfoProvider,
+    super.conflationThresholdFactor,
     this.upColor = const Color(0xFF26A69A),
     this.downColor = const Color(0xFFEF5350),
     this.openVisible = true,
@@ -225,6 +232,7 @@ class BarSeriesOptions extends SeriesOptions {
     PriceFormat? priceFormat,
     String? priceScaleId,
     AutoscaleInfoProvider? autoscaleInfoProvider,
+    double? conflationThresholdFactor,
     Color? upColor,
     Color? downColor,
     bool? openVisible,
@@ -247,6 +255,7 @@ class BarSeriesOptions extends SeriesOptions {
       priceFormat: priceFormat ?? this.priceFormat,
       priceScaleId: priceScaleId ?? this.priceScaleId,
       autoscaleInfoProvider: autoscaleInfoProvider ?? this.autoscaleInfoProvider,
+      conflationThresholdFactor: conflationThresholdFactor ?? this.conflationThresholdFactor,
       upColor: upColor ?? this.upColor,
       downColor: downColor ?? this.downColor,
       openVisible: openVisible ?? this.openVisible,
@@ -273,6 +282,7 @@ class LineSeriesOptions extends SeriesOptions implements LineLikeSeriesOptions {
     super.priceFormat = const PriceFormat.price(),
     super.priceScaleId,
     super.autoscaleInfoProvider,
+    super.conflationThresholdFactor,
     this.lineWidth = 3,
     this.lineStyle = LineStyle.solid,
     this.lineType = LineType.simple,
@@ -333,6 +343,7 @@ class LineSeriesOptions extends SeriesOptions implements LineLikeSeriesOptions {
     PriceFormat? priceFormat,
     String? priceScaleId,
     AutoscaleInfoProvider? autoscaleInfoProvider,
+    double? conflationThresholdFactor,
     double? lineWidth,
     LineStyle? lineStyle,
     LineType? lineType,
@@ -364,6 +375,7 @@ class LineSeriesOptions extends SeriesOptions implements LineLikeSeriesOptions {
       priceFormat: priceFormat ?? this.priceFormat,
       priceScaleId: priceScaleId ?? this.priceScaleId,
       autoscaleInfoProvider: autoscaleInfoProvider ?? this.autoscaleInfoProvider,
+      conflationThresholdFactor: conflationThresholdFactor ?? this.conflationThresholdFactor,
       lineWidth: lineWidth ?? this.lineWidth,
       lineStyle: lineStyle ?? this.lineStyle,
       lineType: lineType ?? this.lineType,
@@ -399,6 +411,7 @@ class AreaSeriesOptions extends SeriesOptions implements LineLikeSeriesOptions {
     super.priceFormat = const PriceFormat.price(),
     super.priceScaleId,
     super.autoscaleInfoProvider,
+    super.conflationThresholdFactor,
     this.lineWidth = 3,
     this.lineStyle = LineStyle.solid,
     this.lineType = LineType.simple,
@@ -469,6 +482,7 @@ class AreaSeriesOptions extends SeriesOptions implements LineLikeSeriesOptions {
     PriceFormat? priceFormat,
     String? priceScaleId,
     AutoscaleInfoProvider? autoscaleInfoProvider,
+    double? conflationThresholdFactor,
     double? lineWidth,
     LineStyle? lineStyle,
     LineType? lineType,
@@ -504,6 +518,7 @@ class AreaSeriesOptions extends SeriesOptions implements LineLikeSeriesOptions {
       priceFormat: priceFormat ?? this.priceFormat,
       priceScaleId: priceScaleId ?? this.priceScaleId,
       autoscaleInfoProvider: autoscaleInfoProvider ?? this.autoscaleInfoProvider,
+      conflationThresholdFactor: conflationThresholdFactor ?? this.conflationThresholdFactor,
       lineWidth: lineWidth ?? this.lineWidth,
       lineStyle: lineStyle ?? this.lineStyle,
       lineType: lineType ?? this.lineType,
@@ -543,6 +558,7 @@ class BaselineSeriesOptions extends SeriesOptions implements LineLikeSeriesOptio
     super.priceFormat = const PriceFormat.price(),
     super.priceScaleId,
     super.autoscaleInfoProvider,
+    super.conflationThresholdFactor,
     this.lineWidth = 3,
     this.lineStyle = LineStyle.solid,
     this.lineType = LineType.simple,
@@ -618,6 +634,7 @@ class BaselineSeriesOptions extends SeriesOptions implements LineLikeSeriesOptio
     PriceFormat? priceFormat,
     String? priceScaleId,
     AutoscaleInfoProvider? autoscaleInfoProvider,
+    double? conflationThresholdFactor,
     double? lineWidth,
     LineStyle? lineStyle,
     LineType? lineType,
@@ -656,6 +673,7 @@ class BaselineSeriesOptions extends SeriesOptions implements LineLikeSeriesOptio
       priceFormat: priceFormat ?? this.priceFormat,
       priceScaleId: priceScaleId ?? this.priceScaleId,
       autoscaleInfoProvider: autoscaleInfoProvider ?? this.autoscaleInfoProvider,
+      conflationThresholdFactor: conflationThresholdFactor ?? this.conflationThresholdFactor,
       lineWidth: lineWidth ?? this.lineWidth,
       lineStyle: lineStyle ?? this.lineStyle,
       lineType: lineType ?? this.lineType,
@@ -698,6 +716,7 @@ class CustomSeriesOptions extends SeriesOptions {
     super.priceFormat = const PriceFormat.price(),
     super.priceScaleId,
     super.autoscaleInfoProvider,
+    super.conflationThresholdFactor,
     this.color = const Color(0xFF2196F3),
   });
 
@@ -721,6 +740,7 @@ class CustomSeriesOptions extends SeriesOptions {
     PriceFormat? priceFormat,
     String? priceScaleId,
     AutoscaleInfoProvider? autoscaleInfoProvider,
+    double? conflationThresholdFactor,
     Color? color,
   }) {
     return CustomSeriesOptions(
@@ -740,6 +760,7 @@ class CustomSeriesOptions extends SeriesOptions {
       priceFormat: priceFormat ?? this.priceFormat,
       priceScaleId: priceScaleId ?? this.priceScaleId,
       autoscaleInfoProvider: autoscaleInfoProvider ?? this.autoscaleInfoProvider,
+      conflationThresholdFactor: conflationThresholdFactor ?? this.conflationThresholdFactor,
       color: color ?? this.color,
     );
   }
@@ -763,6 +784,7 @@ class HistogramSeriesOptions extends SeriesOptions {
     super.priceFormat = const PriceFormat.price(),
     super.priceScaleId,
     super.autoscaleInfoProvider,
+    super.conflationThresholdFactor,
     this.color = const Color(0xFF26A69A),
     this.base = 0,
   });
@@ -788,6 +810,7 @@ class HistogramSeriesOptions extends SeriesOptions {
     PriceFormat? priceFormat,
     String? priceScaleId,
     AutoscaleInfoProvider? autoscaleInfoProvider,
+    double? conflationThresholdFactor,
     Color? color,
     double? base,
   }) {
@@ -808,6 +831,7 @@ class HistogramSeriesOptions extends SeriesOptions {
       priceFormat: priceFormat ?? this.priceFormat,
       priceScaleId: priceScaleId ?? this.priceScaleId,
       autoscaleInfoProvider: autoscaleInfoProvider ?? this.autoscaleInfoProvider,
+      conflationThresholdFactor: conflationThresholdFactor ?? this.conflationThresholdFactor,
       color: color ?? this.color,
       base: base ?? this.base,
     );

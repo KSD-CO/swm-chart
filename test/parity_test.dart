@@ -246,6 +246,7 @@ void main() {
   chartOptionsGroup();
   perfStructuresGroup();
   transformGroup();
+  hoveredInfoGroup();
 
   test('attribution logo path parses and is placed at the bottom left', () {
     final path = parseSvgPath('M0 0h10v10H0Z');
@@ -499,4 +500,71 @@ void transformGroup() {
       });
     }
   }
+}
+
+class _BoxView extends CustomSeriesView<_RangeData> {
+  @override
+  List<double> priceValues(_RangeData item) => [item.low, item.high];
+
+  @override
+  void draw(CustomSeriesDrawContext<_RangeData> ctx) {}
+
+  @override
+  CustomSeriesHitTestResult? hitTest(CustomSeriesDrawContext<_RangeData> ctx, double x, double y) {
+    for (final bar in ctx.bars) {
+      final top = ctx.priceToCoordinate(bar.data.high), bottom = ctx.priceToCoordinate(bar.data.low);
+      if ((bar.x - x).abs() < 3 && y >= top && y <= bottom) {
+        return CustomSeriesHitTestResult(distance: 0, objectId: 'box-${bar.index}');
+      }
+    }
+    return null;
+  }
+}
+
+void hoveredInfoGroup() {
+  test('hoveredInfo: type, sourceKind and objectKind like upstream', () {
+    final chart = ChartController();
+    final candles = chart.addCandlestickSeries()
+      ..setData([
+        for (var i = 0; i < 30; i++)
+          CandlestickData(time: _t0 + i * _day, open: 100.0 + i, high: 105.0 + i, low: 95.0 + i, close: 102.0 + i),
+      ]);
+    candles.createPriceLine(const PriceLineOptions(price: 140, id: 'tp'));
+    createSeriesMarkers(candles, [
+      SeriesMarker(time: _t0 + 10 * _day, position: SeriesMarkerPosition.aboveBar, shape: SeriesMarkerShape.circle, color: const Color(0xFF000000), id: 'm1'),
+    ]);
+    final boxes = chart.addCustomSeries(_BoxView(), const CustomSeriesOptions(), 1)
+      ..setData([for (var i = 0; i < 30; i++) _RangeData(time: _t0 + i * _day, low: 10, high: 20)]);
+    chart.model.layout(const Size(400, 600), 1, _measure);
+    // Paint once so the markers know where they are.
+    final recorder = PictureRecorder();
+    final canvas = Canvas(recorder);
+    final ctx = chart.model.primitiveContext(chart.model.panes[0], chart.model.series.first, canvas);
+    candles.priceScale(); // ensure scale
+    for (final p in chart.model.series.first.primitives) {
+      p.paint(ctx);
+    }
+
+    final events = <ChartEventParams>[];
+    chart.subscribeClick(events.add);
+    final x10 = chart.timeScale().timeToCoordinate(_t0 + 10 * _day)!;
+    final x20 = chart.timeScale().timeToCoordinate(_t0 + 20 * _day)!;
+
+    chart.model.click(0, Offset(x20, candles.priceToCoordinate(120)!));
+    chart.model.click(0, Offset(x20, candles.priceToCoordinate(140)!));
+    final markerY = (chart.model.series.first.primitives.first as SeriesMarkersPrimitive).hitTestCenterForTest!;
+    chart.model.click(0, Offset(x10, markerY));
+    chart.model.click(1, Offset(x20, boxes.priceToCoordinate(15)!));
+
+    final infos = [for (final e in events) e.hoveredInfo!];
+    expect((infos[0].type, infos[0].sourceKind, infos[0].objectKind),
+        (HoveredItemType.seriesRange, HoveredSourceKind.series, HoveredObjectKind.series));
+    expect((infos[1].type, infos[1].objectKind, infos[1].objectId),
+        (HoveredItemType.priceLine, HoveredObjectKind.customPriceLine, 'tp'));
+    expect((infos[2].type, infos[2].sourceKind, infos[2].objectKind, infos[2].objectId),
+        (HoveredItemType.marker, HoveredSourceKind.seriesPrimitive, HoveredObjectKind.seriesMarker, 'm1'));
+    expect((infos[3].type, infos[3].objectKind, infos[3].objectId, infos[3].series),
+        (HoveredItemType.custom, HoveredObjectKind.customObject, 'box-20', boxes));
+    chart.dispose();
+  });
 }

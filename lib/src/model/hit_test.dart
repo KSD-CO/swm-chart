@@ -11,14 +11,21 @@ import 'series.dart';
 import 'time_scale.dart';
 
 /// What kind of object is hovered, like upstream's `HoveredInfo.objectKind`.
-enum HoveredObjectKind { series, customPriceLine, primitive }
+enum HoveredObjectKind { series, customObject, customPriceLine, seriesMarker, primitive }
+
+/// What was hit, like upstream's `HoveredItemType`.
+enum HoveredItemType { seriesPoint, seriesLine, seriesRange, marker, priceLine, primitive, custom }
+
+/// Who owns the hovered object, like upstream's `HoveredInfo.sourceKind`.
+enum HoveredSourceKind { series, seriesPrimitive, panePrimitive }
 
 /// Like upstream's `HitTestPriority`: points beat lines beat ranges.
 enum HitTestPriority { range, line, point }
 
 class HitTestResult {
   const HitTestResult({
-    required this.kind,
+    required this.type,
+    required this.sourceKind,
     this.series,
     this.objectId,
     required this.distance,
@@ -26,7 +33,17 @@ class HitTestResult {
     this.zOrder = PrimitiveZOrder.normal,
   });
 
-  final HoveredObjectKind kind;
+  final HoveredItemType type;
+  final HoveredSourceKind sourceKind;
+
+  /// Upstream's `hoveredTargetObjectKind`.
+  HoveredObjectKind get kind => switch (type) {
+        HoveredItemType.custom => objectId != null ? HoveredObjectKind.customObject : HoveredObjectKind.series,
+        HoveredItemType.priceLine => HoveredObjectKind.customPriceLine,
+        HoveredItemType.marker => HoveredObjectKind.seriesMarker,
+        HoveredItemType.primitive => HoveredObjectKind.primitive,
+        _ => HoveredObjectKind.series,
+      };
   final SeriesModel? series;
   final Object? objectId;
   final double distance;
@@ -57,8 +74,19 @@ HitTestResult? hitTestSeries(SeriesModel series, TimeScale ts, IndexRange visibl
   final barSpacing = ts.barSpacing;
   final index = ts.coordinateToIndex(x);
 
-  HitTestResult result(double distance, HitTestPriority p) =>
-      HitTestResult(kind: HoveredObjectKind.series, series: series, distance: distance, priority: p);
+  HitTestResult result(double distance, HitTestPriority p) => HitTestResult(
+        type: switch (p) {
+          HitTestPriority.range => HoveredItemType.seriesRange,
+          HitTestPriority.line => HoveredItemType.seriesLine,
+          HitTestPriority.point => HoveredItemType.seriesPoint,
+        },
+        sourceKind: HoveredSourceKind.series,
+        series: series,
+        distance: distance,
+        priority: p,
+      );
+
+  if (series is CustomSeriesModel) return _hitTestCustom(series, ts, visible, x, y);
 
   // Range series: the bar under x, its vertical extent widened by the tolerance.
   (double, double)? range(SeriesData item) {
@@ -129,6 +157,28 @@ HitTestResult? hitTestSeries(SeriesModel series, TimeScale ts, IndexRange visibl
   return best;
 }
 
+HitTestResult? _hitTestCustom(CustomSeriesModel series, TimeScale ts, IndexRange visible, double x, double y) {
+  final r = series.hitTest(ts, visible, x, y);
+  if (r == null) return null;
+  return HitTestResult(
+    type: HoveredItemType.custom,
+    sourceKind: HoveredSourceKind.series,
+    series: series,
+    objectId: r.objectId,
+    distance: r.distance,
+    priority: HitTestPriority.point,
+  );
+}
+
+HitTestPriority _primitivePriority(PrimitiveHitTestResult r) => switch (r.hitTestPriority) {
+      0 => HitTestPriority.range,
+      1 => HitTestPriority.line,
+      _ => HitTestPriority.point,
+    };
+
+HoveredItemType _primitiveType(PrimitiveHitTestResult r) =>
+    r.itemType == PrimitiveItemType.marker ? HoveredItemType.marker : HoveredItemType.primitive;
+
 /// Topmost hit in [pane] at ([x], [y]): primitives, custom price lines and
 /// series, like upstream's pane hit test.
 HitTestResult? hitTestPane(
@@ -149,10 +199,11 @@ HitTestResult? hitTestPane(
     final r = p.hitTest(contextFor(null), x, y);
     if (r != null) {
       consider(HitTestResult(
-        kind: HoveredObjectKind.primitive,
+        type: _primitiveType(r),
+        sourceKind: HoveredSourceKind.panePrimitive,
         objectId: r.externalId,
         distance: r.distance,
-        priority: HitTestPriority.point,
+        priority: _primitivePriority(r),
         zOrder: r.zOrder,
       ));
     }
@@ -163,11 +214,12 @@ HitTestResult? hitTestPane(
       final r = p.hitTest(contextFor(s), x, y);
       if (r != null) {
         consider(HitTestResult(
-          kind: HoveredObjectKind.primitive,
+          type: _primitiveType(r),
+          sourceKind: HoveredSourceKind.seriesPrimitive,
           series: s,
           objectId: r.externalId,
           distance: r.distance,
-          priority: HitTestPriority.point,
+          priority: _primitivePriority(r),
           zOrder: r.zOrder,
         ));
       }
@@ -178,7 +230,8 @@ HitTestResult? hitTestPane(
       final d = (s.priceToCoordinate(o.price) - y).abs();
       if (d <= o.lineWidth / 2 + s.options.hitTestTolerance) {
         consider(HitTestResult(
-          kind: HoveredObjectKind.customPriceLine,
+          type: HoveredItemType.priceLine,
+          sourceKind: HoveredSourceKind.series,
           series: s,
           objectId: o.id,
           distance: d,

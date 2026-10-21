@@ -209,6 +209,19 @@ class TimeScale {
     return _width - (deltaFromRight + 0.5) * _barSpacing - 1;
   }
 
+  /// Conflation levels that bar spacings down to `minBarSpacing` can need,
+  /// like upstream's `possibleConflationFactors`.
+  List<int> possibleConflationFactors(double pixelRatio) {
+    final threshold = 1.0 / pixelRatio;
+    final minBarSpacing = _options.minBarSpacing;
+    if (minBarSpacing >= threshold) return const [1];
+    return [
+      1,
+      for (var level = 2; level <= 512; level *= 2)
+        if (minBarSpacing < threshold / level) level,
+    ];
+  }
+
   /// `x = a * index + b`, the inverse-free form of [indexToCoordinate].
   (double, double) indexTransform() {
     if (isEmpty) return (0, 0);
@@ -232,9 +245,10 @@ class TimeScale {
 
   /// Bars merged into one when drawing, a power of two (1 = none). Port of
   /// upstream's DPR-aware `_updateConflationFactor`.
-  int conflationFactor(double pixelRatio) {
+  /// [seriesThresholdFactor] is a series' own `conflationThresholdFactor`.
+  int conflationFactor(double pixelRatio, [double? seriesThresholdFactor]) {
     if (!_options.enableConflation) return 1;
-    final threshold = (1.0 / pixelRatio) * _options.conflationThresholdFactor;
+    final threshold = (1.0 / pixelRatio) * (seriesThresholdFactor ?? _options.conflationThresholdFactor);
     if (_barSpacing >= threshold) return 1;
     final level = math.pow(2, (math.log(threshold / _barSpacing) / math.ln2).floor()).toInt();
     return math.min(level, 512);

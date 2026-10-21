@@ -1,5 +1,6 @@
 // Port of lightweight-charts src/plugins/series-markers.
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/painting.dart';
 
 import '../api/chart_controller.dart';
@@ -130,6 +131,10 @@ class SeriesMarkersPrimitive extends ChartPrimitive {
     return AutoscaleInfo(margins: AutoscaleMargins(above: adjusted(aboveBar), below: adjusted(belowBar)));
   }
 
+  /// Center Y of the first marker drawn in the last frame (tests only).
+  @visibleForTesting
+  double? get hitTestCenterForTest => _drawn.isEmpty ? null : _drawn.first.$1.center.dy;
+
   @override
   PrimitiveHitTestResult? hitTest(PrimitiveContext ctx, double x, double y) {
     PrimitiveHitTestResult? best;
@@ -137,7 +142,11 @@ class SeriesMarkersPrimitive extends ChartPrimitive {
       if (!rect.inflate(2).contains(Offset(x, y))) continue;
       final distance = (rect.center - Offset(x, y)).distance;
       if (best == null || distance < best.distance) {
-        best = PrimitiveHitTestResult(externalId: marker.id ?? marker, distance: distance);
+        best = PrimitiveHitTestResult(
+          externalId: marker.id ?? marker,
+          distance: distance,
+          itemType: PrimitiveItemType.marker,
+        );
       }
     }
     return best;

@@ -321,6 +321,25 @@ class ChartModel extends ChangeNotifier {
     _rebuildTimeline();
     _emitDataChanged(s);
     invalidate();
+    _schedulePrecompute(s);
+  }
+
+  /// `precomputeConflationOnInit`: build the conflation levels in a
+  /// scheduled task, so the first zoom out doesn't pay for them.
+  void _schedulePrecompute(SeriesModel s) {
+    final o = timeScale.options;
+    if (!o.enableConflation || !o.precomputeConflationOnInit) return;
+    final priority = switch (o.precomputeConflationPriority) {
+      ConflationPriority.background => Priority.idle,
+      ConflationPriority.userVisible => Priority.animation,
+      ConflationPriority.userBlocking => Priority.touch,
+    };
+    final version = s.dataVersion;
+    SchedulerBinding.instance.scheduleTask(() {
+      // Skip if the data changed again or the series was removed.
+      if (_disposed || s.dataVersion != version || paneIndexOf(s) < 0) return;
+      s.precomputeConflation(timeScale.possibleConflationFactors(_pixelRatio));
+    }, priority);
   }
 
   List<SeriesData> popSeries(SeriesModel s, int count) {
