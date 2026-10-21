@@ -27,7 +27,6 @@ void paintHistogram(SeriesPaintContext ctx, HistogramSeriesModel series) {
 
   final pr = ctx.pixelRatio;
   final ts = ctx.timeScale;
-  final ps = series.priceScale;
   final barSpacing = ts.barSpacing;
 
   final spacing = (barSpacing * pr).ceil() <= _showSpacingMinimalBarWidth ? 0 : math.max(1, pr.floor());
@@ -51,7 +50,7 @@ void paintHistogram(SeriesPaintContext ctx, HistogramSeriesModel series) {
       left = x - halfWidth;
       right = x + halfWidth - 1;
     }
-    columns.add(_Column(left, right, x, xMedia * pr, index, ps.priceToCoordinate(item.value), series.itemColor(item)));
+    columns.add(_Column(left, right, x, xMedia * pr, index, series.priceToCoordinate(item.value), series.itemColor(item)));
   }
 
   // Align neighbouring columns so gaps are uniform.
@@ -90,7 +89,7 @@ void paintHistogram(SeriesPaintContext ctx, HistogramSeriesModel series) {
   }
 
   final tickWidth = math.max(1, pr.floor());
-  final histogramBase = (ps.priceToCoordinate(series.options.base) * pr).round();
+  final histogramBase = (series.priceToCoordinate(series.options.base) * pr).round();
   final topHistogramBase = histogramBase - tickWidth ~/ 2;
   final bottomHistogramBase = topHistogramBase + tickWidth;
 

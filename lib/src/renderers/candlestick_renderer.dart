@@ -43,17 +43,16 @@ void paintCandlesticks(SeriesPaintContext ctx, CandlestickSeriesModel series) {
 
   final o = series.options;
   final ts = ctx.timeScale;
-  final ps = series.priceScale;
   final bars = <_Bar>[];
   for (var i = from; i < to; i++) {
     final d = series.data[i];
     final up = d.isUp;
     bars.add(_Bar(
       ts.indexToCoordinate(series.indices[i]),
-      ps.priceToCoordinate(d.open),
-      ps.priceToCoordinate(d.high),
-      ps.priceToCoordinate(d.low),
-      ps.priceToCoordinate(d.close),
+      series.priceToCoordinate(d.open),
+      series.priceToCoordinate(d.high),
+      series.priceToCoordinate(d.low),
+      series.priceToCoordinate(d.close),
       d.color ?? (up ? o.upColor : o.downColor),
       d.borderColor ?? (up ? o.borderUpColor : o.borderDownColor),
       d.wickColor ?? (up ? o.wickUpColor : o.wickDownColor),

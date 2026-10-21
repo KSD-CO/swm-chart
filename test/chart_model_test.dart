@@ -89,8 +89,8 @@ void main() {
     final s = chart.addCandlestickSeries();
     s.setData(_bars(50));
     layout();
-    final paneHeight = chart.model.paneSize.height;
-    final range = chart.priceScale().priceRange()!;
+    final paneHeight = chart.model.panes.first.height;
+    final range = chart.priceScale().getVisibleRange()!;
     final visible = chart.model.timeScale.visibleStrictRange()!;
     final shown = s.data().where((d) {
       final i = chart.model.timeScale.timeToIndex(d.time)!;
@@ -109,8 +109,8 @@ void main() {
     chart.priceScale('vol').applyOptions(const PriceScaleOptions(scaleMargins: ScaleMargins(top: 0.8, bottom: 0)));
     vol.setData([for (var i = 0; i < 50; i++) HistogramData(time: _t0 + i * _day, value: 1000.0 * (i + 1))]);
     layout();
-    expect(chart.priceScale('vol').priceRange()!.min, 0); // includes histogram base
-    expect(chart.priceScale().priceRange()!.max, lessThan(1000));
+    expect(chart.priceScale('vol').getVisibleRange()!.min, 0); // includes histogram base
+    expect(chart.priceScale().getVisibleRange()!.max, lessThan(1000));
     expect(chart.priceScale('vol').width(), 0);
   });
 
@@ -122,7 +122,7 @@ void main() {
     final x = chart.timeScale().timeToCoordinate(last.time)!;
     ChartEventParams? event;
     chart.subscribeCrosshairMove((p) => event = p);
-    chart.model.setCrosshairPosition(Offset(x, 5));
+    chart.model.setCrosshairPosition(0, Offset(x, 5));
     final c = chart.model.crosshair!;
     expect(c.y, closeTo(s.priceToCoordinate(last.close)!, 1e-9));
     expect(event!.time, last.time);
@@ -147,11 +147,11 @@ void main() {
     final candles = chart.addCandlestickSeries(const CandlestickSeriesOptions(priceFormat: PriceFormat.price(precision: 3, minMove: 0.001)));
     expect(candles.priceScale().options, isNotNull);
     final vol = chart.addHistogramSeries(const HistogramSeriesOptions(priceFormat: PriceFormat.volume(), priceScaleId: 'v'));
-    chart.model.setSeriesData(chart.model.series[0] as dynamic, _bars(1));
+    chart.model.setSeriesData(chart.model.series.elementAt(0) as dynamic, _bars(1));
     vol.setData([HistogramData(time: _t0, value: 1234567)]);
-    final volModel = chart.model.series[1];
+    final volModel = chart.model.series.elementAt(1);
     expect(chart.model.formatSeriesPrice(volModel, 1234567), '1.23M');
     expect(chart.model.formatSeriesPrice(volModel, 950), '950');
-    expect(chart.model.formatSeriesPrice(chart.model.series[0], -1.5), '−1.500');
+    expect(chart.model.formatSeriesPrice(chart.model.series.elementAt(0), -1.5), '−1.500');
   });
 }

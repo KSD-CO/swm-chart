@@ -1,5 +1,5 @@
-// Port of the parts of lightweight-charts src/model/chart-model.ts,
-// pane.ts and crosshair.ts that a single-pane chart needs.
+// Port of lightweight-charts src/model/chart-model.ts, pane.ts and
+// crosshair.ts, plus the layout done by gui/chart-widget.ts.
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
@@ -9,16 +9,27 @@ import 'package:flutter/scheduler.dart';
 
 import '../data.dart';
 import '../options.dart';
+import '../plugins/primitive.dart';
+import '../series_options.dart';
+import 'pane.dart';
 import 'price_scale.dart';
+import 'primitive_context.dart';
 import 'series.dart';
 import 'time_scale.dart';
 import 'time_utils.dart';
 
-const String defaultPriceScaleId = 'right';
+export 'pane.dart' show leftPriceScaleId, rightPriceScaleId;
+
+/// Duration of one pulse of the last price animation.
+const Duration lastPriceAnimationPeriod = Duration(milliseconds: 2600);
+
+enum AxisSide { left, right }
 
 /// Crosshair state resolved for the current frame.
 class CrosshairState {
-  const CrosshairState({required this.index, required this.x, required this.y, required this.price});
+  const CrosshairState({required this.paneIndex, required this.index, required this.x, required this.y});
+
+  final int paneIndex;
 
   /// Time scale index the crosshair is snapped to.
   final int index;
@@ -26,114 +37,240 @@ class CrosshairState {
   /// Pane coordinates in logical pixels.
   final double x;
   final double y;
-
-  /// Price on the right price scale at [y].
-  final double price;
 }
 
 /// Payload of crosshair-move and click events.
 class ModelEventParams {
-  const ModelEventParams({this.time, this.logical, this.point, this.seriesData = const {}});
+  const ModelEventParams({this.time, this.logical, this.point, this.paneIndex, this.seriesData = const {}});
 
-  /// UTC seconds of the hovered bar, `null` outside the data.
   final int? time;
-
-  /// Logical index of the hovered bar.
   final int? logical;
 
-  /// Pane coordinates in logical pixels, `null` when the crosshair left the chart.
+  /// Pane coordinates in logical pixels.
   final Offset? point;
-
-  /// Data of each series at [time], keyed by the internal series model.
+  final int? paneIndex;
   final Map<SeriesModel, SeriesData> seriesData;
+}
+
+/// A label on a price axis.
+class PriceAxisLabelSpec {
+  PriceAxisLabelSpec(this.y, this.text, this.background, {this.textColor, this.title = ''});
+
+  double y;
+  final String text;
+  final Color background;
+  final Color? textColor;
+
+  /// Drawn inside the pane next to the label (series title, price line title).
+  final String title;
 }
 
 class ChartModel extends ChangeNotifier {
   ChartModel(this._options) : timeScale = TimeScale(_options.timeScale) {
-    _priceScales[defaultPriceScaleId] = PriceScale(defaultPriceScaleId, _options.rightPriceScale);
+    panes.add(Pane(_options));
   }
 
   ChartOptions _options;
   final TimeScale timeScale;
-  final Map<String, PriceScale> _priceScales = {};
-  final List<SeriesModel> _series = [];
+  final List<Pane> panes = [];
 
   List<int> _times = [];
   List<int> _weights = [];
 
+  int? _crosshairPane;
   Offset? _crosshairPoint;
+  bool _crosshairExact = false;
   CrosshairState? _crosshair;
 
   Size _size = Size.zero;
   double _pixelRatio = 1;
-  double _priceAxisWidth = 0;
+  double _leftAxisWidth = 0;
+  double _rightAxisWidth = 0;
   double _timeAxisHeight = 0;
 
   LogicalRange? _lastEmittedRange;
-  bool _rangeCheckScheduled = false;
+  Size? _lastEmittedSize;
+  bool _postLayoutScheduled = false;
+  bool _animationFrameScheduled = false;
   bool _disposed = false;
+  final Stopwatch _clock = Stopwatch()..start();
 
   final List<void Function(LogicalRange?)> visibleLogicalRangeListeners = [];
+  final List<void Function(Size)> sizeListeners = [];
   final List<void Function(ModelEventParams)> crosshairMoveListeners = [];
   final List<void Function(ModelEventParams)> clickListeners = [];
+  final List<void Function(ModelEventParams)> dblClickListeners = [];
 
   ChartOptions get options => _options;
 
-  List<SeriesModel> get series => List.unmodifiable(_series);
-
-  PriceScale get rightPriceScale => _priceScales[defaultPriceScaleId]!;
-
-  Iterable<PriceScale> get priceScales => _priceScales.values;
+  Iterable<SeriesModel> get series => panes.expand((p) => p.series);
 
   Size get size => _size;
 
   double get pixelRatio => _pixelRatio;
 
-  double get priceAxisWidth => _priceAxisWidth;
+  double get leftAxisWidth => _leftAxisWidth;
+
+  double get rightAxisWidth => _rightAxisWidth;
 
   double get timeAxisHeight => _timeAxisHeight;
 
-  Size get paneSize => Size(math.max(0, _size.width - _priceAxisWidth), math.max(0, _size.height - _timeAxisHeight));
+  double get paneWidth => math.max(0, _size.width - _leftAxisWidth - _rightAxisWidth);
+
+  /// Rectangle of pane [index] in chart coordinates.
+  Rect paneRect(int index) => Rect.fromLTWH(_leftAxisWidth, panes[index].top, paneWidth, panes[index].height);
 
   CrosshairState? get crosshair => _crosshair;
 
   bool get hasCrosshair => _crosshairPoint != null;
+
+  Duration get now => _clock.elapsed;
 
   void applyOptions(ChartOptions options) {
     final fontChanged = options.layout.fontSize != _options.layout.fontSize ||
         options.layout.fontFamily != _options.layout.fontFamily;
     _options = options;
     timeScale.applyOptions(options.timeScale);
-    rightPriceScale.options = options.rightPriceScale;
-    if (fontChanged) _priceAxisWidth = 0;
+    for (final p in panes) {
+      p.applyChartOptions(options);
+    }
+    if (fontChanged) {
+      _leftAxisWidth = 0;
+      _rightAxisWidth = 0;
+    }
     invalidate();
   }
 
-  PriceScale priceScale(String id) {
-    return _priceScales.putIfAbsent(
-      id,
-      () => PriceScale(id, _options.rightPriceScale.copyWith(visible: false, autoScale: true)),
-    );
+  // ---- panes ----
+
+  Pane addPane({bool preserveEmpty = false}) {
+    final pane = Pane(_options, preserveEmpty: preserveEmpty);
+    panes.add(pane);
+    invalidate();
+    return pane;
   }
 
-  bool isOverlay(SeriesModel s) => s.priceScale.id != defaultPriceScaleId;
+  void _ensurePane(int index) {
+    while (panes.length <= index) {
+      panes.add(Pane(_options));
+    }
+  }
+
+  void removePane(int index) {
+    if (panes.length < 2 || index < 0 || index >= panes.length) return;
+    final pane = panes.removeAt(index);
+    for (final p in pane.primitives) {
+      p.detached();
+    }
+    if (pane.series.isNotEmpty) _rebuildTimeline();
+    _resetCrosshairIfPaneGone();
+    invalidate();
+  }
+
+  void swapPanes(int a, int b) {
+    if (a == b || a < 0 || b < 0 || a >= panes.length || b >= panes.length) return;
+    final tmp = panes[a];
+    panes[a] = panes[b];
+    panes[b] = tmp;
+    _resetCrosshairIfPaneGone();
+    invalidate();
+  }
+
+  void _cleanupIfPaneIsEmpty(Pane pane) {
+    if (!pane.preserveEmpty && pane.series.isEmpty && panes.length > 1) {
+      panes.remove(pane);
+      _resetCrosshairIfPaneGone();
+    }
+  }
+
+  void _resetCrosshairIfPaneGone() {
+    _crosshairPane = null;
+    _crosshairPoint = null;
+    _crosshair = null;
+  }
+
+  int paneIndexOf(SeriesModel s) => panes.indexWhere((p) => p.series.contains(s));
+
+  /// Sets the height of pane [index] by redistributing stretch factors.
+  void setPaneHeight(int index, double height) {
+    if (panes.length < 2) return;
+    final total = panes.fold<double>(0, (sum, p) => sum + p.height);
+    if (total <= 0) return;
+    final maxHeight = total - (panes.length - 1) * minPaneHeight;
+    final h = height.clamp(minPaneHeight, math.max(minPaneHeight, maxHeight)).toDouble();
+    final others = total - panes[index].height;
+    for (var i = 0; i < panes.length; i++) {
+      panes[i].stretchFactor = i == index ? h : (others > 0 ? panes[i].height * (total - h) / others : 1);
+    }
+    invalidate();
+  }
+
+  // Separator dragging: resizes the panes on both sides of separator [index]
+  // (between pane index and index + 1), keeping their total stretch.
+  ({double top, double bottom, double pixelStretch})? _resizeStart;
+
+  void startPaneResize(int index) {
+    final top = panes[index], bottom = panes[index + 1];
+    final totalStretch = top.stretchFactor + bottom.stretchFactor;
+    final totalHeight = top.height + bottom.height;
+    if (totalHeight <= 0) return;
+    _resizeStart = (top: top.stretchFactor, bottom: bottom.stretchFactor, pixelStretch: totalStretch / totalHeight);
+  }
+
+  void resizePane(int index, double delta) {
+    final start = _resizeStart;
+    if (start == null) return;
+    final total = start.top + start.bottom;
+    final minStretch = minPaneHeight * start.pixelStretch;
+    if (total < minStretch * 2) return;
+    final top = (start.top + delta * start.pixelStretch).clamp(minStretch, total - minStretch).toDouble();
+    panes[index].stretchFactor = top;
+    panes[index + 1].stretchFactor = total - top;
+    invalidate();
+  }
+
+  void endPaneResize() => _resizeStart = null;
 
   // ---- series management ----
 
-  void addSeries(SeriesModel s) {
-    s.priceScale = priceScale(s.options.priceScaleId);
-    _series.add(s);
+  void addSeries(SeriesModel s, {int paneIndex = 0}) {
+    _ensurePane(paneIndex);
+    final pane = panes[paneIndex];
+    s.priceScale = pane.priceScale(s.options.priceScaleId, _options);
+    pane.series.add(s);
+    if (s.data.isNotEmpty) _rebuildTimeline();
     invalidate();
   }
 
   void removeSeries(SeriesModel s) {
-    if (!_series.remove(s)) return;
+    final pane = panes.where((p) => p.series.contains(s)).firstOrNull;
+    if (pane == null) return;
+    pane.series.remove(s);
+    for (final p in s.primitives) {
+      p.detached();
+    }
+    _cleanupIfPaneIsEmpty(pane);
     _rebuildTimeline();
     invalidate();
   }
 
+  void moveSeriesToPane(SeriesModel s, int paneIndex) {
+    final from = panes.where((p) => p.series.contains(s)).firstOrNull;
+    if (from == null) return;
+    _ensurePane(paneIndex);
+    final to = panes[paneIndex];
+    if (from == to) return;
+    from.series.remove(s);
+    to.series.add(s);
+    s.priceScale = to.priceScale(s.options.priceScaleId, _options);
+    _cleanupIfPaneIsEmpty(from);
+    _resetCrosshairIfPaneGone();
+    invalidate();
+  }
+
   void seriesOptionsChanged(SeriesModel s) {
-    s.priceScale = priceScale(s.options.priceScaleId);
+    final index = paneIndexOf(s);
+    if (index >= 0) s.priceScale = panes[index].priceScale(s.options.priceScaleId, _options);
     invalidate();
   }
 
@@ -144,7 +281,11 @@ class ChartModel extends ChangeNotifier {
   }
 
   void updateSeries<T extends SeriesData>(SeriesModel<T, SeriesOptions> s, T item) {
+    final previous = s.lastItem;
     final appended = s.update(item);
+    if (appended || previous == null || s.closeValue(previous) != s.closeValue(item)) {
+      s.lastUpdateTime = now;
+    }
     if (appended) {
       final time = item.time;
       if (_times.isEmpty || time > _times.last) {
@@ -170,7 +311,7 @@ class ChartModel extends ChangeNotifier {
 
   void _rebuildTimeline() {
     final all = <int>{};
-    for (final s in _series) {
+    for (final s in series) {
       for (final d in s.data) {
         all.add(d.time);
       }
@@ -179,7 +320,7 @@ class ChartModel extends ChangeNotifier {
     final weights = List<int>.filled(times.length, 0);
     fillWeightsForPoints(times, weights);
 
-    for (final s in _series) {
+    for (final s in series) {
       final indices = List<int>.filled(s.data.length, 0);
       var j = 0;
       for (var i = 0; i < s.data.length; i++) {
@@ -241,27 +382,51 @@ class ChartModel extends ChangeNotifier {
     final fontSize = _options.layout.fontSize;
 
     _timeAxisHeight = _options.timeScale.visible ? _optimalTimeAxisHeight(fontSize) : 0;
-    final paneHeight = math.max(0.0, size.height - _timeAxisHeight);
-
-    for (final ps in _priceScales.values) {
-      ps.setHeight(paneHeight, fontSize);
-    }
+    _layoutPanes(size.height, pixelRatio, fontSize);
     _updateFormatters();
 
-    // Axis width depends on labels, labels on the price range, the price
-    // range on visible bars and visible bars on the axis width. Like
-    // upstream, iterate and never shrink the axis to avoid jitter.
+    // Axis widths depend on labels, labels on price ranges, price ranges on
+    // visible bars and visible bars on the axis widths. Like upstream,
+    // iterate and never shrink the axes to avoid jitter.
+    final leftVisible = _options.leftPriceScale.visible;
+    final rightVisible = _options.rightPriceScale.visible;
+    if (!leftVisible) _leftAxisWidth = 0;
+    if (!rightVisible) _rightAxisWidth = 0;
     for (var pass = 0; pass < 3; pass++) {
-      timeScale.setWidth(math.max(1, size.width - _priceAxisWidth));
+      timeScale.setWidth(math.max(1.0, paneWidth));
       _recalculateAutoScale();
-      final width = rightPriceScale.options.visible ? _optimalPriceAxisWidth(fontSize, measureText) : 0.0;
-      if (width <= _priceAxisWidth) break;
-      _priceAxisWidth = width;
+      final left = leftVisible ? _optimalPriceAxisWidth(AxisSide.left, fontSize, measureText) : 0.0;
+      final right = rightVisible ? _optimalPriceAxisWidth(AxisSide.right, fontSize, measureText) : 0.0;
+      if (left <= _leftAxisWidth && right <= _rightAxisWidth) break;
+      _leftAxisWidth = math.max(_leftAxisWidth, left);
+      _rightAxisWidth = math.max(_rightAxisWidth, right);
     }
-    if (!rightPriceScale.options.visible) _priceAxisWidth = 0;
 
     _resolveCrosshair();
-    _scheduleRangeCheck();
+    _schedulePostLayout();
+    if (_needsAnimationFrame()) _scheduleAnimationFrame();
+  }
+
+  void _layoutPanes(double height, double pixelRatio, double fontSize) {
+    final separators = (panes.length - 1) * paneSeparatorHeight;
+    final total = math.max(0.0, height - _timeAxisHeight - separators);
+    final totalStretch = panes.fold<double>(0, (sum, p) => sum + p.stretchFactor);
+    final stretchPixels = totalStretch > 0 ? total / totalStretch : 0.0;
+    var top = 0.0;
+    var accumulated = 0.0;
+    for (var i = 0; i < panes.length; i++) {
+      final pane = panes[i];
+      final h = i == panes.length - 1
+          ? math.max(0.0, total - accumulated)
+          : (pane.stretchFactor * stretchPixels * pixelRatio).round() / pixelRatio;
+      pane.top = top;
+      pane.height = h;
+      accumulated += h;
+      top += h + paneSeparatorHeight;
+      for (final ps in pane.priceScales.values) {
+        ps.setHeight(h, fontSize);
+      }
+    }
   }
 
   double _optimalTimeAxisHeight(double fontSize) {
@@ -273,57 +438,96 @@ class ChartModel extends ChangeNotifier {
     return (borderSize + tickLength + fontSize + paddingTop + paddingBottom + labelBottomOffset).ceilToDouble();
   }
 
-  double _optimalPriceAxisWidth(double fontSize, double Function(String) measureText) {
-    final ps = rightPriceScale;
+  /// The price scale drawn on [side] of [pane].
+  PriceScale scaleOnSide(Pane pane, AxisSide side) => side == AxisSide.left ? pane.leftScale : pane.rightScale;
+
+  /// Side whose axis shows labels of [ps]: overlay scales use the right axis
+  /// if visible, otherwise the left one.
+  AxisSide? sideOf(Pane pane, PriceScale ps) {
+    if (ps == pane.leftScale) return _options.leftPriceScale.visible ? AxisSide.left : null;
+    if (ps == pane.rightScale) return _options.rightPriceScale.visible ? AxisSide.right : null;
+    if (_options.rightPriceScale.visible) return AxisSide.right;
+    if (_options.leftPriceScale.visible) return AxisSide.left;
+    return null;
+  }
+
+  double _optimalPriceAxisWidth(AxisSide side, double fontSize, double Function(String) measureText) {
     var maxWidth = 0.0;
-    final marks = ps.marks();
-    if (marks.isNotEmpty) {
-      maxWidth = math.max(measureText(marks.first.label), measureText(marks.last.label));
-    }
-    for (final s in _series) {
-      final last = s.lastItem;
-      if (!s.visible || !s.options.lastValueVisible || last == null) continue;
-      maxWidth = math.max(maxWidth, measureText(formatSeriesPrice(s, s.closeValue(last))));
-    }
-    if (!ps.isEmpty && _options.crosshair.horzLine.labelVisible) {
-      final top = ps.coordinateToPrice(1);
-      final bottom = ps.coordinateToPrice(ps.height - 2);
-      maxWidth = math.max(maxWidth, measureText(ps.formatPrice(math.min(top, bottom).floorToDouble() + 0.11111111111111)));
-      maxWidth = math.max(maxWidth, measureText(ps.formatPrice(math.max(top, bottom).ceilToDouble() - 0.11111111111111)));
+    for (final pane in panes) {
+      final ps = scaleOnSide(pane, side);
+      final marks = ps.marks();
+      if (marks.isNotEmpty) {
+        maxWidth = math.max(maxWidth, math.max(measureText(marks.first.label), measureText(marks.last.label)));
+      }
+      for (final label in priceAxisLabels(pane, side)) {
+        maxWidth = math.max(maxWidth, measureText(label.text));
+      }
+      if (!ps.isEmpty && _options.crosshair.horzLine.labelVisible) {
+        final top = ps.coordinateToDisplay(1);
+        final bottom = ps.coordinateToDisplay(ps.height - 2);
+        maxWidth = math.max(maxWidth, measureText(ps.formatLogical(math.min(top, bottom).floorToDouble() + 0.11111111111111)));
+        maxWidth = math.max(maxWidth, measureText(ps.formatLogical(math.max(top, bottom).ceilToDouble() - 0.11111111111111)));
+      }
     }
     if (maxWidth == 0) maxWidth = 34; // DefaultOptimalWidth
 
     final padding = fontSize / 12 * 5;
     var res = (1 + 5 + padding + padding + 5 + maxWidth).ceil();
     if (res.isOdd) res++; // make it even, like `suggestPriceScaleWidth`
-    return math.max(res.toDouble(), ps.options.minimumWidth);
+    final options = side == AxisSide.left ? _options.leftPriceScale : _options.rightPriceScale;
+    return math.max(res.toDouble(), options.minimumWidth);
   }
 
   void _updateFormatters() {
     final override = _options.localization.priceFormatter;
-    for (final ps in _priceScales.values) {
-      final main = _series.where((s) => s.priceScale == ps).firstOrNull;
-      if (main != null) ps.setFormatter(main.formatter, override);
+    final visible = timeScale.visibleStrictRange();
+    for (final pane in panes) {
+      for (final s in pane.series) {
+        s.updateBaseValue(visible);
+      }
+      for (final ps in pane.priceScales.values) {
+        final main = pane.series.where((s) => s.priceScale == ps).firstOrNull;
+        if (main != null) {
+          ps.setFormatter(main.formatter, override);
+          ps.baseValue = main.baseValue;
+        }
+      }
     }
   }
 
   void _recalculateAutoScale() {
     final visible = timeScale.visibleStrictRange();
     if (visible == null) return;
-    for (final ps in _priceScales.values) {
-      if (!ps.isAutoScale) continue;
-      PriceRange? range;
-      for (final s in _series) {
-        if (s.priceScale != ps) continue;
-        final r = s.autoscaleRange(visible);
-        range = range == null ? r : range.merge(r);
+    for (final pane in panes) {
+      for (final s in pane.series) {
+        s.updateBaseValue(visible);
       }
-      ps.updateAutoScaleRange(range);
+      for (final ps in pane.priceScales.values) {
+        final main = pane.series.where((s) => s.priceScale == ps).firstOrNull;
+        ps.baseValue = main?.baseValue;
+        if (!ps.isAutoScale) continue;
+        PriceRange? range;
+        var above = 0.0, below = 0.0;
+        for (final s in pane.series) {
+          if (s.priceScale != ps) continue;
+          final info = s.autoscaleInfo(visible);
+          if (info == null) continue;
+          final r = info.priceRange;
+          if (r != null && !(ps.isPercentLike && s.baseValue == null)) {
+            final internal = ps.toInternalRange(r, s.baseValue ?? 0);
+            range = range == null ? internal : range.merge(internal);
+          }
+          above = math.max(above, info.margins?.above ?? 0);
+          below = math.max(below, info.margins?.below ?? 0);
+        }
+        ps.setMargins(above, below);
+        ps.updateAutoScaleRange(range);
+      }
     }
   }
 
   String formatSeriesPrice(SeriesModel s, double price) =>
-      (_options.localization.priceFormatter ?? s.formatter.call)(price);
+      s.priceScale.isPercentLike ? s.formatPrice(price) : (_options.localization.priceFormatter ?? s.formatter.call)(price);
 
   String formatTime(int time) {
     final custom = _options.localization.timeFormatter;
@@ -335,76 +539,174 @@ class ChartModel extends ChangeNotifier {
     );
   }
 
+  PrimitiveContextImpl primitiveContext(Pane pane, SeriesModel? s, [Canvas? canvas]) =>
+      PrimitiveContextImpl(this, pane, s, canvas);
+
+  /// Labels on the price axis on [side] of [pane]: last values, price
+  /// lines and primitives. The crosshair label is not included.
+  List<PriceAxisLabelSpec> priceAxisLabels(Pane pane, AxisSide side) {
+    final visible = timeScale.visibleStrictRange();
+    final labels = <PriceAxisLabelSpec>[];
+    for (final s in pane.series) {
+      if (sideOf(pane, s.priceScale) != side || s.priceScale.isEmpty) continue;
+      final item = s.priceLineItem(visible);
+      if (s.visible && s.options.lastValueVisible && item != null) {
+        final price = s.closeValue(item);
+        labels.add(PriceAxisLabelSpec(
+          s.priceToCoordinate(price),
+          formatSeriesPrice(s, price),
+          s.options.priceLineColor ?? s.itemColor(item),
+          title: s.options.title,
+        ));
+      }
+      for (final line in s.priceLines) {
+        final o = line.options;
+        if (!o.axisLabelVisible) continue;
+        labels.add(PriceAxisLabelSpec(
+          s.priceToCoordinate(o.price),
+          formatSeriesPrice(s, o.price),
+          o.axisLabelColor ?? o.color,
+          textColor: o.axisLabelTextColor,
+          title: o.title,
+        ));
+      }
+      if (s.primitives.isNotEmpty) {
+        final ctx = primitiveContext(pane, s);
+        for (final p in s.primitives) {
+          for (final l in p.priceAxisLabels(ctx)) {
+            labels.add(PriceAxisLabelSpec(l.coordinate, l.text, l.backgroundColor, textColor: l.textColor));
+          }
+        }
+      }
+    }
+    if (pane.primitives.isNotEmpty && side == (sideOf(pane, pane.defaultPriceScale) ?? AxisSide.right)) {
+      final ctx = primitiveContext(pane, null);
+      for (final p in pane.primitives) {
+        for (final l in p.priceAxisLabels(ctx)) {
+          labels.add(PriceAxisLabelSpec(l.coordinate, l.text, l.backgroundColor, textColor: l.textColor));
+        }
+      }
+    }
+    return labels;
+  }
+
+  List<AxisLabel> timeAxisPrimitiveLabels() {
+    final labels = <AxisLabel>[];
+    for (final pane in panes) {
+      for (final p in pane.primitives) {
+        labels.addAll(p.timeAxisLabels(primitiveContext(pane, null)));
+      }
+      for (final s in pane.series) {
+        for (final p in s.primitives) {
+          labels.addAll(p.timeAxisLabels(primitiveContext(pane, s)));
+        }
+      }
+    }
+    return labels;
+  }
+
   // ---- crosshair ----
 
-  void setCrosshairPosition(Offset? point) {
+  /// Moves the crosshair to [point] (pane coordinates) in pane [paneIndex],
+  /// or hides it when [point] is `null`.
+  void setCrosshairPosition(int? paneIndex, Offset? point, {bool exact = false}) {
+    _crosshairPane = point == null ? null : paneIndex;
     _crosshairPoint = point;
+    _crosshairExact = exact;
     _resolveCrosshair();
     notifyListeners();
-    _emit(crosshairMoveListeners, _eventParams(point == null ? null : _crosshair));
+    _emit(crosshairMoveListeners, _eventParams(_crosshair));
   }
 
   void _resolveCrosshair() {
     final point = _crosshairPoint;
-    if (point == null || timeScale.isEmpty || _options.crosshair.mode == CrosshairMode.hidden) {
+    final paneIndex = _crosshairPane;
+    if (point == null ||
+        paneIndex == null ||
+        paneIndex >= panes.length ||
+        timeScale.isEmpty ||
+        _options.crosshair.mode == CrosshairMode.hidden) {
       _crosshair = null;
       return;
     }
-    final pane = paneSize;
-    final x = point.dx.clamp(0.0, pane.width - 1);
-    final y = point.dy.clamp(0.0, pane.height - 1);
+    final pane = panes[paneIndex];
+    final x = point.dx.clamp(0.0, math.max(0.0, paneWidth - 1)).toDouble();
+    final y = point.dy.clamp(0.0, math.max(0.0, pane.height - 1)).toDouble();
     final index = timeScale.coordinateToIndex(x);
     final snappedX = timeScale.indexToCoordinate(index);
-    final ps = rightPriceScale;
-    var price = ps.coordinateToPrice(y);
     var resolvedY = y;
 
     final mode = _options.crosshair.mode;
-    if ((mode == CrosshairMode.magnet || mode == CrosshairMode.magnetOhlc) && !ps.isEmpty) {
+    if (!_crosshairExact && (mode == CrosshairMode.magnet || mode == CrosshairMode.magnetOhlc)) {
       double? best;
-      for (final s in _series) {
-        if (isOverlay(s) || !s.visible) continue;
+      for (final s in pane.series) {
+        if (pane.isOverlay(s.priceScale) || !s.visible || s.priceScale.isEmpty) continue;
         final item = s.itemAt(index);
         if (item == null) continue;
         for (final v in s.magnetValues(item, ohlc: mode == CrosshairMode.magnetOhlc)) {
-          final cy = ps.priceToCoordinate(v);
+          final cy = s.priceToCoordinate(v);
           if (best == null || (cy - y).abs() < (best - y).abs()) best = cy;
         }
       }
-      if (best != null) {
-        resolvedY = best;
-        price = ps.coordinateToPrice(best);
-      }
+      if (best != null) resolvedY = best;
     }
-    _crosshair = CrosshairState(index: index, x: snappedX, y: resolvedY, price: price);
+    _crosshair = CrosshairState(paneIndex: paneIndex, index: index, x: snappedX, y: resolvedY);
   }
+
+  Map<SeriesModel, SeriesData> _dataAt(int index) => {
+        for (final s in series) s: ?s.itemAt(index),
+      };
 
   ModelEventParams _eventParams(CrosshairState? c) {
     if (c == null) return const ModelEventParams();
-    final data = <SeriesModel, SeriesData>{};
-    for (final s in _series) {
-      final item = s.itemAt(c.index);
-      if (item != null) data[s] = item;
-    }
     return ModelEventParams(
       time: timeScale.indexToTime(c.index),
       logical: c.index,
       point: Offset(c.x, c.y),
-      seriesData: data,
+      paneIndex: c.paneIndex,
+      seriesData: _dataAt(c.index),
     );
   }
 
-  void click(Offset point) {
+  void click(int paneIndex, Offset point, {bool doubleClick = false}) {
     final index = timeScale.coordinateToIndex(point.dx);
-    final data = <SeriesModel, SeriesData>{};
-    for (final s in _series) {
-      final item = s.itemAt(index);
-      if (item != null) data[s] = item;
-    }
     _emit(
-      clickListeners,
-      ModelEventParams(time: timeScale.indexToTime(index), logical: index, point: point, seriesData: data),
+      doubleClick ? dblClickListeners : clickListeners,
+      ModelEventParams(
+        time: timeScale.indexToTime(index),
+        logical: index,
+        point: point,
+        paneIndex: paneIndex,
+        seriesData: _dataAt(index),
+      ),
     );
+  }
+
+  // ---- last price animation ----
+
+  bool _needsAnimationFrame() {
+    for (final s in series) {
+      if (s is! LineLikeSeriesModel || !s.visible) continue;
+      switch (s.options.lastPriceAnimation) {
+        case LastPriceAnimationMode.disabled:
+          break;
+        case LastPriceAnimationMode.continuous:
+          return true;
+        case LastPriceAnimationMode.onDataUpdate:
+          final t = s.lastUpdateTime;
+          if (t != null && now - t < lastPriceAnimationPeriod) return true;
+      }
+    }
+    return false;
+  }
+
+  void _scheduleAnimationFrame() {
+    if (_animationFrameScheduled) return;
+    _animationFrameScheduled = true;
+    SchedulerBinding.instance.scheduleFrameCallback((_) {
+      _animationFrameScheduled = false;
+      invalidate();
+    });
   }
 
   // ---- notifications ----
@@ -414,18 +716,24 @@ class ChartModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _scheduleRangeCheck() {
-    if (_rangeCheckScheduled) return;
-    _rangeCheckScheduled = true;
+  void _schedulePostLayout() {
+    if (_postLayoutScheduled) return;
+    _postLayoutScheduled = true;
     // Never call user code from inside paint.
     scheduleMicrotask(() {
-      _rangeCheckScheduled = false;
+      _postLayoutScheduled = false;
       if (_disposed) return;
       final range = timeScale.visibleLogicalRange();
       if (range != _lastEmittedRange) {
         _lastEmittedRange = range;
         for (final l in List.of(visibleLogicalRangeListeners)) {
           l(range);
+        }
+      }
+      if (_size != _lastEmittedSize) {
+        _lastEmittedSize = _size;
+        for (final l in List.of(sizeListeners)) {
+          l(_size);
         }
       }
     });
@@ -450,7 +758,6 @@ class ChartModel extends ChangeNotifier {
       if (_disposed || id != _animationId) return;
       startTime ??= now;
       final t = ((now - startTime!).inMicroseconds / duration.inMicroseconds).clamp(0.0, 1.0);
-      // Same easing as lightweight-charts' cubic ease-out.
       final eased = 1 - math.pow(1 - t, 3).toDouble();
       timeScale.setRightOffset(start + (target - start) * eased);
       invalidate();
@@ -467,6 +774,16 @@ class ChartModel extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _animationId++;
+    for (final pane in panes) {
+      for (final p in pane.primitives) {
+        p.detached();
+      }
+      for (final s in pane.series) {
+        for (final p in s.primitives) {
+          p.detached();
+        }
+      }
+    }
     super.dispose();
   }
 }

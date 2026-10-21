@@ -4,7 +4,7 @@ import 'dart:ui' show Color;
 enum LineStyle { solid, dotted, dashed, largeDashed, sparseDotted }
 
 /// How the line series connects its points.
-enum LineType { simple, withSteps }
+enum LineType { simple, withSteps, curved }
 
 /// Crosshair behaviour.
 enum CrosshairMode {
@@ -22,6 +22,24 @@ enum CrosshairMode {
   hidden,
 }
 
+/// Price scale mode.
+enum PriceScaleMode {
+  normal,
+  logarithmic,
+
+  /// Values relative to the first visible value, in percent.
+  percentage,
+
+  /// Like [percentage], but the first visible value is 100.
+  indexedTo100,
+}
+
+/// Pulsing animation of the last price for line-like series.
+enum LastPriceAnimationMode { disabled, continuous, onDataUpdate }
+
+/// Which bar the price line and last value label follow.
+enum PriceLineSource { lastBar, lastVisible }
+
 /// Type of a time scale tick mark, passed to [TickMarkFormatter].
 enum TickMarkType { year, month, dayOfMonth, time, timeWithSeconds }
 
@@ -35,30 +53,48 @@ typedef TimeFormatter = String Function(int time);
 /// Formats a price.
 typedef PriceFormatterFn = String Function(double price);
 
+class PaneOptions {
+  const PaneOptions({
+    this.separatorColor = const Color(0xFFE0E3EB),
+    this.separatorHoverColor = const Color(0x33B2B5BD),
+    this.enableResize = true,
+  });
+
+  final Color separatorColor;
+
+  /// Color of the separator while it is being dragged.
+  final Color separatorHoverColor;
+  final bool enableResize;
+}
+
 class LayoutOptions {
   const LayoutOptions({
     this.backgroundColor = const Color(0xFFFFFFFF),
     this.textColor = const Color(0xFF191919),
     this.fontSize = 12,
     this.fontFamily,
+    this.panes = const PaneOptions(),
   });
 
   final Color backgroundColor;
   final Color textColor;
   final double fontSize;
   final String? fontFamily;
+  final PaneOptions panes;
 
   LayoutOptions copyWith({
     Color? backgroundColor,
     Color? textColor,
     double? fontSize,
     String? fontFamily,
+    PaneOptions? panes,
   }) {
     return LayoutOptions(
       backgroundColor: backgroundColor ?? this.backgroundColor,
       textColor: textColor ?? this.textColor,
       fontSize: fontSize ?? this.fontSize,
       fontFamily: fontFamily ?? this.fontFamily,
+      panes: panes ?? this.panes,
     );
   }
 }
@@ -171,6 +207,7 @@ class ScaleMargins {
 class PriceScaleOptions {
   const PriceScaleOptions({
     this.autoScale = true,
+    this.mode = PriceScaleMode.normal,
     this.invertScale = false,
     this.visible = true,
     this.borderVisible = true,
@@ -179,12 +216,14 @@ class PriceScaleOptions {
     this.entireTextOnly = false,
     this.tickMarkDensity = 2.5,
     this.minimumWidth = 0,
+    this.alignLabels = true,
   });
 
   final bool autoScale;
+  final PriceScaleMode mode;
   final bool invertScale;
 
-  /// Only meaningful for the `right` price scale. Overlay scales are never drawn.
+  /// Only meaningful for the `left`/`right` price scales. Overlay scales are never drawn.
   final bool visible;
   final bool borderVisible;
   final Color borderColor;
@@ -193,8 +232,12 @@ class PriceScaleOptions {
   final double tickMarkDensity;
   final double minimumWidth;
 
+  /// Push overlapping axis labels apart.
+  final bool alignLabels;
+
   PriceScaleOptions copyWith({
     bool? autoScale,
+    PriceScaleMode? mode,
     bool? invertScale,
     bool? visible,
     bool? borderVisible,
@@ -203,9 +246,11 @@ class PriceScaleOptions {
     bool? entireTextOnly,
     double? tickMarkDensity,
     double? minimumWidth,
+    bool? alignLabels,
   }) {
     return PriceScaleOptions(
       autoScale: autoScale ?? this.autoScale,
+      mode: mode ?? this.mode,
       invertScale: invertScale ?? this.invertScale,
       visible: visible ?? this.visible,
       borderVisible: borderVisible ?? this.borderVisible,
@@ -214,6 +259,7 @@ class PriceScaleOptions {
       entireTextOnly: entireTextOnly ?? this.entireTextOnly,
       tickMarkDensity: tickMarkDensity ?? this.tickMarkDensity,
       minimumWidth: minimumWidth ?? this.minimumWidth,
+      alignLabels: alignLabels ?? this.alignLabels,
     );
   }
 }
@@ -313,6 +359,7 @@ class InteractionOptions {
     this.handleScale = true,
     this.kineticScroll = true,
     this.axisDragScale = true,
+    this.axisDoubleTapReset = true,
   });
 
   /// Drag the pane to scroll the time scale.
@@ -326,6 +373,9 @@ class InteractionOptions {
 
   /// Drag the price/time axis to scale it.
   final bool axisDragScale;
+
+  /// Double-tap an axis to reset it.
+  final bool axisDoubleTapReset;
 }
 
 class ChartOptions {
@@ -334,6 +384,7 @@ class ChartOptions {
     this.grid = const GridOptions(),
     this.crosshair = const CrosshairOptions(),
     this.rightPriceScale = const PriceScaleOptions(),
+    this.leftPriceScale = const PriceScaleOptions(visible: false),
     this.timeScale = const TimeScaleOptions(),
     this.localization = const LocalizationOptions(),
     this.interaction = const InteractionOptions(),
@@ -343,6 +394,7 @@ class ChartOptions {
   final GridOptions grid;
   final CrosshairOptions crosshair;
   final PriceScaleOptions rightPriceScale;
+  final PriceScaleOptions leftPriceScale;
   final TimeScaleOptions timeScale;
   final LocalizationOptions localization;
   final InteractionOptions interaction;
@@ -352,6 +404,7 @@ class ChartOptions {
     GridOptions? grid,
     CrosshairOptions? crosshair,
     PriceScaleOptions? rightPriceScale,
+    PriceScaleOptions? leftPriceScale,
     TimeScaleOptions? timeScale,
     LocalizationOptions? localization,
     InteractionOptions? interaction,
@@ -361,6 +414,7 @@ class ChartOptions {
       grid: grid ?? this.grid,
       crosshair: crosshair ?? this.crosshair,
       rightPriceScale: rightPriceScale ?? this.rightPriceScale,
+      leftPriceScale: leftPriceScale ?? this.leftPriceScale,
       timeScale: timeScale ?? this.timeScale,
       localization: localization ?? this.localization,
       interaction: interaction ?? this.interaction,
@@ -393,248 +447,3 @@ class PriceFormat {
 }
 
 enum PriceFormatType { price, volume, custom }
-
-/// Options shared by all series types.
-abstract class SeriesOptions {
-  const SeriesOptions({
-    required this.title,
-    required this.visible,
-    required this.lastValueVisible,
-    required this.priceLineVisible,
-    required this.priceLineWidth,
-    required this.priceLineColor,
-    required this.priceLineStyle,
-    required this.priceFormat,
-    required this.priceScaleId,
-  });
-
-  final String title;
-  final bool visible;
-
-  /// Show the last value label on the price axis.
-  final bool lastValueVisible;
-
-  /// Show a horizontal line at the last value.
-  final bool priceLineVisible;
-  final double priceLineWidth;
-
-  /// `null` means "use the series color".
-  final Color? priceLineColor;
-  final LineStyle priceLineStyle;
-  final PriceFormat priceFormat;
-
-  /// `right` for the visible price scale; any other id creates an invisible
-  /// overlay price scale (e.g. for volume).
-  final String priceScaleId;
-}
-
-class CandlestickSeriesOptions extends SeriesOptions {
-  const CandlestickSeriesOptions({
-    super.title = '',
-    super.visible = true,
-    super.lastValueVisible = true,
-    super.priceLineVisible = true,
-    super.priceLineWidth = 1,
-    super.priceLineColor,
-    super.priceLineStyle = LineStyle.dashed,
-    super.priceFormat = const PriceFormat.price(),
-    super.priceScaleId = 'right',
-    this.upColor = const Color(0xFF26A69A),
-    this.downColor = const Color(0xFFEF5350),
-    this.wickVisible = true,
-    this.borderVisible = true,
-    this.borderUpColor = const Color(0xFF26A69A),
-    this.borderDownColor = const Color(0xFFEF5350),
-    this.wickUpColor = const Color(0xFF26A69A),
-    this.wickDownColor = const Color(0xFFEF5350),
-  });
-
-  final Color upColor;
-  final Color downColor;
-  final bool wickVisible;
-  final bool borderVisible;
-  final Color borderUpColor;
-  final Color borderDownColor;
-  final Color wickUpColor;
-  final Color wickDownColor;
-
-  CandlestickSeriesOptions copyWith({
-    String? title,
-    bool? visible,
-    bool? lastValueVisible,
-    bool? priceLineVisible,
-    double? priceLineWidth,
-    Color? priceLineColor,
-    LineStyle? priceLineStyle,
-    PriceFormat? priceFormat,
-    String? priceScaleId,
-    Color? upColor,
-    Color? downColor,
-    bool? wickVisible,
-    bool? borderVisible,
-    Color? borderUpColor,
-    Color? borderDownColor,
-    Color? wickUpColor,
-    Color? wickDownColor,
-  }) {
-    return CandlestickSeriesOptions(
-      title: title ?? this.title,
-      visible: visible ?? this.visible,
-      lastValueVisible: lastValueVisible ?? this.lastValueVisible,
-      priceLineVisible: priceLineVisible ?? this.priceLineVisible,
-      priceLineWidth: priceLineWidth ?? this.priceLineWidth,
-      priceLineColor: priceLineColor ?? this.priceLineColor,
-      priceLineStyle: priceLineStyle ?? this.priceLineStyle,
-      priceFormat: priceFormat ?? this.priceFormat,
-      priceScaleId: priceScaleId ?? this.priceScaleId,
-      upColor: upColor ?? this.upColor,
-      downColor: downColor ?? this.downColor,
-      wickVisible: wickVisible ?? this.wickVisible,
-      borderVisible: borderVisible ?? this.borderVisible,
-      borderUpColor: borderUpColor ?? this.borderUpColor,
-      borderDownColor: borderDownColor ?? this.borderDownColor,
-      wickUpColor: wickUpColor ?? this.wickUpColor,
-      wickDownColor: wickDownColor ?? this.wickDownColor,
-    );
-  }
-}
-
-class LineSeriesOptions extends SeriesOptions {
-  const LineSeriesOptions({
-    super.title = '',
-    super.visible = true,
-    super.lastValueVisible = true,
-    super.priceLineVisible = true,
-    super.priceLineWidth = 1,
-    super.priceLineColor,
-    super.priceLineStyle = LineStyle.dashed,
-    super.priceFormat = const PriceFormat.price(),
-    super.priceScaleId = 'right',
-    this.color = const Color(0xFF2196F3),
-    this.lineWidth = 3,
-    this.lineStyle = LineStyle.solid,
-    this.lineType = LineType.simple,
-    this.lineVisible = true,
-    this.pointMarkersVisible = false,
-    this.pointMarkersRadius,
-    this.crosshairMarkerVisible = true,
-    this.crosshairMarkerRadius = 4,
-    this.crosshairMarkerBorderColor,
-    this.crosshairMarkerBackgroundColor,
-    this.crosshairMarkerBorderWidth = 2,
-  });
-
-  final Color color;
-  final double lineWidth;
-  final LineStyle lineStyle;
-  final LineType lineType;
-  final bool lineVisible;
-  final bool pointMarkersVisible;
-  final double? pointMarkersRadius;
-  final bool crosshairMarkerVisible;
-  final double crosshairMarkerRadius;
-
-  /// `null` means the chart background color.
-  final Color? crosshairMarkerBorderColor;
-
-  /// `null` means the series color.
-  final Color? crosshairMarkerBackgroundColor;
-  final double crosshairMarkerBorderWidth;
-
-  LineSeriesOptions copyWith({
-    String? title,
-    bool? visible,
-    bool? lastValueVisible,
-    bool? priceLineVisible,
-    double? priceLineWidth,
-    Color? priceLineColor,
-    LineStyle? priceLineStyle,
-    PriceFormat? priceFormat,
-    String? priceScaleId,
-    Color? color,
-    double? lineWidth,
-    LineStyle? lineStyle,
-    LineType? lineType,
-    bool? lineVisible,
-    bool? pointMarkersVisible,
-    double? pointMarkersRadius,
-    bool? crosshairMarkerVisible,
-    double? crosshairMarkerRadius,
-    Color? crosshairMarkerBorderColor,
-    Color? crosshairMarkerBackgroundColor,
-    double? crosshairMarkerBorderWidth,
-  }) {
-    return LineSeriesOptions(
-      title: title ?? this.title,
-      visible: visible ?? this.visible,
-      lastValueVisible: lastValueVisible ?? this.lastValueVisible,
-      priceLineVisible: priceLineVisible ?? this.priceLineVisible,
-      priceLineWidth: priceLineWidth ?? this.priceLineWidth,
-      priceLineColor: priceLineColor ?? this.priceLineColor,
-      priceLineStyle: priceLineStyle ?? this.priceLineStyle,
-      priceFormat: priceFormat ?? this.priceFormat,
-      priceScaleId: priceScaleId ?? this.priceScaleId,
-      color: color ?? this.color,
-      lineWidth: lineWidth ?? this.lineWidth,
-      lineStyle: lineStyle ?? this.lineStyle,
-      lineType: lineType ?? this.lineType,
-      lineVisible: lineVisible ?? this.lineVisible,
-      pointMarkersVisible: pointMarkersVisible ?? this.pointMarkersVisible,
-      pointMarkersRadius: pointMarkersRadius ?? this.pointMarkersRadius,
-      crosshairMarkerVisible: crosshairMarkerVisible ?? this.crosshairMarkerVisible,
-      crosshairMarkerRadius: crosshairMarkerRadius ?? this.crosshairMarkerRadius,
-      crosshairMarkerBorderColor: crosshairMarkerBorderColor ?? this.crosshairMarkerBorderColor,
-      crosshairMarkerBackgroundColor: crosshairMarkerBackgroundColor ?? this.crosshairMarkerBackgroundColor,
-      crosshairMarkerBorderWidth: crosshairMarkerBorderWidth ?? this.crosshairMarkerBorderWidth,
-    );
-  }
-}
-
-class HistogramSeriesOptions extends SeriesOptions {
-  const HistogramSeriesOptions({
-    super.title = '',
-    super.visible = true,
-    super.lastValueVisible = true,
-    super.priceLineVisible = true,
-    super.priceLineWidth = 1,
-    super.priceLineColor,
-    super.priceLineStyle = LineStyle.dashed,
-    super.priceFormat = const PriceFormat.price(),
-    super.priceScaleId = 'right',
-    this.color = const Color(0xFF26A69A),
-    this.base = 0,
-  });
-
-  final Color color;
-
-  /// Value the columns grow from.
-  final double base;
-
-  HistogramSeriesOptions copyWith({
-    String? title,
-    bool? visible,
-    bool? lastValueVisible,
-    bool? priceLineVisible,
-    double? priceLineWidth,
-    Color? priceLineColor,
-    LineStyle? priceLineStyle,
-    PriceFormat? priceFormat,
-    String? priceScaleId,
-    Color? color,
-    double? base,
-  }) {
-    return HistogramSeriesOptions(
-      title: title ?? this.title,
-      visible: visible ?? this.visible,
-      lastValueVisible: lastValueVisible ?? this.lastValueVisible,
-      priceLineVisible: priceLineVisible ?? this.priceLineVisible,
-      priceLineWidth: priceLineWidth ?? this.priceLineWidth,
-      priceLineColor: priceLineColor ?? this.priceLineColor,
-      priceLineStyle: priceLineStyle ?? this.priceLineStyle,
-      priceFormat: priceFormat ?? this.priceFormat,
-      priceScaleId: priceScaleId ?? this.priceScaleId,
-      color: color ?? this.color,
-      base: base ?? this.base,
-    );
-  }
-}

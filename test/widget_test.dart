@@ -62,15 +62,15 @@ void main() {
   testWidgets('dragging the price axis disables autoscale, double tap restores it', (tester) async {
     final chart = await _pump(tester);
     final axisX = 400 - chart.priceScale().width() / 2;
-    final rangeBefore = chart.priceScale().priceRange()!;
+    final rangeBefore = chart.priceScale().getVisibleRange()!;
     await tester.dragFrom(Offset(axisX, 100), const Offset(0, 60));
     await tester.pumpAndSettle();
-    expect(chart.model.rightPriceScale.isAutoScale, isFalse);
-    expect(chart.priceScale().priceRange()!.length, isNot(closeTo(rangeBefore.length, 1e-9)));
+    expect(chart.model.panes.first.rightScale.isAutoScale, isFalse);
+    expect(chart.priceScale().getVisibleRange()!.length, isNot(closeTo(rangeBefore.length, 1e-9)));
     await tester.tapAt(Offset(axisX, 100));
     await tester.pump(const Duration(milliseconds: 50));
     await tester.tapAt(Offset(axisX, 100));
     await tester.pumpAndSettle();
-    expect(chart.model.rightPriceScale.isAutoScale, isTrue);
+    expect(chart.model.panes.first.rightScale.isAutoScale, isTrue);
   });
 }

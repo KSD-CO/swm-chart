@@ -11,17 +11,15 @@ abstract class SeriesData {
   final int time;
 }
 
-/// Data for a candlestick series.
-class CandlestickData extends SeriesData {
-  const CandlestickData({
+/// Open/high/low/close data.
+abstract class OhlcData extends SeriesData {
+  const OhlcData({
     required super.time,
     required this.open,
     required this.high,
     required this.low,
     required this.close,
     this.color,
-    this.borderColor,
-    this.wickColor,
   });
 
   final double open;
@@ -29,15 +27,45 @@ class CandlestickData extends SeriesData {
   final double low;
   final double close;
 
-  /// Overrides the series up/down body color for this bar.
+  /// Overrides the series up/down color for this bar.
   final Color? color;
+
+  bool get isUp => close >= open;
+}
+
+/// Data for a candlestick series.
+class CandlestickData extends OhlcData {
+  const CandlestickData({
+    required super.time,
+    required super.open,
+    required super.high,
+    required super.low,
+    required super.close,
+    super.color,
+    this.borderColor,
+    this.wickColor,
+  });
+
   final Color? borderColor;
   final Color? wickColor;
 
-  bool get isUp => close >= open;
-
   @override
   String toString() => 'CandlestickData(time: $time, o: $open, h: $high, l: $low, c: $close)';
+}
+
+/// Data for a bar (OHLC) series.
+class BarData extends OhlcData {
+  const BarData({
+    required super.time,
+    required super.open,
+    required super.high,
+    required super.low,
+    required super.close,
+    super.color,
+  });
+
+  @override
+  String toString() => 'BarData(time: $time, o: $open, h: $high, l: $low, c: $close)';
 }
 
 /// Data with a single value (line, histogram).
@@ -62,4 +90,39 @@ class HistogramData extends SingleValueData {
 
   @override
   String toString() => 'HistogramData(time: $time, value: $value)';
+}
+
+class AreaData extends SingleValueData {
+  const AreaData({required super.time, required super.value, this.lineColor, this.topColor, this.bottomColor})
+      : super(color: lineColor);
+
+  final Color? lineColor;
+  final Color? topColor;
+  final Color? bottomColor;
+
+  @override
+  String toString() => 'AreaData(time: $time, value: $value)';
+}
+
+class BaselineData extends SingleValueData {
+  const BaselineData({
+    required super.time,
+    required super.value,
+    this.topLineColor,
+    this.topFillColor1,
+    this.topFillColor2,
+    this.bottomLineColor,
+    this.bottomFillColor1,
+    this.bottomFillColor2,
+  });
+
+  final Color? topLineColor;
+  final Color? topFillColor1;
+  final Color? topFillColor2;
+  final Color? bottomLineColor;
+  final Color? bottomFillColor1;
+  final Color? bottomFillColor2;
+
+  @override
+  String toString() => 'BaselineData(time: $time, value: $value)';
 }

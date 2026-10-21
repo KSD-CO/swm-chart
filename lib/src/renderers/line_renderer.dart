@@ -1,65 +1,89 @@
-// Port of lightweight-charts src/renderers/line-renderer.ts (simple and stepped lines).
+// Port of lightweight-charts src/renderers/line-renderer.ts
 import 'dart:math' as math;
 import 'dart:ui';
 
 import '../model/series.dart';
-import '../options.dart';
+import '../series_options.dart';
 import 'draw_utils.dart';
 import 'paint_context.dart';
+import 'walk_line.dart';
 
-void paintLine(SeriesPaintContext ctx, LineSeriesModel series) {
+/// Visible points of a line-like series in bitmap coordinates, extended by
+/// one point on each side so the line continues past the pane edges.
+(LinePoints, int)? visibleLinePoints(SeriesPaintContext ctx, LineLikeSeriesModel series) {
   var (from, to) = series.itemsInRange(ctx.visibleRange);
-  // Include one point on each side so the line continues past the edges.
   from = math.max(0, from - 1);
   to = math.min(series.data.length, to + 1);
-  if (from >= to) return;
-
-  final o = series.options;
+  if (from >= to) return null;
   final pr = ctx.pixelRatio;
   final ts = ctx.timeScale;
-  final ps = series.priceScale;
-
   final xs = List<double>.generate(to - from, (i) => ts.indexToCoordinate(series.indices[from + i]) * pr);
-  final ys = List<double>.generate(to - from, (i) => ps.priceToCoordinate(series.data[from + i].value) * pr);
+  final ys = List<double>.generate(to - from, (i) => series.priceToCoordinate(series.data[from + i].value) * pr);
+  return (LinePoints(xs, ys), from);
+}
 
-  final paint = Paint()
-    ..style = PaintingStyle.stroke
-    ..strokeWidth = o.lineWidth * pr
-    ..strokeJoin = StrokeJoin.round
-    ..strokeCap = StrokeCap.butt
-    ..isAntiAlias = true;
+Paint linePaint(LineLikeSeriesOptions o, double pr) => Paint()
+  ..style = PaintingStyle.stroke
+  ..strokeWidth = o.lineWidth * pr
+  ..strokeJoin = StrokeJoin.round
+  ..strokeCap = StrokeCap.butt
+  ..isAntiAlias = true;
 
-  if (o.lineVisible) {
-    if (xs.length == 1) {
-      // A single point has no segment; draw a dot like the upstream renderer.
-      final fill = Paint()..color = series.itemColor(series.data[from]);
-      ctx.canvas.drawCircle(Offset(xs[0], ys[0]), o.lineWidth * pr / 2, fill);
-    } else {
-      final dash = dashPattern(o.lineStyle, o.lineWidth * pr);
-      // Split the line into runs of the same color.
-      var runStart = 0;
-      while (runStart < xs.length - 1) {
-        final color = series.itemColor(series.data[from + runStart + 1]);
-        final path = Path()..moveTo(xs[runStart], ys[runStart]);
-        var i = runStart + 1;
-        for (; i < xs.length; i++) {
-          if (i > runStart + 1 && series.itemColor(series.data[from + i]) != color) break;
-          if (o.lineType == LineType.withSteps) path.lineTo(xs[i], ys[i - 1]);
-          path.lineTo(xs[i], ys[i]);
-        }
-        paint.color = color;
-        ctx.canvas.drawPath(dashPath(path, dash), paint);
-        runStart = i - 1;
-      }
-    }
+/// Strokes the line, split into runs of the same color.
+void strokeLine(
+  SeriesPaintContext ctx,
+  LineLikeSeriesModel series,
+  LinePoints points,
+  int from,
+  Color Function(int dataIndex) colorOf,
+) {
+  final o = series.options;
+  final pr = ctx.pixelRatio;
+  final paint = linePaint(o, pr);
+  final dash = dashPattern(o.lineStyle, o.lineWidth * pr);
+
+  if (points.length == 1) {
+    // A single point: a horizontal tick as wide as a bar, like upstream.
+    final half = ctx.timeScale.barSpacing * pr / 2;
+    paint.color = colorOf(from);
+    ctx.canvas.drawLine(
+      Offset(points.xs[0] - half, points.ys[0]),
+      Offset(points.xs[0] + half, points.ys[0]),
+      paint,
+    );
+    return;
   }
 
-  if (o.pointMarkersVisible) {
-    final radius = (o.pointMarkersRadius ?? o.lineWidth / 2 + 2) * pr;
-    final fill = Paint()..style = PaintingStyle.fill;
-    for (var i = 0; i < xs.length; i++) {
-      fill.color = series.itemColor(series.data[from + i]);
-      ctx.canvas.drawCircle(Offset(xs[i], ys[i]), radius, fill);
-    }
+  for (final run in styleRuns(points.length, (i) => colorOf(from + i))) {
+    final path = Path();
+    walkLine(path, points, o.lineType, run.start, run.end);
+    paint.color = run.style;
+    ctx.canvas.drawPath(dashPath(path, dash), paint);
   }
+}
+
+void paintPointMarkers(
+  SeriesPaintContext ctx,
+  LineLikeSeriesModel series,
+  LinePoints points,
+  int from,
+  Color Function(int dataIndex) colorOf,
+) {
+  final o = series.options;
+  if (!o.pointMarkersVisible) return;
+  final radius = (o.pointMarkersRadius ?? o.lineWidth / 2 + 2) * ctx.pixelRatio;
+  final fill = Paint()..style = PaintingStyle.fill;
+  for (var i = 0; i < points.length; i++) {
+    fill.color = colorOf(from + i);
+    ctx.canvas.drawCircle(Offset(points.xs[i], points.ys[i]), radius, fill);
+  }
+}
+
+void paintLine(SeriesPaintContext ctx, LineSeriesModel series) {
+  final visible = visibleLinePoints(ctx, series);
+  if (visible == null) return;
+  final (points, from) = visible;
+  Color colorOf(int i) => series.lineColor(series.data[i]);
+  if (series.options.lineVisible) strokeLine(ctx, series, points, from, colorOf);
+  paintPointMarkers(ctx, series, points, from, colorOf);
 }

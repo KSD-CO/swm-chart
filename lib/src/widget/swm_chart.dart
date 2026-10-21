@@ -1,25 +1,43 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/physics.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
 import '../api/chart_controller.dart';
 import '../model/chart_model.dart';
+import '../model/pane.dart';
 import '../model/price_scale.dart';
 import 'chart_painter.dart';
 
-enum _Region { pane, priceAxis, timeAxis }
+enum _Region { pane, leftAxis, rightAxis, timeAxis, separator }
 
-enum _DragMode { none, scroll, pinch, priceAxisScale, timeAxisScale }
+/// What is under a pointer: the region, the pane index (or separator index)
+/// and the position relative to the pane.
+class _Hit {
+  const _Hit(this.region, this.index, this.local);
+
+  final _Region region;
+  final int index;
+  final Offset local;
+}
+
+enum _DragMode { none, scroll, pinch, priceAxisScale, timeAxisScale, separator }
+
+/// Touch area around a pane separator, in logical pixels.
+const double _separatorHitSlop = 8;
 
 /// Renders a [ChartController]. Give it bounded constraints (e.g. wrap it in
 /// a `SizedBox` or `Expanded`).
 ///
 /// Touch gestures, following lightweight-charts on mobile:
-/// * drag the pane to scroll (with kinetic scrolling), pinch to zoom;
+/// * drag a pane to scroll (with kinetic scrolling), pinch to zoom;
 /// * long-press then move to track the crosshair; tap to show/hide it;
-/// * drag the price axis to scale prices, double-tap it to re-enable auto-scale;
-/// * drag the time axis to change bar spacing, double-tap it to reset.
+/// * drag a price axis to scale prices, double-tap it to re-enable auto-scale;
+/// * drag the time axis to change bar spacing, double-tap it to reset;
+/// * drag the separator between panes to resize them.
 class SwmChart extends StatefulWidget {
   const SwmChart({super.key, required this.controller});
 
@@ -31,41 +49,88 @@ class SwmChart extends StatefulWidget {
 
 class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin {
   final TextCache _textCache = TextCache();
+  final GlobalKey _boundaryKey = GlobalKey();
   late final Ticker _kineticTicker = createTicker(_onKineticTick);
   FrictionSimulation? _kinetic;
 
   _DragMode _mode = _DragMode.none;
+  _Hit? _dragHit;
+  double _dragStartY = 0;
   double _pinchStartBarSpacing = 0;
   double _pinchAnchorIndex = 0;
   bool _crosshairPinned = false;
+  int? _activeSeparator;
 
-  _Region? _lastTapRegion;
+  _Hit? _lastTap;
   Duration? _lastTapTime;
   final Stopwatch _clock = Stopwatch()..start();
 
   ChartModel get _model => widget.controller.model;
 
   @override
+  void initState() {
+    super.initState();
+    widget.controller.screenshotDelegate = _screenshot;
+  }
+
+  @override
   void didUpdateWidget(SwmChart oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller != widget.controller) _stopKinetic();
+    if (oldWidget.controller != widget.controller) {
+      _stopKinetic();
+      if (oldWidget.controller.screenshotDelegate == _screenshot) oldWidget.controller.screenshotDelegate = null;
+      widget.controller.screenshotDelegate = _screenshot;
+    }
   }
 
   @override
   void dispose() {
+    if (widget.controller.screenshotDelegate == _screenshot) widget.controller.screenshotDelegate = null;
     _kineticTicker.dispose();
     _textCache.dispose();
     super.dispose();
   }
 
-  _Region _regionAt(Offset p) {
-    final pane = _model.paneSize;
-    if (p.dy >= pane.height) return _Region.timeAxis;
-    if (p.dx >= pane.width) return _Region.priceAxis;
-    return _Region.pane;
+  Future<ui.Image> _screenshot() {
+    final boundary = _boundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+    if (boundary == null) throw StateError('The chart is not mounted');
+    return boundary.toImage(pixelRatio: MediaQuery.devicePixelRatioOf(context));
   }
 
-  PriceScale get _rightScale => _model.rightPriceScale;
+  _Hit _hitTest(Offset p) {
+    final m = _model;
+    final panes = m.panes;
+    if (m.options.layout.panes.enableResize) {
+      for (var i = 0; i < panes.length - 1; i++) {
+        final y = panes[i].top + panes[i].height + paneSeparatorHeight / 2;
+        if ((p.dy - y).abs() <= _separatorHitSlop) return _Hit(_Region.separator, i, p);
+      }
+    }
+    if (p.dy >= m.size.height - m.timeAxisHeight) {
+      return _Hit(_Region.timeAxis, -1, Offset(p.dx - m.leftAxisWidth, 0));
+    }
+    var index = panes.length - 1;
+    for (var i = 0; i < panes.length; i++) {
+      if (p.dy < panes[i].top + panes[i].height) {
+        index = i;
+        break;
+      }
+    }
+    final local = Offset(p.dx - m.leftAxisWidth, p.dy - panes[index].top);
+    if (p.dx < m.leftAxisWidth) return _Hit(_Region.leftAxis, index, local);
+    if (p.dx >= m.leftAxisWidth + m.paneWidth) return _Hit(_Region.rightAxis, index, local);
+    return _Hit(_Region.pane, index, local);
+  }
+
+  PriceScale _axisScale(_Hit hit) {
+    final pane = _model.panes[hit.index];
+    return hit.region == _Region.leftAxis ? pane.leftScale : pane.rightScale;
+  }
+
+  Iterable<PriceScale> _paneScales(int index) {
+    final pane = _model.panes[index];
+    return [pane.leftScale, pane.rightScale];
+  }
 
   // ---- pan / pinch / axis drag ----
 
@@ -73,71 +138,105 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
     _stopKinetic();
     _model.cancelAnimations();
     final interaction = _model.options.interaction;
-    final region = _regionAt(d.localFocalPoint);
+    final hit = _hitTest(d.localFocalPoint);
+    _dragHit = hit;
 
-    if (region == _Region.pane) {
-      if (_model.hasCrosshair) _model.setCrosshairPosition(null);
-      _crosshairPinned = false;
-      if (d.pointerCount >= 2 && interaction.handleScale) {
-        _mode = _DragMode.pinch;
-        _pinchStartBarSpacing = _model.timeScale.barSpacing;
-        _pinchAnchorIndex = _model.timeScale.coordinateToFloatIndex(d.localFocalPoint.dx);
-      } else if (interaction.handleScroll) {
-        _mode = _DragMode.scroll;
-        _model.timeScale.startScroll(d.localFocalPoint.dx);
-        _rightScale.startScroll(d.localFocalPoint.dy);
-      } else {
-        _mode = _DragMode.none;
-      }
-    } else if (interaction.axisDragScale && region == _Region.priceAxis) {
-      _mode = _DragMode.priceAxisScale;
-      _rightScale.startScale(d.localFocalPoint.dy);
-    } else if (interaction.axisDragScale && region == _Region.timeAxis) {
-      _mode = _DragMode.timeAxisScale;
-      _model.timeScale.startScale(d.localFocalPoint.dx);
-    } else {
-      _mode = _DragMode.none;
+    switch (hit.region) {
+      case _Region.separator:
+        _mode = _DragMode.separator;
+        _dragStartY = d.localFocalPoint.dy;
+        _model.startPaneResize(hit.index);
+        setState(() => _activeSeparator = hit.index);
+      case _Region.pane:
+        if (_model.hasCrosshair) _model.setCrosshairPosition(null, null);
+        _crosshairPinned = false;
+        if (d.pointerCount >= 2 && interaction.handleScale) {
+          _mode = _DragMode.pinch;
+          _pinchStartBarSpacing = _model.timeScale.barSpacing;
+          _pinchAnchorIndex = _model.timeScale.coordinateToFloatIndex(hit.local.dx);
+        } else if (interaction.handleScroll) {
+          _mode = _DragMode.scroll;
+          _model.timeScale.startScroll(hit.local.dx);
+          for (final ps in _paneScales(hit.index)) {
+            ps.startScroll(hit.local.dy);
+          }
+        } else {
+          _mode = _DragMode.none;
+        }
+      case _Region.leftAxis:
+      case _Region.rightAxis:
+        if (interaction.axisDragScale) {
+          _mode = _DragMode.priceAxisScale;
+          _axisScale(hit).startScale(hit.local.dy);
+        } else {
+          _mode = _DragMode.none;
+        }
+      case _Region.timeAxis:
+        if (interaction.axisDragScale) {
+          _mode = _DragMode.timeAxisScale;
+          _model.timeScale.startScale(hit.local.dx);
+        } else {
+          _mode = _DragMode.none;
+        }
     }
   }
 
   void _onScaleUpdate(ScaleUpdateDetails d) {
     final ts = _model.timeScale;
+    final hit = _dragHit;
+    if (hit == null) return;
+    final x = d.localFocalPoint.dx - _model.leftAxisWidth;
+    final paneTop = hit.index >= 0 && hit.index < _model.panes.length ? _model.panes[hit.index].top : 0.0;
+    final y = d.localFocalPoint.dy - paneTop;
     switch (_mode) {
       case _DragMode.none:
         return;
+      case _DragMode.separator:
+        _model.resizePane(hit.index, d.localFocalPoint.dy - _dragStartY);
       case _DragMode.scroll:
-        ts.scrollTo(d.localFocalPoint.dx);
-        _rightScale.scrollTo(d.localFocalPoint.dy);
+        ts.scrollTo(x);
+        for (final ps in _paneScales(hit.index)) {
+          ps.scrollTo(y);
+        }
       case _DragMode.pinch:
-        ts.zoomAnchored(_pinchStartBarSpacing * d.horizontalScale, _pinchAnchorIndex, d.localFocalPoint.dx);
+        ts.zoomAnchored(_pinchStartBarSpacing * d.horizontalScale, _pinchAnchorIndex, x);
       case _DragMode.priceAxisScale:
-        _rightScale.scaleTo(d.localFocalPoint.dy);
+        _axisScale(hit).scaleTo(y);
       case _DragMode.timeAxisScale:
-        ts.scaleTo(d.localFocalPoint.dx);
+        ts.scaleTo(x);
     }
     _model.invalidate();
   }
 
   void _onScaleEnd(ScaleEndDetails d) {
     final ts = _model.timeScale;
+    final hit = _dragHit;
     switch (_mode) {
       case _DragMode.scroll:
         ts.endScroll();
-        _rightScale.endScroll();
+        if (hit != null) {
+          for (final ps in _paneScales(hit.index)) {
+            ps.endScroll();
+          }
+        }
         final vx = d.velocity.pixelsPerSecond.dx;
         // Like upstream's KineticAnimation, ignore slow flings.
         if (_model.options.interaction.kineticScroll && d.pointerCount == 0 && vx.abs() > 200) {
           _startKinetic(vx);
         }
       case _DragMode.priceAxisScale:
-        _rightScale.endScale();
+        if (hit != null) _axisScale(hit).endScale();
       case _DragMode.timeAxisScale:
         ts.endScale();
+      case _DragMode.separator:
+        _model.endPaneResize();
+        setState(() => _activeSeparator = null);
       case _DragMode.none:
       case _DragMode.pinch:
         break;
     }
     _mode = _DragMode.none;
+    _dragHit = null;
   }
 
   void _startKinetic(double velocity) {
@@ -167,47 +266,58 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
   // ---- crosshair ----
 
   void _onLongPressStart(LongPressStartDetails d) {
-    if (_regionAt(d.localPosition) != _Region.pane) return;
+    final hit = _hitTest(d.localPosition);
+    if (hit.region != _Region.pane) return;
     _stopKinetic();
     _crosshairPinned = true;
-    _model.setCrosshairPosition(d.localPosition);
+    _model.setCrosshairPosition(hit.index, hit.local);
   }
 
   void _onLongPressMove(LongPressMoveUpdateDetails d) {
     if (!_crosshairPinned) return;
-    _model.setCrosshairPosition(d.localPosition);
+    final hit = _hitTest(d.localPosition);
+    if (hit.region == _Region.pane) _model.setCrosshairPosition(hit.index, hit.local);
   }
 
   void _onTapUp(TapUpDetails d) {
-    final region = _regionAt(d.localPosition);
+    final hit = _hitTest(d.localPosition);
     final now = _clock.elapsed;
-    final isDoubleTap = _lastTapRegion == region &&
+    final last = _lastTap;
+    final isDoubleTap = last != null &&
+        last.region == hit.region &&
+        last.index == hit.index &&
         _lastTapTime != null &&
         now - _lastTapTime! < kDoubleTapTimeout;
-    _lastTapRegion = region;
+    _lastTap = isDoubleTap ? null : hit;
     _lastTapTime = now;
+    final interaction = _model.options.interaction;
 
-    switch (region) {
-      case _Region.priceAxis:
-        if (isDoubleTap) {
-          _rightScale.options = _rightScale.options.copyWith(autoScale: true);
+    switch (hit.region) {
+      case _Region.leftAxis:
+      case _Region.rightAxis:
+        if (isDoubleTap && interaction.axisDoubleTapReset) {
+          final ps = _axisScale(hit);
+          ps.options = ps.options.copyWith(autoScale: true);
           _model.invalidate();
         }
       case _Region.timeAxis:
-        if (isDoubleTap) {
+        if (isDoubleTap && interaction.axisDoubleTapReset) {
           _model.timeScale.restoreDefault();
           _model.invalidate();
         }
+      case _Region.separator:
+        break;
       case _Region.pane:
         _stopKinetic();
         if (_model.hasCrosshair) {
-          _model.setCrosshairPosition(null);
+          _model.setCrosshairPosition(null, null);
           _crosshairPinned = false;
         } else {
-          _model.setCrosshairPosition(d.localPosition);
+          _model.setCrosshairPosition(hit.index, hit.local);
           _crosshairPinned = true;
         }
-        _model.click(d.localPosition);
+        _model.click(hit.index, hit.local);
+        if (isDoubleTap) _model.click(hit.index, hit.local, doubleClick: true);
     }
   }
 
@@ -215,10 +325,11 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
 
   void _onPointerSignal(PointerSignalEvent event) {
     if (event is! PointerScrollEvent || !_model.options.interaction.handleScale) return;
-    if (_regionAt(event.localPosition) != _Region.pane) return;
+    final hit = _hitTest(event.localPosition);
+    if (hit.region != _Region.pane) return;
     GestureBinding.instance.pointerSignalResolver.register(event, (e) {
       final scroll = e as PointerScrollEvent;
-      _model.timeScale.zoom(scroll.localPosition.dx, -scroll.scrollDelta.dy / 100);
+      _model.timeScale.zoom(hit.local.dx, -scroll.scrollDelta.dy / 100);
       _model.invalidate();
     });
   }
@@ -250,9 +361,15 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
           ),
         },
         child: RepaintBoundary(
+          key: _boundaryKey,
           child: SizedBox.expand(
             child: CustomPaint(
-              painter: ChartPainter(model: _model, pixelRatio: pixelRatio, textCache: _textCache),
+              painter: ChartPainter(
+                model: _model,
+                pixelRatio: pixelRatio,
+                textCache: _textCache,
+                activeSeparator: _activeSeparator,
+              ),
             ),
           ),
         ),
