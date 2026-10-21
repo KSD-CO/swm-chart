@@ -37,6 +37,18 @@ class AxisLabel {
   final Color? textColor;
 }
 
+/// Result of [ChartPrimitive.hitTest].
+class PrimitiveHitTestResult {
+  const PrimitiveHitTestResult({required this.externalId, this.zOrder = PrimitiveZOrder.normal, this.distance = 0});
+
+  /// Reported as `hoveredObjectId` in chart events.
+  final Object? externalId;
+  final PrimitiveZOrder zOrder;
+
+  /// Distance from the pointer in logical pixels; closer hits win.
+  final double distance;
+}
+
 /// Coordinate helpers available to a primitive for the current frame.
 abstract class PrimitiveContext {
   Size get paneSize;
@@ -116,6 +128,10 @@ abstract class ChartPrimitive {
   List<AxisLabel> priceAxisLabels(PrimitiveContext ctx) => const [];
 
   List<AxisLabel> timeAxisLabels(PrimitiveContext ctx) => const [];
+
+  /// Whether the primitive is under ([x], [y]) (pane coordinates). Return
+  /// `null` when it is not.
+  PrimitiveHitTestResult? hitTest(PrimitiveContext ctx, double x, double y) => null;
 
   /// Extra autoscale info (series primitives only). [from] and [to] are the
   /// visible logical indices.

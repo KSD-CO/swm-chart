@@ -239,11 +239,60 @@ void main() {
     });
   });
 
+  hitTestGroup();
+
   test('attribution logo path parses and is placed at the bottom left', () {
     final path = parseSvgPath('M0 0h10v10H0Z');
     expect(path.getBounds(), const Rect.fromLTWH(0, 0, 10, 10));
     final rect = attributionLogoRect(const Rect.fromLTWH(50, 0, 300, 200));
     expect(rect.left, 60);
     expect(rect.bottom, 190);
+  });
+}
+
+void hitTestGroup() {
+  group('hit testing', () {
+    late ChartController chart;
+    setUp(() => chart = ChartController());
+    tearDown(() => chart.dispose());
+
+    void layout() => chart.model.layout(const Size(400, 300), 1, _measure);
+
+    test('candles: range hit, outside misses', () {
+      final s = chart.addCandlestickSeries()
+        ..setData([
+          for (var i = 0; i < 30; i++)
+            CandlestickData(time: _t0 + i * _day, open: 100.0 + i, high: 105.0 + i, low: 95.0 + i, close: 102.0 + i),
+        ]);
+      layout();
+      final t = _t0 + 20 * _day;
+      final x = chart.timeScale().timeToCoordinate(t)!;
+      final hit = chart.model.hitTest(0, Offset(x, s.priceToCoordinate(120)!));
+      expect(hit!.series, isNotNull);
+      expect(hit.priority.name, 'range');
+      expect(chart.model.hitTest(0, Offset(x, s.priceToCoordinate(150)!)), isNull);
+    });
+
+    test('lines: near the line hits, price lines report their id', () {
+      final s = chart.addLineSeries()..setData(_line(30, 1));
+      s.createPriceLine(const PriceLineOptions(price: 5, id: 'stop'));
+      layout();
+      final x = chart.timeScale().timeToCoordinate(_t0 + 10 * _day)!;
+      final onLine = chart.model.hitTest(0, Offset(x, s.priceToCoordinate(10)! + 2));
+      expect(onLine!.priority.name, 'line');
+      final xFar = chart.timeScale().timeToCoordinate(_t0 + 25 * _day)!;
+      final onPriceLine = chart.model.hitTest(0, Offset(xFar, s.priceToCoordinate(5)!));
+      expect(onPriceLine!.objectId, 'stop');
+    });
+
+    test('events expose hoveredSeries', () {
+      final s = chart.addLineSeries()..setData(_line(30, 1));
+      layout();
+      ChartEventParams? clicked;
+      chart.subscribeClick((p) => clicked = p);
+      final x = chart.timeScale().timeToCoordinate(_t0 + 10 * _day)!;
+      chart.model.click(0, Offset(x, s.priceToCoordinate(10)!));
+      expect(clicked!.hoveredSeries, same(s));
+    });
   });
 }

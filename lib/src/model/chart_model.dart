@@ -15,6 +15,7 @@ import 'price_scale.dart';
 import 'primitive_context.dart';
 import 'series.dart';
 import 'time_scale.dart';
+import 'hit_test.dart';
 import 'horz_scale_behavior.dart';
 import 'tick_marks.dart';
 import 'time_utils.dart' show TickMarkWeight;
@@ -42,7 +43,17 @@ class CrosshairState {
 
 /// Payload of crosshair-move and click events.
 class ModelEventParams {
-  const ModelEventParams({this.time, this.logical, this.point, this.paneIndex, this.seriesData = const {}});
+  const ModelEventParams({
+    this.time,
+    this.logical,
+    this.point,
+    this.paneIndex,
+    this.seriesData = const {},
+    this.hit,
+  });
+
+  /// What is under the pointer, if anything.
+  final HitTestResult? hit;
 
   final num? time;
   final int? logical;
@@ -721,13 +732,22 @@ class ChartModel extends ChangeNotifier {
 
   ModelEventParams _eventParams(CrosshairState? c) {
     if (c == null) return const ModelEventParams();
+    final raw = _crosshairPoint;
     return ModelEventParams(
       time: timeScale.indexToTime(c.index),
       logical: c.index,
       point: Offset(c.x, c.y),
       paneIndex: c.paneIndex,
       seriesData: _dataAt(c.index),
+      hit: raw == null ? null : hitTest(c.paneIndex, raw),
     );
+  }
+
+  /// What is at [point] (pane coordinates) in pane [paneIndex].
+  HitTestResult? hitTest(int paneIndex, Offset point) {
+    if (paneIndex < 0 || paneIndex >= panes.length) return null;
+    final pane = panes[paneIndex];
+    return hitTestPane(pane, timeScale, point.dx, point.dy, (s) => primitiveContext(pane, s));
   }
 
   void click(int paneIndex, Offset point, {bool doubleClick = false}) {
@@ -740,6 +760,7 @@ class ChartModel extends ChangeNotifier {
         point: point,
         paneIndex: paneIndex,
         seriesData: _dataAt(index),
+        hit: hitTest(paneIndex, point),
       ),
     );
   }

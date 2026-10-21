@@ -6,6 +6,7 @@ import 'package:meta/meta.dart';
 
 import '../data.dart';
 import '../model/chart_model.dart';
+import '../model/hit_test.dart' show HoveredObjectKind;
 import '../model/horz_scale_behavior.dart';
 import '../model/pane.dart';
 import '../model/price_line.dart';
@@ -16,9 +17,37 @@ import '../options.dart';
 import '../plugins/primitive.dart';
 import '../series_options.dart';
 
+/// What is under the pointer, like upstream's `HoveredInfo`.
+class HoveredInfo {
+  const HoveredInfo({required this.objectKind, this.series, this.objectId, this.paneIndex});
+
+  final HoveredObjectKind objectKind;
+  final SeriesApi? series;
+
+  /// Id of a custom price line, series marker or primitive.
+  final Object? objectId;
+  final int? paneIndex;
+}
+
 /// Payload of crosshair-move and click events, like `MouseEventParams`.
 class ChartEventParams {
-  const ChartEventParams({this.time, this.logical, this.point, this.paneIndex, this.seriesData = const {}});
+  const ChartEventParams({
+    this.time,
+    this.logical,
+    this.point,
+    this.paneIndex,
+    this.seriesData = const {},
+    this.hoveredInfo,
+  });
+
+  /// What is under the pointer.
+  final HoveredInfo? hoveredInfo;
+
+  /// The series under the pointer.
+  SeriesApi? get hoveredSeries => hoveredInfo?.series;
+
+  /// Id of the price line, marker or primitive under the pointer.
+  Object? get hoveredObjectId => hoveredInfo?.objectId;
 
   /// Horizontal value (UTC seconds on a time chart) of the bar under the
   /// pointer, `null` outside the data.
@@ -269,11 +298,20 @@ class ChartController {
 
   void _dispatch(List<ChartEventHandler> handlers, ModelEventParams p) {
     if (handlers.isEmpty) return;
+    final hit = p.hit;
     final params = ChartEventParams(
       time: p.time,
       logical: p.logical,
       point: p.point,
       paneIndex: p.paneIndex,
+      hoveredInfo: hit == null
+          ? null
+          : HoveredInfo(
+              objectKind: hit.kind,
+              series: hit.series == null ? null : _seriesApis[hit.series],
+              objectId: hit.objectId,
+              paneIndex: p.paneIndex,
+            ),
       seriesData: {
         for (final e in p.seriesData.entries)
           if (_seriesApis[e.key] != null) _seriesApis[e.key]!: e.value,

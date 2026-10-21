@@ -29,6 +29,7 @@ abstract class SeriesOptions {
   const SeriesOptions({
     required this.title,
     required this.visible,
+    required this.hitTestTolerance,
     required this.lastValueVisible,
     required this.priceLineVisible,
     required this.priceLineSource,
@@ -46,6 +47,8 @@ abstract class SeriesOptions {
 
   final String title;
   final bool visible;
+  /// Extra distance in logical pixels counted as hovering the series.
+  final double hitTestTolerance;
   /// Show the last value label on the price axis.
   final bool lastValueVisible;
   /// Show a horizontal line at the last value.
@@ -87,6 +90,7 @@ class CandlestickSeriesOptions extends SeriesOptions {
   const CandlestickSeriesOptions({
     super.title = '',
     super.visible = true,
+    super.hitTestTolerance = 3,
     super.lastValueVisible = true,
     super.priceLineVisible = true,
     super.priceLineSource = PriceLineSource.lastBar,
@@ -122,6 +126,7 @@ class CandlestickSeriesOptions extends SeriesOptions {
   CandlestickSeriesOptions copyWith({
     String? title,
     bool? visible,
+    double? hitTestTolerance,
     bool? lastValueVisible,
     bool? priceLineVisible,
     PriceLineSource? priceLineSource,
@@ -147,6 +152,7 @@ class CandlestickSeriesOptions extends SeriesOptions {
     return CandlestickSeriesOptions(
       title: title ?? this.title,
       visible: visible ?? this.visible,
+      hitTestTolerance: hitTestTolerance ?? this.hitTestTolerance,
       lastValueVisible: lastValueVisible ?? this.lastValueVisible,
       priceLineVisible: priceLineVisible ?? this.priceLineVisible,
       priceLineSource: priceLineSource ?? this.priceLineSource,
@@ -176,6 +182,7 @@ class BarSeriesOptions extends SeriesOptions {
   const BarSeriesOptions({
     super.title = '',
     super.visible = true,
+    super.hitTestTolerance = 3,
     super.lastValueVisible = true,
     super.priceLineVisible = true,
     super.priceLineSource = PriceLineSource.lastBar,
@@ -204,6 +211,7 @@ class BarSeriesOptions extends SeriesOptions {
   BarSeriesOptions copyWith({
     String? title,
     bool? visible,
+    double? hitTestTolerance,
     bool? lastValueVisible,
     bool? priceLineVisible,
     PriceLineSource? priceLineSource,
@@ -225,6 +233,7 @@ class BarSeriesOptions extends SeriesOptions {
     return BarSeriesOptions(
       title: title ?? this.title,
       visible: visible ?? this.visible,
+      hitTestTolerance: hitTestTolerance ?? this.hitTestTolerance,
       lastValueVisible: lastValueVisible ?? this.lastValueVisible,
       priceLineVisible: priceLineVisible ?? this.priceLineVisible,
       priceLineSource: priceLineSource ?? this.priceLineSource,
@@ -250,6 +259,7 @@ class LineSeriesOptions extends SeriesOptions implements LineLikeSeriesOptions {
   const LineSeriesOptions({
     super.title = '',
     super.visible = true,
+    super.hitTestTolerance = 3,
     super.lastValueVisible = true,
     super.priceLineVisible = true,
     super.priceLineSource = PriceLineSource.lastBar,
@@ -309,6 +319,7 @@ class LineSeriesOptions extends SeriesOptions implements LineLikeSeriesOptions {
   LineSeriesOptions copyWith({
     String? title,
     bool? visible,
+    double? hitTestTolerance,
     bool? lastValueVisible,
     bool? priceLineVisible,
     PriceLineSource? priceLineSource,
@@ -339,6 +350,7 @@ class LineSeriesOptions extends SeriesOptions implements LineLikeSeriesOptions {
     return LineSeriesOptions(
       title: title ?? this.title,
       visible: visible ?? this.visible,
+      hitTestTolerance: hitTestTolerance ?? this.hitTestTolerance,
       lastValueVisible: lastValueVisible ?? this.lastValueVisible,
       priceLineVisible: priceLineVisible ?? this.priceLineVisible,
       priceLineSource: priceLineSource ?? this.priceLineSource,
@@ -373,6 +385,7 @@ class AreaSeriesOptions extends SeriesOptions implements LineLikeSeriesOptions {
   const AreaSeriesOptions({
     super.title = '',
     super.visible = true,
+    super.hitTestTolerance = 3,
     super.lastValueVisible = true,
     super.priceLineVisible = true,
     super.priceLineSource = PriceLineSource.lastBar,
@@ -442,6 +455,7 @@ class AreaSeriesOptions extends SeriesOptions implements LineLikeSeriesOptions {
   AreaSeriesOptions copyWith({
     String? title,
     bool? visible,
+    double? hitTestTolerance,
     bool? lastValueVisible,
     bool? priceLineVisible,
     PriceLineSource? priceLineSource,
@@ -476,6 +490,7 @@ class AreaSeriesOptions extends SeriesOptions implements LineLikeSeriesOptions {
     return AreaSeriesOptions(
       title: title ?? this.title,
       visible: visible ?? this.visible,
+      hitTestTolerance: hitTestTolerance ?? this.hitTestTolerance,
       lastValueVisible: lastValueVisible ?? this.lastValueVisible,
       priceLineVisible: priceLineVisible ?? this.priceLineVisible,
       priceLineSource: priceLineSource ?? this.priceLineSource,
@@ -514,6 +529,7 @@ class BaselineSeriesOptions extends SeriesOptions implements LineLikeSeriesOptio
   const BaselineSeriesOptions({
     super.title = '',
     super.visible = true,
+    super.hitTestTolerance = 3,
     super.lastValueVisible = true,
     super.priceLineVisible = true,
     super.priceLineSource = PriceLineSource.lastBar,
@@ -588,6 +604,7 @@ class BaselineSeriesOptions extends SeriesOptions implements LineLikeSeriesOptio
   BaselineSeriesOptions copyWith({
     String? title,
     bool? visible,
+    double? hitTestTolerance,
     bool? lastValueVisible,
     bool? priceLineVisible,
     PriceLineSource? priceLineSource,
@@ -625,6 +642,7 @@ class BaselineSeriesOptions extends SeriesOptions implements LineLikeSeriesOptio
     return BaselineSeriesOptions(
       title: title ?? this.title,
       visible: visible ?? this.visible,
+      hitTestTolerance: hitTestTolerance ?? this.hitTestTolerance,
       lastValueVisible: lastValueVisible ?? this.lastValueVisible,
       priceLineVisible: priceLineVisible ?? this.priceLineVisible,
       priceLineSource: priceLineSource ?? this.priceLineSource,
@@ -666,6 +684,7 @@ class HistogramSeriesOptions extends SeriesOptions {
   const HistogramSeriesOptions({
     super.title = '',
     super.visible = true,
+    super.hitTestTolerance = 3,
     super.lastValueVisible = true,
     super.priceLineVisible = true,
     super.priceLineSource = PriceLineSource.lastBar,
@@ -690,6 +709,7 @@ class HistogramSeriesOptions extends SeriesOptions {
   HistogramSeriesOptions copyWith({
     String? title,
     bool? visible,
+    double? hitTestTolerance,
     bool? lastValueVisible,
     bool? priceLineVisible,
     PriceLineSource? priceLineSource,
@@ -709,6 +729,7 @@ class HistogramSeriesOptions extends SeriesOptions {
     return HistogramSeriesOptions(
       title: title ?? this.title,
       visible: visible ?? this.visible,
+      hitTestTolerance: hitTestTolerance ?? this.hitTestTolerance,
       lastValueVisible: lastValueVisible ?? this.lastValueVisible,
       priceLineVisible: priceLineVisible ?? this.priceLineVisible,
       priceLineSource: priceLineSource ?? this.priceLineSource,

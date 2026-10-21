@@ -6,6 +6,8 @@ library;
 
 export 'src/api/chart_controller.dart';
 export 'src/data.dart';
+export 'src/model/hit_test.dart' show HoveredObjectKind;
+export 'src/model/horz_scale_behavior.dart' show YieldCurveOptions;
 export 'src/model/price_line.dart' show PriceLineOptions;
 export 'src/model/price_scale.dart' show PriceRange;
 export 'src/model/time_scale.dart' show LogicalRange;

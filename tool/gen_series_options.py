@@ -2,6 +2,7 @@ import sys
 common = [
  ("title","String","''",None),
  ("visible","bool","true",None),
+ ("hitTestTolerance","double","3","Extra distance in logical pixels counted as hovering the series."),
  ("lastValueVisible","bool","true","Show the last value label on the price axis."),
  ("priceLineVisible","bool","true","Show a horizontal line at the last value."),
  ("priceLineSource","PriceLineSource","PriceLineSource.lastBar",None),

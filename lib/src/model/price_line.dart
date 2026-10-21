@@ -14,7 +14,11 @@ class PriceLineOptions {
     this.title = '',
     this.axisLabelColor,
     this.axisLabelTextColor,
+    this.id,
   });
+
+  /// Reported as `hoveredObjectId` when the line is hovered/tapped.
+  final String? id;
 
   final double price;
   final Color color;
@@ -42,6 +46,7 @@ class PriceLineOptions {
     String? title,
     Color? axisLabelColor,
     Color? axisLabelTextColor,
+    String? id,
   }) {
     return PriceLineOptions(
       price: price ?? this.price,
@@ -53,6 +58,7 @@ class PriceLineOptions {
       title: title ?? this.title,
       axisLabelColor: axisLabelColor ?? this.axisLabelColor,
       axisLabelTextColor: axisLabelTextColor ?? this.axisLabelTextColor,
+      id: id ?? this.id,
     );
   }
 }

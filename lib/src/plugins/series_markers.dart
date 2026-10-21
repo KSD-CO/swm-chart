@@ -95,6 +95,9 @@ class SeriesMarkersPrimitive extends ChartPrimitive {
 
   List<SeriesMarker> _markers = const [];
 
+  /// Shapes drawn in the last frame, for [hitTest].
+  final List<(Rect, SeriesMarker)> _drawn = [];
+
   /// Reserve room above/below the data so markers stay visible.
   bool autoscale;
 
@@ -128,7 +131,21 @@ class SeriesMarkersPrimitive extends ChartPrimitive {
   }
 
   @override
+  PrimitiveHitTestResult? hitTest(PrimitiveContext ctx, double x, double y) {
+    PrimitiveHitTestResult? best;
+    for (final (rect, marker) in _drawn) {
+      if (!rect.inflate(2).contains(Offset(x, y))) continue;
+      final distance = (rect.center - Offset(x, y)).distance;
+      if (best == null || distance < best.distance) {
+        best = PrimitiveHitTestResult(externalId: marker.id ?? marker, distance: distance);
+      }
+    }
+    return best;
+  }
+
+  @override
   void paint(PrimitivePaintContext ctx) {
+    _drawn.clear();
     final range = ctx.visibleLogicalRange;
     if (range == null || _markers.isEmpty) return;
     final from = range.from.floor(), to = range.to.ceil();
@@ -185,6 +202,7 @@ class SeriesMarkersPrimitive extends ChartPrimitive {
 
       final x = ctx.logicalToCoordinate(index.toDouble());
       _drawShape(ctx.canvas, m.shape, x, y, shapeSize.toDouble(), m.color);
+      _drawn.add((Rect.fromCenter(center: Offset(x, y), width: shapeSize.toDouble(), height: shapeSize.toDouble()), m));
       if (textY != null) {
         final tp = TextPainter(
           text: TextSpan(
