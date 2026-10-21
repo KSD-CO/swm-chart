@@ -58,10 +58,34 @@ void main() {
     expect(crosshair!.seriesData, isNotEmpty);
     await checkpoint(tester, 'crosshair');
 
+    // Drag the separator between the main and RSI panes up.
+    final panes = controller.panes();
+    final mainHeight = panes[0].getHeight();
+    final sepY = rect.top + mainHeight + 0.5;
+    await tester.dragFrom(Offset(rect.center.dx, sepY), const Offset(0, -80));
+    await tester.pump();
+    expect(panes[0].getHeight(), lessThan(mainHeight - 40));
+
     // Dark mode toggle.
     await tester.tap(find.byIcon(Icons.dark_mode));
     await tester.pump(const Duration(milliseconds: 300));
     expect(controller.options.layout.backgroundColor, const Color(0xFF131722));
     await checkpoint(tester, 'dark');
+
+    // Area series + percentage price scale.
+    // The area series animates its last price continuously, so the frame
+    // queue never settles: pump fixed durations instead of pumpAndSettle.
+    const menu = Duration(milliseconds: 600);
+    await tester.tap(find.byIcon(Icons.candlestick_chart));
+    await tester.pump(menu);
+    await tester.tap(find.text('area').last);
+    await tester.pump(menu);
+    await tester.tap(find.byIcon(Icons.straighten));
+    await tester.pump(menu);
+    await tester.tap(find.text('percentage').last);
+    await tester.pump(menu);
+    controller.clearCrosshairPosition();
+    expect(controller.priceScale().options.mode, PriceScaleMode.percentage);
+    await checkpoint(tester, 'area_percent');
   });
 }

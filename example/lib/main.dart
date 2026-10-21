@@ -54,6 +54,45 @@ class FakeFeed {
   double tick(double price) => math.max(1.0, price + (_random.nextDouble() - 0.5) * price * 0.002);
 }
 
+/// Wilder's RSI over [closes].
+List<double?> rsi(List<double> closes, [int period = 14]) {
+  final out = List<double?>.filled(closes.length, null);
+  if (closes.length <= period) return out;
+  var gain = 0.0, loss = 0.0;
+  for (var i = 1; i <= period; i++) {
+    final d = closes[i] - closes[i - 1];
+    if (d > 0) {
+      gain += d;
+    } else {
+      loss -= d;
+    }
+  }
+  gain /= period;
+  loss /= period;
+  out[period] = loss == 0 ? 100 : 100 - 100 / (1 + gain / loss);
+  for (var i = period + 1; i < closes.length; i++) {
+    final d = closes[i] - closes[i - 1];
+    gain = (gain * (period - 1) + math.max(d, 0)) / period;
+    loss = (loss * (period - 1) + math.max(-d, 0)) / period;
+    out[i] = loss == 0 ? 100 : 100 - 100 / (1 + gain / loss);
+  }
+  return out;
+}
+
+/// Simple moving average over [closes].
+List<double?> sma(List<double> closes, int period) {
+  final out = List<double?>.filled(closes.length, null);
+  var sum = 0.0;
+  for (var i = 0; i < closes.length; i++) {
+    sum += closes[i];
+    if (i >= period) sum -= closes[i - period];
+    if (i >= period - 1) out[i] = sum / period;
+  }
+  return out;
+}
+
+enum MainType { candles, bars, line, area, baseline }
+
 class TradingScreen extends StatefulWidget {
   const TradingScreen({super.key});
 
@@ -68,20 +107,23 @@ class _TradingScreenState extends State<TradingScreen> {
 
   final FakeFeed _feed = FakeFeed(interval: _interval);
   late final ChartController _chart;
-  late final CandlestickSeriesApi _candles;
+  late SeriesApi _main;
+  late final LineSeriesApi _sma;
   late final HistogramSeriesApi _volume;
-  late final LineSeriesApi _line;
+  late final LineSeriesApi _rsi;
+  late SeriesMarkersPlugin _markers;
+  late final WatermarkPlugin<TextWatermarkPrimitive> _watermark;
 
   final List<CandlestickData> _bars = [];
   final List<HistogramData> _volumes = [];
   Timer? _timer;
   int _ticks = 0;
   bool _loadingHistory = false;
-  bool _showLine = false;
+  MainType _type = MainType.candles;
+  PriceScaleMode _mode = PriceScaleMode.normal;
   bool? _dark;
 
-  CandlestickData? _hovered;
-  HistogramData? _hoveredVolume;
+  int? _hoveredTime;
 
   @override
   void initState() {
@@ -91,16 +133,45 @@ class _TradingScreenState extends State<TradingScreen> {
         timeScale: TimeScaleOptions(timeVisible: true, secondsVisible: false, rightOffset: 5, barSpacing: 8),
       ),
     );
-    _candles = _chart.addCandlestickSeries(const CandlestickSeriesOptions(borderVisible: false));
-    _line = _chart.addLineSeries(const LineSeriesOptions(lineWidth: 2, visible: false));
+    _main = _createMain(_type);
+    _sma = _chart.addLineSeries(const LineSeriesOptions(
+      color: Color(0xFFFF9800),
+      lineWidth: 1,
+      lastValueVisible: false,
+      priceLineVisible: false,
+      crosshairMarkerVisible: false,
+      title: 'SMA 20',
+    ));
     _volume = _chart.addHistogramSeries(const HistogramSeriesOptions(
       priceScaleId: 'volume',
       priceFormat: PriceFormat.volume(),
       lastValueVisible: false,
       priceLineVisible: false,
     ));
-    // Volume lives in the bottom 20% of the pane.
+    // Volume lives in the bottom 20% of the main pane.
     _chart.priceScale('volume').applyOptions(const PriceScaleOptions(scaleMargins: ScaleMargins(top: 0.8, bottom: 0)));
+
+    // RSI in its own pane, a third of the main pane's height.
+    _rsi = _chart.addLineSeries(
+      const LineSeriesOptions(color: Color(0xFF7E57C2), lineWidth: 1.5, priceLineVisible: false, title: 'RSI 14'),
+      1,
+    );
+    _chart.panes()[0].setStretchFactor(3);
+    _rsi.createPriceLine(const PriceLineOptions(price: 70, color: Color(0x99EF5350), lineStyle: LineStyle.dashed));
+    _rsi.createPriceLine(const PriceLineOptions(price: 30, color: Color(0x9926A69A), lineStyle: LineStyle.dashed));
+    _chart.priceScale('right', 1).applyOptions(const PriceScaleOptions(
+      autoScale: false,
+      scaleMargins: ScaleMargins(top: 0.1, bottom: 0.1),
+    ));
+    _chart.priceScale('right', 1).setVisibleRange(const PriceRange(0, 100));
+
+    _watermark = createTextWatermark(
+      _chart.panes()[0],
+      const TextWatermarkOptions(lines: [
+        TextWatermarkLine(text: 'BTC/USD', color: Color(0x1F808080), fontSize: 44, fontWeight: FontWeight.bold),
+        TextWatermarkLine(text: '5m · swm_chart', color: Color(0x1F808080), fontSize: 16),
+      ]),
+    );
 
     final now = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
     final lastBarTime = now - now % _interval;
@@ -113,18 +184,125 @@ class _TradingScreenState extends State<TradingScreen> {
     _timer = Timer.periodic(const Duration(milliseconds: 500), (_) => _onTick());
   }
 
+  SeriesApi _createMain(MainType type) {
+    final api = switch (type) {
+      MainType.candles => _chart.addCandlestickSeries(const CandlestickSeriesOptions(borderVisible: false)),
+      MainType.bars => _chart.addBarSeries(),
+      MainType.line => _chart.addLineSeries(const LineSeriesOptions(lineWidth: 2, lineType: LineType.curved)),
+      MainType.area => _chart.addAreaSeries(const AreaSeriesOptions(
+          lineColor: Color(0xFF2962FF),
+          topColor: Color(0x662962FF),
+          bottomColor: Color(0x002962FF),
+          lineWidth: 2,
+          lastPriceAnimation: LastPriceAnimationMode.continuous,
+        )),
+      MainType.baseline => _chart.addBaselineSeries(const BaselineSeriesOptions(lineWidth: 2)),
+    };
+    _markers = createSeriesMarkers(api);
+    return api;
+  }
+
+  /// Converts a bar to the data type of the main series.
+  SeriesData _mainItem(CandlestickData b) => switch (_type) {
+        MainType.candles => b,
+        MainType.bars => BarData(time: b.time, open: b.open, high: b.high, low: b.low, close: b.close),
+        MainType.line => LineData(time: b.time, value: b.close),
+        MainType.area => AreaData(time: b.time, value: b.close),
+        MainType.baseline => BaselineData(time: b.time, value: b.close),
+      };
+
+  void _setMainData() {
+    final api = _main;
+    final items = _bars.map(_mainItem).toList();
+    switch (api) {
+      case CandlestickSeriesApi s:
+        s.setData(items.cast());
+      case BarSeriesApi s:
+        s.setData(items.cast());
+      case LineSeriesApi s:
+        s.setData(items.cast());
+      case AreaSeriesApi s:
+        s.setData(items.cast());
+      case BaselineSeriesApi s:
+        s.setData(items.cast());
+    }
+  }
+
+  void _updateMain(CandlestickData bar) {
+    final item = _mainItem(bar);
+    switch (_main) {
+      case CandlestickSeriesApi s:
+        s.update(item as CandlestickData);
+      case BarSeriesApi s:
+        s.update(item as BarData);
+      case LineSeriesApi s:
+        s.update(item as LineData);
+      case AreaSeriesApi s:
+        s.update(item as AreaData);
+      case BaselineSeriesApi s:
+        s.update(item as BaselineData);
+    }
+  }
+
   HistogramData _volumeFor(CandlestickData bar) => HistogramData(
         time: bar.time,
         value: _feed.volume(),
         color: (bar.isUp ? _up : _down).withValues(alpha: 0.5),
       );
 
-  LineData _lineFor(CandlestickData bar) => LineData(time: bar.time, value: bar.close);
+  List<double> get _closes => _bars.map((b) => b.close).toList();
 
   void _pushAll() {
-    _candles.setData(_bars);
+    _setMainData();
     _volume.setData(_volumes);
-    _line.setData(_bars.map(_lineFor).toList());
+    _pushIndicators();
+    if (_type == MainType.baseline) {
+      // Baseline around the first loaded price.
+      final o = (_main as BaselineSeriesApi).options;
+      (_main as BaselineSeriesApi).applyOptions(o.copyWith(baseValue: _bars[_bars.length ~/ 2].close));
+    }
+  }
+
+  void _pushIndicators() {
+    final closes = _closes;
+    final s = sma(closes, 20);
+    final r = rsi(closes);
+    _sma.setData([
+      for (var i = 0; i < _bars.length; i++)
+        if (s[i] != null) LineData(time: _bars[i].time, value: s[i]!),
+    ]);
+    _rsi.setData([
+      for (var i = 0; i < _bars.length; i++)
+        if (r[i] != null) LineData(time: _bars[i].time, value: r[i]!),
+    ]);
+    _markers.setMarkers(_rsiMarkers(r));
+  }
+
+  /// Buy when RSI crosses up through 30, sell when it crosses down through 70.
+  List<SeriesMarker> _rsiMarkers(List<double?> r) {
+    final markers = <SeriesMarker>[];
+    for (var i = 1; i < r.length; i++) {
+      final prev = r[i - 1], cur = r[i];
+      if (prev == null || cur == null) continue;
+      if (prev < 30 && cur >= 30) {
+        markers.add(SeriesMarker(
+          time: _bars[i].time,
+          position: SeriesMarkerPosition.belowBar,
+          shape: SeriesMarkerShape.arrowUp,
+          color: _up,
+          text: 'Buy',
+        ));
+      } else if (prev > 70 && cur <= 70) {
+        markers.add(SeriesMarker(
+          time: _bars[i].time,
+          position: SeriesMarkerPosition.aboveBar,
+          shape: SeriesMarkerShape.arrowDown,
+          color: _down,
+          text: 'Sell',
+        ));
+      }
+    }
+    return markers;
   }
 
   /// Simulates a live feed: every tick updates the last bar, every 10th opens a new one.
@@ -133,7 +311,8 @@ class _TradingScreenState extends State<TradingScreen> {
     _ticks++;
     CandlestickData bar;
     HistogramData vol;
-    if (_ticks % 10 == 0) {
+    final newBar = _ticks % 10 == 0;
+    if (newBar) {
       bar = _feed.nextBar(last.time + _interval, last.close);
       vol = _volumeFor(bar);
       _bars.add(bar);
@@ -156,15 +335,22 @@ class _TradingScreenState extends State<TradingScreen> {
       _bars[_bars.length - 1] = bar;
       _volumes[_volumes.length - 1] = vol;
     }
-    _candles.update(bar);
+    _updateMain(bar);
     _volume.update(vol);
-    _line.update(_lineFor(bar));
-    if (_hovered == null) setState(() {});
+    final closes = _closes;
+    final s = sma(closes, 20).last;
+    final r = rsi(closes);
+    if (s != null) _sma.update(LineData(time: bar.time, value: s));
+    if (r.last != null) _rsi.update(LineData(time: bar.time, value: r.last!));
+    if (newBar) _markers.setMarkers(_rsiMarkers(r));
+    if (_hoveredTime == null) setState(() {});
   }
 
   /// Loads older bars when the user scrolls close to the first one.
   void _onRangeChange(LogicalRange? range) {
-    if (range == null || range.from > 20 || _loadingHistory) return;
+    if (range == null || _loadingHistory) return;
+    final info = _main.barsInLogicalRange(range);
+    if (info == null || info.barsBefore > 20) return;
     _loadingHistory = true;
     Future<void>.delayed(const Duration(milliseconds: 300), () {
       if (!mounted) return;
@@ -177,11 +363,21 @@ class _TradingScreenState extends State<TradingScreen> {
     });
   }
 
-  void _onCrosshairMove(ChartEventParams p) {
-    setState(() {
-      _hovered = p.seriesData[_candles] as CandlestickData?;
-      _hoveredVolume = p.seriesData[_volume] as HistogramData?;
-    });
+  void _onCrosshairMove(ChartEventParams p) => setState(() => _hoveredTime = p.time);
+
+  void _switchType(MainType type) {
+    if (type == _type) return;
+    _markers.detach();
+    _chart.removeSeries(_main);
+    setState(() => _type = type);
+    _main = _createMain(type);
+    _pushAll();
+  }
+
+  void _switchMode(PriceScaleMode mode) {
+    setState(() => _mode = mode);
+    final scale = _chart.priceScale();
+    scale.applyOptions(scale.options.copyWith(mode: mode));
   }
 
   void _applyTheme(bool dark) {
@@ -192,21 +388,26 @@ class _TradingScreenState extends State<TradingScreen> {
     final label = dark ? const Color(0xFF363A45) : const Color(0xFF131722);
     final o = _chart.options;
     _chart.applyOptions(o.copyWith(
-      layout: o.layout.copyWith(backgroundColor: bg, textColor: text),
+      layout: o.layout.copyWith(
+        backgroundColor: bg,
+        textColor: text,
+        panes: PaneOptions(separatorColor: border),
+      ),
       crosshair: o.crosshair.copyWith(
         vertLine: o.crosshair.vertLine.copyWith(labelBackgroundColor: label),
         horzLine: o.crosshair.horzLine.copyWith(labelBackgroundColor: label),
       ),
       grid: GridOptions(vertLines: GridLineOptions(color: grid), horzLines: GridLineOptions(color: grid)),
-      rightPriceScale: o.rightPriceScale.copyWith(borderColor: border),
+      rightPriceScale: o.rightPriceScale.copyWith(borderColor: border, mode: _mode),
       timeScale: o.timeScale.copyWith(borderColor: border),
     ));
-  }
-
-  void _toggleSeries() {
-    setState(() => _showLine = !_showLine);
-    _candles.applyOptions(_candles.options.copyWith(visible: !_showLine));
-    _line.applyOptions(_line.options.copyWith(visible: _showLine));
+    // applyOptions resets every pane's right scale; restore the RSI range.
+    _chart.priceScale('right', 1).applyOptions(_chart.priceScale('right', 1).options.copyWith(
+          autoScale: false,
+          mode: PriceScaleMode.normal,
+          scaleMargins: const ScaleMargins(top: 0.1, bottom: 0.1),
+        ));
+    _chart.priceScale('right', 1).setVisibleRange(const PriceRange(0, 100));
   }
 
   @override
@@ -222,14 +423,17 @@ class _TradingScreenState extends State<TradingScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _watermark.detach();
     _chart.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final bar = _hovered ?? _bars.last;
-    final vol = _hoveredVolume ?? _volumes.last;
+    final index = _hoveredTime == null ? _bars.length - 1 : _bars.indexWhere((b) => b.time == _hoveredTime);
+    final bar = _bars[index < 0 ? _bars.length - 1 : index];
+    final vol = _volumes[index < 0 ? _volumes.length - 1 : index];
+    final rsiValue = _rsi.data().where((d) => d.time == bar.time).firstOrNull?.value;
     final color = bar.isUp ? _up : _down;
     final dark = _dark ?? false;
 
@@ -237,10 +441,23 @@ class _TradingScreenState extends State<TradingScreen> {
       appBar: AppBar(
         title: const Text('BTC/USD · 5m'),
         actions: [
-          IconButton(
-            tooltip: _showLine ? 'Candles' : 'Line',
-            icon: Icon(_showLine ? Icons.candlestick_chart : Icons.show_chart),
-            onPressed: _toggleSeries,
+          PopupMenuButton<MainType>(
+            tooltip: 'Series type',
+            icon: const Icon(Icons.candlestick_chart),
+            initialValue: _type,
+            onSelected: _switchType,
+            itemBuilder: (_) => [
+              for (final t in MainType.values) PopupMenuItem(value: t, child: Text(t.name)),
+            ],
+          ),
+          PopupMenuButton<PriceScaleMode>(
+            tooltip: 'Price scale mode',
+            icon: const Icon(Icons.straighten),
+            initialValue: _mode,
+            onSelected: _switchMode,
+            itemBuilder: (_) => [
+              for (final m in PriceScaleMode.values) PopupMenuItem(value: m, child: Text(m.name)),
+            ],
           ),
           IconButton(
             tooltip: 'Fit content',
@@ -271,7 +488,11 @@ class _TradingScreenState extends State<TradingScreen> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
                 child: DefaultTextStyle(
-                  style: TextStyle(color: _chart.options.layout.textColor, fontSize: 12, fontFeatures: const [FontFeature.tabularFigures()]),
+                  style: TextStyle(
+                    color: _chart.options.layout.textColor,
+                    fontSize: 12,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
                   child: Wrap(
                     spacing: 10,
                     children: [
@@ -280,6 +501,7 @@ class _TradingScreenState extends State<TradingScreen> {
                       _Legend('L', bar.low, color),
                       _Legend('C', bar.close, color),
                       Text('Vol ${(vol.value / 1000).toStringAsFixed(1)}K'),
+                      if (rsiValue != null) _Legend('RSI', rsiValue, const Color(0xFF7E57C2)),
                     ],
                   ),
                 ),

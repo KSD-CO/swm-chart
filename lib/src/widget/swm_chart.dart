@@ -55,6 +55,11 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
 
   _DragMode _mode = _DragMode.none;
   _Hit? _dragHit;
+
+  /// Where the first finger touched down. Scale gestures only start after
+  /// the touch slop, so hit testing uses this point instead.
+  Offset? _downPosition;
+  int _pointersDown = 0;
   double _dragStartY = 0;
   double _pinchStartBarSpacing = 0;
   double _pinchAnchorIndex = 0;
@@ -138,13 +143,14 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
     _stopKinetic();
     _model.cancelAnimations();
     final interaction = _model.options.interaction;
-    final hit = _hitTest(d.localFocalPoint);
+    final start = d.pointerCount == 1 && _downPosition != null ? _downPosition! : d.localFocalPoint;
+    final hit = _hitTest(start);
     _dragHit = hit;
 
     switch (hit.region) {
       case _Region.separator:
         _mode = _DragMode.separator;
-        _dragStartY = d.localFocalPoint.dy;
+        _dragStartY = start.dy;
         _model.startPaneResize(hit.index);
         setState(() => _activeSeparator = hit.index);
       case _Region.pane:
@@ -339,6 +345,11 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
     final pixelRatio = MediaQuery.devicePixelRatioOf(context);
     return Listener(
       onPointerSignal: _onPointerSignal,
+      onPointerDown: (e) {
+        if (_pointersDown++ == 0) _downPosition = e.localPosition;
+      },
+      onPointerUp: (_) => _pointersDown = (_pointersDown - 1).clamp(0, 100),
+      onPointerCancel: (_) => _pointersDown = (_pointersDown - 1).clamp(0, 100),
       child: RawGestureDetector(
         behavior: HitTestBehavior.opaque,
         gestures: {
