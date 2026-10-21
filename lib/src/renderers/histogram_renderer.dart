@@ -90,7 +90,7 @@ void paintHistogram(SeriesPaintContext ctx, HistogramSeriesModel series) {
   final topHistogramBase = histogramBase - tickWidth ~/ 2;
   final bottomHistogramBase = topHistogramBase + tickWidth;
 
-  final batch = RectBatch.shared..reset();
+  final batch = RectBatch.shared..reset(n);
   for (var j = 0; j < n; j++) {
     final y = (ys[j] * pr).round();
     int top;

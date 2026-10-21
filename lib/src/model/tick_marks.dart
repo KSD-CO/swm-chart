@@ -1,4 +1,6 @@
 // Port of lightweight-charts src/model/tick-marks.ts
+import 'dart:math' as math;
+
 class TickMark {
   const TickMark(this.index, this.time, this.weight);
 
@@ -15,6 +17,10 @@ class TickMarks {
   List<TickMark>? _cache;
   bool _uniformDistribution = false;
 
+  /// Points were only appended from this index since [_cache] was built.
+  int? _appendedFrom;
+  int _pointsCount = 0;
+
   void setUniformDistribution(bool value) {
     if (value == _uniformDistribution) return;
     _uniformDistribution = value;
@@ -23,7 +29,14 @@ class TickMarks {
 
   void setTimeScalePoints(List<num> times, List<int> weights, int firstChangedPointIndex) {
     _removeMarksSinceIndex(firstChangedPointIndex);
-    _cache = null;
+    if (_cache != null && firstChangedPointIndex == _pointsCount && firstChangedPointIndex > 0) {
+      // Pure append (a new bar): the cache stays valid except near the end.
+      _appendedFrom = math.min(_appendedFrom ?? firstChangedPointIndex, firstChangedPointIndex);
+    } else {
+      _cache = null;
+      _appendedFrom = null;
+    }
+    _pointsCount = times.length;
 
     for (var index = firstChangedPointIndex; index < times.length; ++index) {
       _marksByWeight.putIfAbsent(weights[index], () => []).add(TickMark(index, times[index], weights[index]));
@@ -40,11 +53,17 @@ class TickMarks {
     int indicesWithDataId = 0,
   }) {
     final maxIndexesPerMark = (maxWidth / spacing).ceil();
-    if (_cache == null ||
-        _cacheMaxIndexesPerMark != maxIndexesPerMark ||
-        _cacheCheckIndices != checkIndicesForData ||
-        _cacheIndicesWithDataId != indicesWithDataId) {
-      _cache = _buildMarksImpl(maxIndexesPerMark, checkIndicesForData ? indicesWithData : null);
+    final filter = checkIndicesForData ? indicesWithData : null;
+    final sameParams = _cache != null &&
+        _cacheMaxIndexesPerMark == maxIndexesPerMark &&
+        _cacheCheckIndices == checkIndicesForData &&
+        _cacheIndicesWithDataId == indicesWithDataId;
+    if (sameParams && _appendedFrom != null) {
+      _cache = _rebuildTail(maxIndexesPerMark, filter, _appendedFrom!);
+      _appendedFrom = null;
+    } else if (!sameParams) {
+      _cache = _buildMarksImpl(maxIndexesPerMark, filter);
+      _appendedFrom = null;
       _cacheMaxIndexesPerMark = maxIndexesPerMark;
       _cacheCheckIndices = checkIndicesForData;
       _cacheIndicesWithDataId = indicesWithDataId;
@@ -69,6 +88,35 @@ class TickMarks {
     weightsToClear.forEach(_marksByWeight.remove);
   }
 
+  /// Recomputes the selection after points were appended from
+  /// [appendedFrom], keeping the cached prefix. Exact: appending at the
+  /// right end can only change decisions within one label spacing per
+  /// weight level of the end, so marks before
+  /// `appendedFrom - (levels + 1) * maxIndexesPerMark` keep their fate.
+  List<TickMark> _rebuildTail(int maxIndexesPerMark, Set<int>? indicesWithData, int appendedFrom) {
+    final cutoff = appendedFrom - (_marksByWeight.length + 1) * maxIndexesPerMark;
+    if (cutoff <= 0 || _uniformDistribution) return _buildMarksImpl(maxIndexesPerMark, indicesWithData);
+    final old = _cache!;
+    final prefix = old.sublist(0, _lowerBound(old, cutoff));
+
+    // Nearest kept prefix mark of each weight or heavier: the left
+    // neighbour the greedy pass would see when it reaches the tail.
+    num leftmostAtLeast(int weight) {
+      for (var i = prefix.length - 1; i >= 0; i--) {
+        if (prefix[i].weight >= weight) return prefix[i].index;
+      }
+      return double.negativeInfinity;
+    }
+
+    final tail = _buildMarksImpl(
+      maxIndexesPerMark,
+      indicesWithData,
+      fromIndex: cutoff,
+      initialLeft: leftmostAtLeast,
+    );
+    return [...prefix, ...tail];
+  }
+
   static int _lowerBound(List<TickMark> marks, int index) {
     var lo = 0;
     var hi = marks.length;
@@ -85,7 +133,15 @@ class TickMarks {
 
   /// Greedy selection from the heaviest weight down: a mark is kept if it is
   /// at least [maxIndexesPerMark] bars away from its already-kept neighbours.
-  List<TickMark> _buildMarksImpl(int maxIndexesPerMark, Set<int>? indicesWithData) {
+  ///
+  /// With [fromIndex], only marks at or after it are considered, and each
+  /// weight level starts from [initialLeft] instead of minus infinity.
+  List<TickMark> _buildMarksImpl(
+    int maxIndexesPerMark,
+    Set<int>? indicesWithData, {
+    int fromIndex = 0,
+    num Function(int weight)? initialLeft,
+  }) {
     bool canBeIncluded(TickMark mark) => indicesWithData == null || indicesWithData.contains(mark.index);
     var marks = <TickMark>[];
     final weights = _marksByWeight.keys.toList()..sort((a, b) => b - a);
@@ -96,10 +152,11 @@ class TickMarks {
 
       final prevMarksLength = prevMarks.length;
       var prevMarksPointer = 0;
-      final currentWeight = _marksByWeight[weight]!;
+      final allOfWeight = _marksByWeight[weight]!;
+      final currentWeight = fromIndex == 0 ? allOfWeight : allOfWeight.sublist(_lowerBound(allOfWeight, fromIndex));
 
       num rightIndex = double.infinity;
-      num leftIndex = double.negativeInfinity;
+      num leftIndex = initialLeft?.call(weight) ?? double.negativeInfinity;
       for (final mark in currentWeight) {
         final currentIndex = mark.index;
 

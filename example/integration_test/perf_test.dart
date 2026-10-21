@@ -72,6 +72,7 @@ Future<void> drive(void Function(double t) onFrame) async {
 }
 
 void main() {
+  const only = String.fromEnvironment('ONLY');
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   binding.framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
   final bars = generateBars(barCount);
@@ -96,7 +97,7 @@ void main() {
     return (chart, candles);
   }
 
-  testWidgets('scroll (bar spacing 6)', (tester) async {
+  testWidgets('scroll (bar spacing 6)', skip: only.isNotEmpty && !'scroll (bar spacing 6)'.contains(only), (tester) async {
     final (chart, _) = await setUp(tester);
     await binding.watchPerformance(() async {
       await drive((t) => chart.timeScale().scrollToPosition(-t * 5000));
@@ -104,7 +105,7 @@ void main() {
     chart.dispose();
   });
 
-  testWidgets('zoomed out, 100k visible, no conflation', (tester) async {
+  testWidgets('zoomed out, 100k visible, no conflation', skip: only.isNotEmpty && !'zoomed out, 100k visible, no conflation'.contains(only), (tester) async {
     final (chart, _) = await setUp(tester);
     chart.timeScale().fitContent();
     await binding.watchPerformance(() async {
@@ -114,7 +115,7 @@ void main() {
     chart.dispose();
   });
 
-  testWidgets('zoomed out, 100k visible, conflation', (tester) async {
+  testWidgets('zoomed out, 100k visible, conflation', skip: only.isNotEmpty && !'zoomed out, 100k visible, conflation'.contains(only), (tester) async {
     final (chart, _) = await setUp(tester, conflation: true);
     chart.timeScale().fitContent();
     await binding.watchPerformance(() async {
@@ -123,7 +124,7 @@ void main() {
     chart.dispose();
   });
 
-  testWidgets('realtime updates every frame', (tester) async {
+  testWidgets('realtime updates every frame', skip: only.isNotEmpty && !'realtime updates every frame'.contains(only), (tester) async {
     final (chart, candles) = await setUp(tester);
     var last = bars.last;
     var i = 0;
@@ -148,7 +149,7 @@ void main() {
     chart.dispose();
   });
 
-  testWidgets('crosshair moving', (tester) async {
+  testWidgets('crosshair moving', skip: only.isNotEmpty && !'crosshair moving'.contains(only), (tester) async {
     final (chart, candles) = await setUp(tester);
     await binding.watchPerformance(() async {
       await drive((t) {

@@ -7,6 +7,7 @@ import 'draw_utils.dart';
 import 'paint_context.dart';
 
 const double _barBorderWidth = 1;
+const int _noEdge = -0x40000000;
 
 int optimalCandlestickWidth(double barSpacing, double pixelRatio) {
   const specialCaseFrom = 2.5;
@@ -89,7 +90,8 @@ void paintCandlesticks(SeriesPaintContext ctx, CandlestickSeriesModel series) {
 
   // All rectangles go into one vertex batch, in upstream's drawing order:
   // wicks, borders, bodies.
-  final batch = RectBatch.shared..reset();
+  // Up to 2 wick rectangles, 4 border rectangles and a body per candle.
+  final batch = RectBatch.shared..reset(bars.length * 7);
   if (o.wickVisible) _drawWicks(batch, bars, barWidth, ts.barSpacing, pr);
   if (o.borderVisible) _drawBorder(batch, bars, barWidth, ts.barSpacing, pr);
 
@@ -105,7 +107,9 @@ void _drawWicks(RectBatch batch, _Bars bars, int barWidth, double barSpacing, do
   wickWidth = math.max(pr.floor(), math.min(wickWidth, barWidth));
   final wickOffset = (wickWidth * 0.5).floor();
 
-  int? prevEdge;
+  // Right edge of the previous rectangle; a sentinel instead of a nullable
+  // int keeps the loop free of boxing.
+  var prevEdge = _noEdge;
   for (var j = 0; j < bars.length; j++) {
     final top = (math.min(bars.openY[j], bars.closeY[j]) * pr).round();
     final bottom = (math.max(bars.openY[j], bars.closeY[j]) * pr).round();
@@ -115,7 +119,7 @@ void _drawWicks(RectBatch batch, _Bars bars, int barWidth, double barSpacing, do
 
     var left = scaledX - wickOffset;
     final right = left + wickWidth - 1;
-    if (prevEdge != null) {
+    if (prevEdge != _noEdge) {
       left = math.max(prevEdge + 1, left);
       left = math.min(left, right);
     }
@@ -143,7 +147,9 @@ int _calculateBorderWidth(int barWidth, double pr) {
 void _drawBorder(RectBatch batch, _Bars bars, int barWidth, double barSpacing, double pr) {
   final borderWidth = _calculateBorderWidth(barWidth, pr);
 
-  int? prevEdge;
+  // Right edge of the previous rectangle; a sentinel instead of a nullable
+  // int keeps the loop free of boxing.
+  var prevEdge = _noEdge;
   for (var j = 0; j < bars.length; j++) {
     var left = (bars.x[j] * pr).round() - (barWidth * 0.5).floor();
     // Calculate right before patching left.
@@ -152,7 +158,7 @@ void _drawBorder(RectBatch batch, _Bars bars, int barWidth, double barSpacing, d
     final top = (math.min(bars.openY[j], bars.closeY[j]) * pr).round();
     final bottom = (math.max(bars.openY[j], bars.closeY[j]) * pr).round();
 
-    if (prevEdge != null) {
+    if (prevEdge != _noEdge) {
       left = math.max(prevEdge + 1, left);
       left = math.min(left, right);
     }

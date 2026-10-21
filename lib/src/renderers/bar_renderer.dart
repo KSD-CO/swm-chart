@@ -27,7 +27,8 @@ void paintBars(SeriesPaintContext ctx, BarSeriesModel series) {
   final barLineWidth = o.thinBars ? math.min(barWidth, pr.floor()) : barWidth;
   final drawOpenClose = barLineWidth <= barWidth && barSpacing >= (1.5 * pr).floor();
 
-  final batch = RectBatch.shared..reset();
+  // A body and up to two ticks per bar.
+  final batch = RectBatch.shared..reset((to - from) * 3);
   final (xa, xb) = ts.indexTransform();
   final linear = series.priceTransform();
   double y(double price) => linear != null ? linear.$1 * price + linear.$2 : series.priceToCoordinate(price);

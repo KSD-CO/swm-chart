@@ -126,7 +126,14 @@ class RectBatch {
 
   bool get isEmpty => _count == 0;
 
-  void reset() => _count = 0;
+  int get count => _count;
+
+  /// Starts a batch with room for [expected] rectangles, so [add] doesn't
+  /// have to grow the buffers one rectangle at a time.
+  void reset([int expected = 0]) {
+    _count = 0;
+    _ensureCapacity(expected);
+  }
 
   void _ensureCapacity(int rects) {
     if (rects * 12 <= _positions.length) return;
@@ -139,27 +146,59 @@ class RectBatch {
   }
 
   /// Adds a rectangle in bitmap coordinates, like `fillRect`.
+  ///
+  /// When the previous rectangle has the same column, the same opaque color
+  /// and touches this one vertically, it is extended instead: painting an
+  /// opaque color twice gives the same pixels, and at small bar spacings
+  /// thousands of candles share a column.
   void add(double x, double y, double w, double h, int argb) {
     if (w <= 0 || h <= 0) return;
-    _ensureCapacity(_count + 1);
+    // Int32List stores colors signed; compare and store in the same form.
+    final color = argb.toSigned(32);
     final p = _positions;
+    final bottom = y + h;
+    if (_count > 0 && (color >> 24) & 0xFF == 0xFF) {
+      final i = (_count - 1) * 12;
+      if (p[i] == x && p[i + 2] == x + w && _colors[(_count - 1) * 6] == color) {
+        final top0 = p[i + 1], bottom0 = p[i + 5];
+        if (y <= bottom0 && bottom >= top0) {
+          final top = y < top0 ? y : top0;
+          final b = bottom > bottom0 ? bottom : bottom0;
+          p[i + 1] = top;
+          p[i + 3] = top;
+          p[i + 7] = top;
+          p[i + 5] = b;
+          p[i + 9] = b;
+          p[i + 11] = b;
+          return;
+        }
+      }
+    }
+    if ((_count + 1) * 12 > p.length) _ensureCapacity(_count + 1);
+    final pos = _positions;
     final i = _count * 12;
-    final right = x + w, bottom = y + h;
+    final right = x + w;
     // Two triangles: (x,y) (r,y) (x,b) and (r,y) (r,b) (x,b).
-    p[i] = x;
-    p[i + 1] = y;
-    p[i + 2] = right;
-    p[i + 3] = y;
-    p[i + 4] = x;
-    p[i + 5] = bottom;
-    p[i + 6] = right;
-    p[i + 7] = y;
-    p[i + 8] = right;
-    p[i + 9] = bottom;
-    p[i + 10] = x;
-    p[i + 11] = bottom;
+    pos[i] = x;
+    pos[i + 1] = y;
+    pos[i + 2] = right;
+    pos[i + 3] = y;
+    pos[i + 4] = x;
+    pos[i + 5] = bottom;
+    pos[i + 6] = right;
+    pos[i + 7] = y;
+    pos[i + 8] = right;
+    pos[i + 9] = bottom;
+    pos[i + 10] = x;
+    pos[i + 11] = bottom;
     final c = _count * 6;
-    _colors.fillRange(c, c + 6, argb);
+    final colors = _colors;
+    colors[c] = color;
+    colors[c + 1] = color;
+    colors[c + 2] = color;
+    colors[c + 3] = color;
+    colors[c + 4] = color;
+    colors[c + 5] = color;
     _count++;
   }
 
