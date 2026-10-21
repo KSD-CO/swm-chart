@@ -3,6 +3,8 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:flutter/services.dart' show MouseCursor;
+
 import '../data.dart';
 import '../plugins/primitive.dart';
 import 'pane.dart';
@@ -31,7 +33,11 @@ class HitTestResult {
     required this.distance,
     required this.priority,
     this.zOrder = PrimitiveZOrder.normal,
+    this.cursor,
   });
+
+  /// Cursor requested by a primitive or custom series.
+  final MouseCursor? cursor;
 
   final HoveredItemType type;
   final HoveredSourceKind sourceKind;
@@ -167,6 +173,7 @@ HitTestResult? _hitTestCustom(CustomSeriesModel series, TimeScale ts, IndexRange
     objectId: r.objectId,
     distance: r.distance,
     priority: HitTestPriority.point,
+    cursor: r.cursor,
   );
 }
 
@@ -206,6 +213,7 @@ HitTestResult? hitTestPane(
           distance: r.distance,
           priority: _primitivePriority(r),
           zOrder: r.zOrder,
+          cursor: r.cursor,
         ),
       );
     }
@@ -224,6 +232,7 @@ HitTestResult? hitTestPane(
             distance: r.distance,
             priority: _primitivePriority(r),
             zOrder: r.zOrder,
+            cursor: r.cursor,
           ),
         );
       }

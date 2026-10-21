@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
@@ -10,6 +11,7 @@ import '../api/chart_controller.dart';
 import '../model/chart_model.dart';
 import '../model/pane.dart';
 import '../model/price_scale.dart';
+import '../model/series.dart';
 import '../options.dart';
 import 'attribution_logo.dart';
 import 'chart_painter.dart';
@@ -34,16 +36,25 @@ const double _separatorHitSlop = 8;
 /// Renders a [ChartController]. Give it bounded constraints (e.g. wrap it in
 /// a `SizedBox` or `Expanded`).
 ///
-/// Touch gestures, following lightweight-charts on mobile:
-/// * drag a pane to scroll (with kinetic scrolling), pinch to zoom;
-/// * long-press then move to track the crosshair; tap to show/hide it;
+/// Gestures follow lightweight-charts:
+/// * drag a pane to scroll (with kinetic scrolling), pinch or wheel to zoom;
+/// * touch: long-press then move to track the crosshair, tap to show/hide it;
+/// * mouse: the crosshair follows the pointer, clicks only emit events;
 /// * drag a price axis to scale prices, double-tap it to re-enable auto-scale;
 /// * drag the time axis to change bar spacing, double-tap it to reset;
 /// * drag the separator between panes to resize them.
+///
+/// With a mouse the cursor shows what a drag would do: `resizeRow` on
+/// separators, `resizeUpDown` on price axes, `resizeLeftRight` on the time
+/// axis, or the cursor of the hovered primitive / custom series.
 class SwmChart extends StatefulWidget {
-  const SwmChart({super.key, required this.controller, this.onAttributionLogoTap});
+  const SwmChart({super.key, required this.controller, this.onAttributionLogoTap, this.semanticsLabel = 'Chart'});
 
   final ChartController controller;
+
+  /// Accessibility label read by screen readers. The semantics value is a
+  /// summary of each series' last value, refreshed at most once a second.
+  final String semanticsLabel;
 
   /// Called when the TradingView attribution logo is tapped; open
   /// https://www.tradingview.com/ here (e.g. with `url_launcher`).
@@ -80,16 +91,60 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
   Offset _panStart = Offset.zero;
   int? _activeSeparator;
 
+  /// Mouse hover state (desktop / web).
+  int? _hoverSeparator;
+  MouseCursor _cursor = MouseCursor.defer;
+  bool _mouseCrosshair = false;
+
   _Hit? _lastTap;
   Duration? _lastTapTime;
   final Stopwatch _clock = Stopwatch()..start();
 
   ChartModel get _model => widget.controller.model;
 
+  String _semanticsValue = '';
+  Timer? _semanticsTimer;
+
   @override
   void initState() {
     super.initState();
     widget.controller.screenshotDelegate = _screenshot;
+    _model.addListener(_scheduleSemantics);
+    _semanticsValue = _summary();
+  }
+
+  /// Last value of every visible series, e.g. "Candlestick 101.00, RSI 55.29".
+  String _summary() {
+    final parts = <String>[];
+    for (final s in _model.series) {
+      final last = s.lastItem;
+      if (!s.visible || last == null) continue;
+      final name = s.options.title.isNotEmpty ? s.options.title : _typeName(s);
+      parts.add('$name ${_model.formatSeriesPrice(s, s.closeValue(last))}');
+    }
+    return parts.join(', ');
+  }
+
+  static String _typeName(SeriesModel s) => switch (s) {
+    CandlestickSeriesModel() => 'Candlestick',
+    BarSeriesModel() => 'Bar',
+    LineSeriesModel() => 'Line',
+    AreaSeriesModel() => 'Area',
+    BaselineSeriesModel() => 'Baseline',
+    HistogramSeriesModel() => 'Histogram',
+    _ => 'Series',
+  };
+
+  // Realtime data repaints every frame; screen readers only need a
+  // summary now and then.
+  void _scheduleSemantics() {
+    if (_semanticsTimer != null) return;
+    _semanticsTimer = Timer(const Duration(seconds: 1), () {
+      _semanticsTimer = null;
+      if (!mounted) return;
+      final value = _summary();
+      if (value != _semanticsValue) setState(() => _semanticsValue = value);
+    });
   }
 
   @override
@@ -97,6 +152,8 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
       _stopKinetic();
+      oldWidget.controller.model.removeListener(_scheduleSemantics);
+      _model.addListener(_scheduleSemantics);
       if (oldWidget.controller.screenshotDelegate == _screenshot) oldWidget.controller.screenshotDelegate = null;
       widget.controller.screenshotDelegate = _screenshot;
     }
@@ -104,6 +161,8 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
 
   @override
   void dispose() {
+    _semanticsTimer?.cancel();
+    _model.removeListener(_scheduleSemantics);
     if (widget.controller.screenshotDelegate == _screenshot) widget.controller.screenshotDelegate = null;
     _kineticTicker.dispose();
     _textCache.dispose();
@@ -140,6 +199,10 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
     if (p.dx >= m.leftAxisWidth + m.paneWidth) return _Hit(_Region.rightAxis, index, local);
     return _Hit(_Region.pane, index, local);
   }
+
+  /// Upstream only scales price axes by dragging outside the percentage modes.
+  bool _canScalePriceAxis(_Hit hit) =>
+      _model.options.handleScale.axisPressedMouseMove.price && !_axisScale(hit).isPercentLike;
 
   PriceScale _axisScale(_Hit hit) {
     final pane = _model.panes[hit.index];
@@ -191,7 +254,7 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
         }
       case _Region.leftAxis:
       case _Region.rightAxis:
-        if (o.handleScale.axisPressedMouseMove.price) {
+        if (_canScalePriceAxis(hit)) {
           _mode = _DragMode.priceAxisScale;
           _axisScale(hit).startScale(hit.local.dy);
         } else {
@@ -324,6 +387,7 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
   }
 
   void _onTapUp(TapUpDetails d) {
+    final isMouse = d.kind == PointerDeviceKind.mouse;
     if (_model.options.layout.attributionLogo && _model.panes.isNotEmpty) {
       final logo = attributionLogoRect(_model.paneRect(_model.panes.length - 1)).inflate(4);
       if (logo.contains(d.localPosition)) {
@@ -361,15 +425,60 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
         break;
       case _Region.pane:
         _stopKinetic();
-        if (_model.hasCrosshair) {
-          _model.setCrosshairPosition(null, null);
-          _crosshairPinned = false;
-        } else {
-          _model.setCrosshairPosition(hit.index, hit.local);
-          _crosshairPinned = true;
+        // With a mouse the crosshair follows hovering; a click only emits events.
+        if (!isMouse) {
+          if (_model.hasCrosshair) {
+            _model.setCrosshairPosition(null, null);
+            _crosshairPinned = false;
+          } else {
+            _model.setCrosshairPosition(hit.index, hit.local);
+            _crosshairPinned = true;
+          }
         }
         _model.click(hit.index, hit.local);
         if (isDoubleTap) _model.click(hit.index, hit.local, doubleClick: true);
+    }
+  }
+
+  // ---- mouse hover (desktop / web) ----
+
+  void _onHover(PointerHoverEvent e) {
+    final hit = _hitTest(e.localPosition);
+    final o = _model.options;
+    if (hit.region == _Region.pane && _mode == _DragMode.none) {
+      _model.setCrosshairPosition(hit.index, hit.local);
+      _mouseCrosshair = true;
+    } else if (_mouseCrosshair) {
+      _model.setCrosshairPosition(null, null);
+      _mouseCrosshair = false;
+    }
+    final cursor = switch (hit.region) {
+      _Region.separator => SystemMouseCursors.resizeRow,
+      _Region.leftAxis ||
+      _Region.rightAxis => _canScalePriceAxis(hit) ? SystemMouseCursors.resizeUpDown : SystemMouseCursors.basic,
+      _Region.timeAxis =>
+        o.handleScale.axisPressedMouseMove.time ? SystemMouseCursors.resizeLeftRight : SystemMouseCursors.basic,
+      _Region.pane => _model.hovered?.cursor ?? SystemMouseCursors.basic,
+    };
+    final separator = hit.region == _Region.separator ? hit.index : null;
+    if (cursor != _cursor || separator != _hoverSeparator) {
+      setState(() {
+        _cursor = cursor;
+        _hoverSeparator = separator;
+      });
+    }
+  }
+
+  void _onExit(PointerExitEvent e) {
+    if (_mouseCrosshair && _mode == _DragMode.none) {
+      _model.setCrosshairPosition(null, null);
+      _mouseCrosshair = false;
+    }
+    if (_hoverSeparator != null || _cursor != MouseCursor.defer) {
+      setState(() {
+        _hoverSeparator = null;
+        _cursor = MouseCursor.defer;
+      });
     }
   }
 
@@ -393,46 +502,63 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      Semantics(container: true, label: widget.semanticsLabel, value: _semanticsValue, child: _buildChart(context));
+
+  Widget _buildChart(BuildContext context) {
     final pixelRatio = MediaQuery.devicePixelRatioOf(context);
-    return Listener(
-      onPointerSignal: _onPointerSignal,
-      onPointerDown: (e) {
-        if (_pointersDown++ == 0) _downPosition = e.localPosition;
-      },
-      onPointerUp: (_) => _pointersDown = (_pointersDown - 1).clamp(0, 100),
-      onPointerCancel: (_) => _pointersDown = (_pointersDown - 1).clamp(0, 100),
-      child: RawGestureDetector(
-        behavior: HitTestBehavior.opaque,
-        gestures: {
-          ScaleGestureRecognizer: GestureRecognizerFactoryWithHandlers<ScaleGestureRecognizer>(
-            () => ScaleGestureRecognizer(debugOwner: this),
-            (r) => r
-              ..onStart = _onScaleStart
-              ..onUpdate = _onScaleUpdate
-              ..onEnd = _onScaleEnd,
-          ),
-          LongPressGestureRecognizer: GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
-            () => LongPressGestureRecognizer(debugOwner: this),
-            (r) => r
-              ..onLongPressStart = _onLongPressStart
-              ..onLongPressMoveUpdate = _onLongPressMove
-              ..onLongPressEnd = _onLongPressEnd,
-          ),
-          TapGestureRecognizer: GestureRecognizerFactoryWithHandlers<TapGestureRecognizer>(
-            () => TapGestureRecognizer(debugOwner: this),
-            (r) => r.onTapUp = _onTapUp,
-          ),
+    return MouseRegion(
+      cursor: _cursor,
+      onHover: _onHover,
+      onExit: _onExit,
+      child: Listener(
+        onPointerSignal: _onPointerSignal,
+        onPointerDown: (e) {
+          if (_pointersDown++ == 0) _downPosition = e.localPosition;
         },
-        child: RepaintBoundary(
-          key: _boundaryKey,
-          child: SizedBox.expand(
-            child: CustomPaint(
-              painter: ChartPainter(
-                model: _model,
-                pixelRatio: pixelRatio,
-                textCache: _textCache,
-                activeSeparator: _activeSeparator,
+        onPointerUp: (_) => _pointersDown = (_pointersDown - 1).clamp(0, 100),
+        onPointerCancel: (_) => _pointersDown = (_pointersDown - 1).clamp(0, 100),
+        child: RawGestureDetector(
+          behavior: HitTestBehavior.opaque,
+          gestures: {
+            ScaleGestureRecognizer: GestureRecognizerFactoryWithHandlers<ScaleGestureRecognizer>(
+              () => ScaleGestureRecognizer(debugOwner: this),
+              (r) => r
+                ..onStart = _onScaleStart
+                ..onUpdate = _onScaleUpdate
+                ..onEnd = _onScaleEnd,
+            ),
+            LongPressGestureRecognizer: GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
+              // Touch only: with a mouse the crosshair already follows hovering.
+              () => LongPressGestureRecognizer(
+                debugOwner: this,
+                supportedDevices: const {
+                  PointerDeviceKind.touch,
+                  PointerDeviceKind.stylus,
+                  PointerDeviceKind.invertedStylus,
+                  PointerDeviceKind.unknown,
+                },
+              ),
+              (r) => r
+                ..onLongPressStart = _onLongPressStart
+                ..onLongPressMoveUpdate = _onLongPressMove
+                ..onLongPressEnd = _onLongPressEnd,
+            ),
+            TapGestureRecognizer: GestureRecognizerFactoryWithHandlers<TapGestureRecognizer>(
+              () => TapGestureRecognizer(debugOwner: this),
+              (r) => r.onTapUp = _onTapUp,
+            ),
+          },
+          child: RepaintBoundary(
+            key: _boundaryKey,
+            child: SizedBox.expand(
+              child: CustomPaint(
+                painter: ChartPainter(
+                  model: _model,
+                  pixelRatio: pixelRatio,
+                  textCache: _textCache,
+                  activeSeparator: _activeSeparator ?? _hoverSeparator,
+                ),
               ),
             ),
           ),

@@ -9,7 +9,7 @@ charts for Flutter. The package is a native Dart port of
 
 ```yaml
 dependencies:
-  swm_chart: ^0.4.1
+  swm_chart: ^0.5.0
 ```
 
 There is no WebView. Everything is drawn with `CustomPainter`, and the
@@ -36,6 +36,8 @@ Everything in Lightweight Charts v5.2.1 that applies to Flutter is ported:
 | Localization: locale, date format, month names, price/percentage/tick mark formatters | ✅ |
 | Events: crosshair move, click, double click, visible logical/time range, size, data changed | ✅ |
 | Gestures: pan + kinetic, pinch, long-press crosshair, axis drag, double-tap reset, mouse wheel — each switchable like `handleScroll` / `handleScale` | ✅ |
+| Desktop / web: crosshair follows the mouse, resize cursors on axes and separators, primitive `cursor` | ✅ |
+| Accessibility: `Semantics` label and a summary of the last values | ✅ |
 | Attribution logo (opt-in), `takeScreenshot` | ✅ |
 
 Not applicable in Flutter: `autoSize`/`resize`/`width`/`height` (the widget
@@ -152,8 +154,19 @@ flutter drive --profile -d <device> \
   --driver=test_driver/perf_driver.dart --target=integration_test/perf_test.dart
 ```
 
+## Interaction
+
+| | Touch | Mouse |
+|---|---|---|
+| Crosshair | long-press and move; tap to show/hide | follows the pointer |
+| Scroll / zoom | drag (locked to its main direction), pinch | drag, wheel |
+| Scale an axis | drag it; double-tap resets | drag it; double-click resets |
+| Resize panes | drag the separator | drag the separator (`resizeRow` cursor) |
+
 ## Notes
 
+- `SwmChart(semanticsLabel: ...)` names the chart for screen readers; its
+  value lists each series' last value.
 - Inside a vertical `ListView`, vertical drags go to the list; set
   `handleScroll: HandleScrollOptions(vertTouchDrag: false)` so the chart never
   claims them.

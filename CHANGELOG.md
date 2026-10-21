@@ -1,3 +1,21 @@
+## 0.5.0
+
+* Desktop / web: the crosshair follows the mouse and hides when it leaves;
+  mouse clicks no longer toggle it. Cursors like upstream: `resizeRow` on
+  separators, `resizeUpDown` on price axes, `resizeLeftRight` on the time
+  axis; primitives and custom series can set `cursor` from `hitTest`.
+  Separators highlight on hover. Long-press is touch-only.
+* `alignLabels` is a port of upstream's overlap algorithm (verified against
+  it on 300 random label sets).
+* Time axis labels are clipped like upstream, and only aligned inside the
+  axis at fixed edges (`needAlignCoordinate`).
+* Last price animation reproduces upstream's three stages.
+* `PriceScaleOptions.textColor`.
+* Price axes can't be drag-scaled in percentage / indexed-to-100 modes,
+  like upstream.
+* Accessibility: `SwmChart.semanticsLabel` and a last-values summary.
+* CI and tag-based publishing workflows.
+
 ## 0.4.1
 
 * Homepage: https://stockworldmonitor.com/

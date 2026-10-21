@@ -2,6 +2,8 @@
 // (ICustomSeriesPaneView / ICustomSeriesPaneRenderer).
 import 'dart:ui';
 
+import 'package:flutter/services.dart' show MouseCursor;
+
 import '../data.dart';
 import '../series_options.dart';
 
@@ -60,7 +62,10 @@ class CustomConflationContext<T extends SeriesData> {
 
 /// Result of [CustomSeriesView.hitTest], like `CustomSeriesHitTestResult`.
 class CustomSeriesHitTestResult {
-  const CustomSeriesHitTestResult({required this.distance, this.objectId});
+  const CustomSeriesHitTestResult({required this.distance, this.objectId, this.cursor});
+
+  /// Mouse cursor while hovering it (desktop/web); `null` keeps the default.
+  final MouseCursor? cursor;
 
   /// Distance from the pointer in logical pixels; closer hits win.
   final double distance;

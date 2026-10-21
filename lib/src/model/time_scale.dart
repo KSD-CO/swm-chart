@@ -35,11 +35,15 @@ class IndexRange {
 }
 
 class TimeMark {
-  TimeMark(this.coord, this.label, this.weight);
+  TimeMark(this.coord, this.label, this.weight, {this.needAlignCoordinate = false});
 
   final double coord;
   final String label;
   final int weight;
+
+  /// Whether the label must be shifted to stay inside the axis (fixed edges
+  /// or no scrolling), like upstream's `TimeMark.needAlignCoordinate`.
+  final bool needAlignCoordinate;
 }
 
 class TimeScale {
@@ -70,6 +74,7 @@ class TimeScale {
   final TickMarks _tickMarks = TickMarks();
   List<TimeMark>? _marksCache;
   double _marksFontSize = 0;
+  bool _marksAllDisabled = false;
 
   /// Indices where at least one series has data (not only whitespace),
   /// used by `ignoreWhitespaceIndices`.
@@ -456,9 +461,17 @@ class TimeScale {
 
   void _invalidateMarks() => _marksCache = null;
 
-  List<TimeMark> marks(double fontSize, String Function(TickMark) formatLabel) {
+  /// [allScalingAndScrollingDisabled]: no gesture can move the time scale,
+  /// so labels at the edges are aligned instead of clipped.
+  List<TimeMark> marks(
+    double fontSize,
+    String Function(TickMark) formatLabel, {
+    bool allScalingAndScrollingDisabled = false,
+  }) {
     if (isEmpty) return const [];
-    if (_marksCache != null && _marksFontSize == fontSize) return _marksCache!;
+    if (_marksCache != null && _marksFontSize == fontSize && _marksAllDisabled == allScalingAndScrollingDisabled) {
+      return _marksCache!;
+    }
 
     final spacing = _barSpacing;
     final pixelsPer8Characters = (fontSize + 4) * 5;
@@ -477,14 +490,28 @@ class TimeScale {
       indicesWithData: _indicesWithData,
       indicesWithDataId: _indicesWithDataId,
     );
+    // Earliest index that may hold the second label, and latest that may
+    // hold the second to last one.
+    final earliestIndexOfSecondLabel = indexPerLabel;
+    final indexOfSecondLastLabel = _times.length - 1 - indexPerLabel;
+    final leftEdgeFixed = _options.fixLeftEdge || allScalingAndScrollingDisabled;
+    final rightEdgeFixed = _options.fixRightEdge || allScalingAndScrollingDisabled;
+
     final result = <TimeMark>[];
     for (final tm in items) {
       if (tm.index < firstBar || tm.index > lastBar) continue;
-      result.add(TimeMark(indexToCoordinate(tm.index), formatLabel(tm), tm.weight));
+      // With enough room every label is drawn as usual; otherwise labels
+      // that can't be scrolled into view are aligned to the edges.
+      final needAlign =
+          !(_barSpacing > maxLabelWidth / 2 && !allScalingAndScrollingDisabled) &&
+          ((leftEdgeFixed && tm.index <= earliestIndexOfSecondLabel) ||
+              (rightEdgeFixed && tm.index >= indexOfSecondLastLabel));
+      result.add(TimeMark(indexToCoordinate(tm.index), formatLabel(tm), tm.weight, needAlignCoordinate: needAlign));
     }
 
     _marksCache = result;
     _marksFontSize = fontSize;
+    _marksAllDisabled = allScalingAndScrollingDisabled;
     return result;
   }
 

@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-import 'package:flutter/animation.dart' show Curves;
 import 'package:flutter/rendering.dart';
 
 import '../model/chart_model.dart';
@@ -10,6 +9,8 @@ import '../model/series.dart';
 import '../options.dart';
 import '../plugins/primitive.dart';
 import '../renderers/draw_utils.dart';
+import '../renderers/label_alignment.dart';
+import '../renderers/last_price_animation.dart';
 import '../renderers/paint_context.dart';
 import 'attribution_logo.dart';
 
@@ -199,7 +200,7 @@ class ChartPainter extends CustomPainter {
 
     if (grid.vertLines.visible) {
       paint.color = grid.vertLines.color;
-      for (final mark in model.timeScale.marks(_o.layout.fontSize, model.formatTickMark)) {
+      for (final mark in model.timeMarks()) {
         final x = (mark.coord * pr).roundToDouble();
         drawVerticalLine(canvas, paint, x, 0, paneSize.height * pr, lineWidth, grid.vertLines.style);
       }
@@ -289,30 +290,30 @@ class ChartPainter extends CustomPainter {
   /// Port of `series-last-price-animation-renderer.ts`: a pulsing circle on
   /// the last point.
   void _paintLastPriceAnimation(Canvas canvas, Pane pane) {
+    final visible = model.timeScale.visibleStrictRange();
+    if (visible == null) return;
     for (final s in pane.series) {
       if (s is! LineLikeSeriesModel || !s.visible || s.priceScale.isEmpty) continue;
       final mode = s.options.lastPriceAnimation;
       if (mode == LastPriceAnimationMode.disabled) continue;
       final last = s.lastItem;
-      if (last == null) continue;
-      final elapsed = mode == LastPriceAnimationMode.continuous
+      // Like upstream: only while the last bar is visible.
+      if (last == null || !visible.contains(s.indices.last)) continue;
+      final active = mode == LastPriceAnimationMode.continuous || model.now <= s.animationEnd;
+      // When idle, upstream draws the final (resting) stage.
+      final elapsed = !active
+          ? lastPriceAnimationPeriod - const Duration(milliseconds: 1)
+          : mode == LastPriceAnimationMode.continuous
           ? model.now
-          : (s.lastUpdateTime == null ? null : model.now - s.lastUpdateTime!);
-      if (elapsed == null || (mode == LastPriceAnimationMode.onDataUpdate && elapsed >= lastPriceAnimationPeriod)) {
-        continue;
-      }
-      final t =
-          (elapsed.inMicroseconds % lastPriceAnimationPeriod.inMicroseconds) / lastPriceAnimationPeriod.inMicroseconds;
-      final x = model.timeScale.indexToCoordinate(s.indices.last);
-      final y = s.priceToCoordinate(last.value);
-      final color = s.lineColor(last);
-      final radius = s.options.lineWidth + 1;
-      // Expanding, fading ring over the first half of the period.
-      final ringT = (t * 2).clamp(0.0, 1.0);
-      final ringRadius = radius + (radius * 2.5) * Curves.easeOut.transform(ringT);
-      final alpha = (1 - ringT) * 0.4;
-      canvas.drawCircle(Offset(x, y), ringRadius, Paint()..color = color.withValues(alpha: alpha * color.a));
-      canvas.drawCircle(Offset(x, y), radius, Paint()..color = color);
+          : model.now - s.animationStart;
+      paintLastPriceAnimation(
+        canvas,
+        Offset(model.timeScale.indexToCoordinate(s.indices.last), s.priceToCoordinate(last.value)),
+        pr,
+        s.options.lineWidth,
+        s.lineColor(last),
+        elapsed,
+      );
     }
   }
 
@@ -328,9 +329,9 @@ class ChartPainter extends CustomPainter {
         final text = _text(label.title, color: label.textColor ?? contrastColor(label.background));
         final width = text.width + padding * 2;
         final left = side == AxisSide.right ? paneSize.width - width : 0.0;
-        final rect = Rect.fromLTWH(left, label.y - _labelHeight / 2, width, _labelHeight);
+        final rect = Rect.fromLTWH(left, label.render - _labelHeight / 2, width, _labelHeight);
         canvas.drawRect(rect, Paint()..color = label.background);
-        text.paint(canvas, Offset(rect.left + padding, label.y - text.height / 2));
+        text.paint(canvas, Offset(rect.left + padding, label.render - text.height / 2));
       }
     }
   }
@@ -339,27 +340,11 @@ class ChartPainter extends CustomPainter {
 
   List<PriceAxisLabelSpec> _alignedLabels(Pane pane, AxisSide side) {
     final labels = model.priceAxisLabels(pane, side);
-    if (model.scaleOnSide(pane, side).options.alignLabels) _alignLabels(labels, pane.height);
+    if (model.scaleOnSide(pane, side).options.alignLabels && labels.isNotEmpty) {
+      final center = labels.where((l) => l.isCenter).firstOrNull?.y ?? pane.height / 2;
+      fixLabelOverlap(labels, pane.height, _labelHeight, center);
+    }
     return labels;
-  }
-
-  /// Pushes overlapping labels apart, like lightweight-charts' `alignLabels`.
-  void _alignLabels(List<PriceAxisLabelSpec> labels, double paneHeight) {
-    if (labels.length < 2) return;
-    final h = _labelHeight;
-    labels.sort((a, b) => a.y.compareTo(b.y));
-    for (var i = 1; i < labels.length; i++) {
-      final minY = labels[i - 1].y + h;
-      if (labels[i].y < minY) labels[i].y = minY;
-    }
-    final overflow = labels.last.y + h / 2 - paneHeight;
-    if (overflow > 0) {
-      labels.last.y -= overflow;
-      for (var i = labels.length - 2; i >= 0; i--) {
-        final maxY = labels[i + 1].y - h;
-        if (labels[i].y > maxY) labels[i].y = maxY;
-      }
-    }
   }
 
   void _paintPriceAxis(Canvas canvas, int index, Pane pane, AxisSide side) {
@@ -389,7 +374,7 @@ class ChartPainter extends CustomPainter {
     final tickPaint = Paint()..color = ps.options.borderColor;
     final tickWidth = math.max(1, pr.floor()) / pr;
     for (final mark in ps.marks()) {
-      final t = _text(mark.label);
+      final t = _text(mark.label, color: ps.options.textColor);
       t.paint(canvas, Offset(textX(t), mark.coord - t.height / 2));
       if (ps.options.ticksVisible) {
         final x = isLeft ? left + width - 1 - tickLength : left + 1;
@@ -398,7 +383,7 @@ class ChartPainter extends CustomPainter {
     }
 
     for (final label in _alignedLabels(pane, side)) {
-      _paintAxisLabel(canvas, left, width, label.y, label.text, label.background, label.textColor, isLeft, textX);
+      _paintAxisLabel(canvas, left, width, label.render, label.text, label.background, label.textColor, isLeft, textX);
     }
 
     final c = model.crosshair;
@@ -466,7 +451,7 @@ class ChartPainter extends CustomPainter {
 
     canvas.save();
     canvas.clipRect(Rect.fromLTWH(paneLeft, top, paneWidth, height));
-    final marks = ts.marks(f, model.formatTickMark);
+    final marks = model.timeMarks();
     if (marks.isNotEmpty) {
       final maxWeight = model.behavior.maxTickMarkWeight(marks.map((m) => m.weight));
       final bold = ts.options.allowBoldLabels;
@@ -476,7 +461,18 @@ class ChartPainter extends CustomPainter {
       for (final mark in marks) {
         if (mark.coord < -50 || mark.coord > paneWidth + 50) continue;
         final t = _text(mark.label, weight: bold && mark.weight >= maxWeight ? FontWeight.bold : FontWeight.normal);
-        final x = (mark.coord - t.width / 2).clamp(0.0, math.max(0.0, paneWidth - t.width)).toDouble();
+        // Like upstream: labels are centered and clipped by the axis, except
+        // those flagged to be aligned inside it.
+        var center = mark.coord;
+        if (mark.needAlignCoordinate) {
+          final left = (center - t.width / 2).floorToDouble() + 0.5;
+          if (left < 0) {
+            center += -left;
+          } else if (left + t.width > paneWidth) {
+            center -= left + t.width - paneWidth;
+          }
+        }
+        final x = center - t.width / 2;
         t.paint(canvas, Offset(paneLeft + x, labelY));
         if (ts.options.ticksVisible) {
           canvas.drawRect(Rect.fromLTWH(paneLeft + mark.coord - tickWidth / 2, top + 1, tickWidth, 5), tickPaint);

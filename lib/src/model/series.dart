@@ -98,8 +98,21 @@ abstract class SeriesModel<T extends SeriesData, O extends SeriesOptions> {
   /// First visible value; the base of the percentage price scale modes.
   double? baseValue;
 
-  /// Time of the last [update], used by [LastPriceAnimationMode.onDataUpdate].
-  Duration? lastUpdateTime;
+  /// Pulse window of [LastPriceAnimationMode.onDataUpdate].
+  Duration animationStart = Duration.zero;
+  Duration animationEnd = const Duration(microseconds: -1);
+
+  /// Upstream's `onNewRealtimeDataReceived`: start a pulse, or extend the
+  /// running one when it is about to end.
+  void onRealtimeUpdate(Duration now, Duration period) {
+    final left = animationEnd - now;
+    if (left > Duration.zero) {
+      if (left < period ~/ 4) animationEnd += period;
+      return;
+    }
+    animationStart = now;
+    animationEnd = now + period;
+  }
 
   O get options => _options;
 

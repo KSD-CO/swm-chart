@@ -15,6 +15,8 @@ import 'price_scale.dart';
 import 'primitive_context.dart';
 import 'series.dart';
 import 'time_scale.dart';
+import '../renderers/last_price_animation.dart';
+import '../renderers/label_alignment.dart';
 import 'hit_test.dart';
 import 'horz_scale_behavior.dart';
 import 'tick_marks.dart';
@@ -23,7 +25,6 @@ import 'time_utils.dart' show TickMarkWeight;
 export 'pane.dart' show leftPriceScaleId, rightPriceScaleId;
 
 /// Duration of one pulse of the last price animation.
-const Duration lastPriceAnimationPeriod = Duration(milliseconds: 2600);
 
 enum AxisSide { left, right }
 
@@ -58,10 +59,22 @@ class ModelEventParams {
 }
 
 /// A label on a price axis.
-class PriceAxisLabelSpec {
-  PriceAxisLabelSpec(this.y, this.text, this.background, {this.textColor, this.title = ''});
+class PriceAxisLabelSpec implements AlignableLabel {
+  PriceAxisLabelSpec(this.y, this.text, this.background, {this.textColor, this.title = ''}) : render = y;
 
-  double y;
+  /// Where the label belongs.
+  final double y;
+
+  /// Where it is drawn after `alignLabels`.
+  @override
+  double render;
+
+  @override
+  double get coordinate => y;
+
+  /// First label of the scale's first series: the center `alignLabels`
+  /// pushes the others away from, like upstream's `centerSource`.
+  bool isCenter = false;
   final String text;
   final Color background;
   final Color? textColor;
@@ -140,8 +153,11 @@ class ChartModel extends ChangeNotifier {
 
   bool get hasCrosshair => _crosshairPoint != null;
 
-  /// Series under the crosshair, drawn on top with `hoveredSeriesOnTop`.
-  SeriesModel? hoveredSeries;
+  /// What the crosshair is over: its series is drawn on top with
+  /// `hoveredSeriesOnTop`, its cursor used on desktop.
+  HitTestResult? hovered;
+
+  SeriesModel? get hoveredSeries => hovered?.series;
 
   String _scaleIdOf(SeriesModel s) => s.options.priceScaleId ?? defaultVisiblePriceScaleId;
 
@@ -344,12 +360,9 @@ class ChartModel extends ChangeNotifier {
   }
 
   void updateSeries(SeriesModel s, SeriesData item) {
-    final previous = s.lastItem;
     final kind = s.update(item);
-    final last = s.lastItem;
-    if (last != null &&
-        (previous == null || kind != SeriesUpdateKind.replaced || s.closeValue(previous) != s.closeValue(last))) {
-      s.lastUpdateTime = now;
+    if (s is LineLikeSeriesModel && s.options.lastPriceAnimation == LastPriceAnimationMode.onDataUpdate) {
+      s.onRealtimeUpdate(now, lastPriceAnimationPeriod);
     }
     final time = item.time;
     switch (kind) {
@@ -649,6 +662,25 @@ class ChartModel extends ChangeNotifier {
 
   String formatTickMark(TickMark mark) => behavior.formatTickMark(mark, _options);
 
+  /// Upstream's `_isAllScalingAndScrollingDisabled`.
+  bool get allScalingAndScrollingDisabled {
+    final scroll = _options.handleScroll, scale = _options.handleScale;
+    return !scroll.horzTouchDrag &&
+        !scroll.mouseWheel &&
+        !scroll.pressedMouseMove &&
+        !scroll.vertTouchDrag &&
+        !scale.axisDoubleClickReset.time &&
+        !scale.axisPressedMouseMove.time &&
+        !scale.mouseWheel &&
+        !scale.pinch;
+  }
+
+  List<TimeMark> timeMarks() => timeScale.marks(
+    _options.layout.fontSize,
+    formatTickMark,
+    allScalingAndScrollingDisabled: allScalingAndScrollingDisabled,
+  );
+
   PrimitiveContextImpl primitiveContext(Pane pane, SeriesModel? s, [Canvas? canvas]) =>
       PrimitiveContextImpl(this, pane, s, canvas);
 
@@ -657,8 +689,10 @@ class ChartModel extends ChangeNotifier {
   List<PriceAxisLabelSpec> priceAxisLabels(Pane pane, AxisSide side) {
     final visible = timeScale.visibleStrictRange();
     final labels = <PriceAxisLabelSpec>[];
+    final mainSeries = pane.series.where((s) => s.priceScale == scaleOnSide(pane, side)).firstOrNull;
     for (final s in pane.series) {
       if (sideOf(pane, s.priceScale) != side || s.priceScale.isEmpty) continue;
+      final firstOfSeries = labels.length;
       final item = s.priceLineItem(visible);
       if (s.visible && s.options.lastValueVisible && item != null) {
         final price = s.closeValue(item);
@@ -692,6 +726,7 @@ class ChartModel extends ChangeNotifier {
           }
         }
       }
+      if (s == mainSeries && labels.length > firstOfSeries) labels[firstOfSeries].isCenter = true;
     }
     if (pane.primitives.isNotEmpty && side == (sideOf(pane, pane.defaultPriceScale) ?? AxisSide.right)) {
       final ctx = primitiveContext(pane, null);
@@ -729,7 +764,7 @@ class ChartModel extends ChangeNotifier {
     _crosshairExact = exact;
     _resolveCrosshair();
     final params = _eventParams(_crosshair);
-    hoveredSeries = params.hit?.series;
+    hovered = params.hit;
     notifyListeners();
     _emit(crosshairMoveListeners, params);
   }
@@ -835,8 +870,7 @@ class ChartModel extends ChangeNotifier {
         case LastPriceAnimationMode.continuous:
           return true;
         case LastPriceAnimationMode.onDataUpdate:
-          final t = s.lastUpdateTime;
-          if (t != null && now - t < lastPriceAnimationPeriod) return true;
+          if (now <= s.animationEnd) return true;
       }
     }
     return false;

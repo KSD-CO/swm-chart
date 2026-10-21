@@ -2,6 +2,8 @@
 // (ISeriesPrimitive / IPanePrimitive).
 import 'dart:ui';
 
+import 'package:flutter/services.dart' show MouseCursor;
+
 import '../data.dart';
 import '../model/time_scale.dart';
 import '../series_options.dart';
@@ -43,7 +45,12 @@ class PrimitiveHitTestResult {
     this.distance = 0,
     this.hitTestPriority,
     this.itemType = PrimitiveItemType.primitive,
+    this.cursor,
   });
+
+  /// Mouse cursor while hovering it (desktop/web), like upstream's
+  /// `cursorStyle`; `null` keeps the default.
+  final MouseCursor? cursor;
 
   /// Among hits on the same z-order: 0 for ranges, 1 for lines, 2 for
   /// points (higher wins). `null` counts as a point.

@@ -246,6 +246,7 @@ class PriceScaleOptions {
     this.alignLabels = true,
     this.ticksVisible = false,
     this.ensureEdgeTickMarksVisible = false,
+    this.textColor,
   });
 
   final bool autoScale;
@@ -270,6 +271,9 @@ class PriceScaleOptions {
   /// Always label the top and bottom of the scale (autoscale only).
   final bool ensureEdgeTickMarksVisible;
 
+  /// Color of the tick mark labels; `null` uses `LayoutOptions.textColor`.
+  final Color? textColor;
+
   PriceScaleOptions copyWith({
     bool? autoScale,
     PriceScaleMode? mode,
@@ -284,6 +288,7 @@ class PriceScaleOptions {
     bool? alignLabels,
     bool? ticksVisible,
     bool? ensureEdgeTickMarksVisible,
+    Color? textColor,
   }) {
     return PriceScaleOptions(
       autoScale: autoScale ?? this.autoScale,
@@ -299,6 +304,7 @@ class PriceScaleOptions {
       alignLabels: alignLabels ?? this.alignLabels,
       ticksVisible: ticksVisible ?? this.ticksVisible,
       ensureEdgeTickMarksVisible: ensureEdgeTickMarksVisible ?? this.ensureEdgeTickMarksVisible,
+      textColor: textColor ?? this.textColor,
     );
   }
 }

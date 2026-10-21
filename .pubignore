@@ -1,9 +1,12 @@
 # Not needed by package users.
 tool/
+.github/
 example/android/
 example/ios/
 example/macos/
 example/build/
 example/.dart_tool/
+.github/
 build/
 .dart_tool/
+.github/
