@@ -19,7 +19,7 @@ void main() {
   testWidgets('pinch, long-press crosshair, dark mode', (tester) async {
     await tester.pumpWidget(const DemoApp());
     await tester.pump(const Duration(seconds: 1));
-    final chartFinder = find.byType(SwmChart);
+    final chartFinder = find.byType(SwmChart).first;
     final state = tester.state<State<StatefulWidget>>(chartFinder);
     final controller = (state.widget as SwmChart).controller;
     final rect = tester.getRect(chartFinder);
@@ -76,7 +76,7 @@ void main() {
     // The area series animates its last price continuously, so the frame
     // queue never settles: pump fixed durations instead of pumpAndSettle.
     const menu = Duration(milliseconds: 600);
-    await tester.tap(find.byIcon(Icons.candlestick_chart));
+    await tester.tap(find.byTooltip('Series type'));
     await tester.pump(menu);
     await tester.tap(find.text('area').last);
     await tester.pump(menu);
@@ -87,5 +87,13 @@ void main() {
     controller.clearCrosshairPosition();
     expect(controller.priceScale().options.mode, PriceScaleMode.percentage);
     await checkpoint(tester, 'area_percent');
+
+    // Yield curve and options chain tabs.
+    await tester.tap(find.widgetWithText(NavigationDestination, 'Yield curve'));
+    await tester.pump(menu);
+    await checkpoint(tester, 'yield');
+    await tester.tap(find.widgetWithText(NavigationDestination, 'Options'));
+    await tester.pump(menu);
+    await checkpoint(tester, 'options');
   });
 }

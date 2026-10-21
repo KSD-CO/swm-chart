@@ -54,6 +54,8 @@ void main() {
     expect(ts.rightOffset, 5);
   });
 
+  pendingRangeTests();
+
   group('timeToIndex', () {
     test('returns index for time on scale', () {
       final ts = _make(const TimeScaleOptions(), lastIndex: 2);
@@ -103,5 +105,17 @@ void main() {
     for (var i = 1; i < marks.length; i++) {
       expect(marks[i].coord - marks[i - 1].coord, greaterThanOrEqualTo(60 - 1e-9));
     }
+  });
+}
+
+void pendingRangeTests() {
+  test('fitContent before layout is applied on first width', () {
+    final ts = _make(const TimeScaleOptions(), lastIndex: 99);
+    ts.fitContent();
+    ts.setWidth(400);
+    ts.applyPendingRange();
+    final r = ts.visibleLogicalRange()!;
+    expect(r.from, closeTo(0, 1e-9));
+    expect(r.to, closeTo(99, 1e-9));
   });
 }

@@ -4,6 +4,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:swm_chart/swm_chart.dart';
 
+import 'other_charts.dart';
+
 void main() => runApp(const DemoApp());
 
 class DemoApp extends StatelessWidget {
@@ -15,7 +17,41 @@ class DemoApp extends StatelessWidget {
       title: 'swm_chart demo',
       theme: ThemeData(colorSchemeSeed: Colors.teal, useMaterial3: true),
       darkTheme: ThemeData(colorSchemeSeed: Colors.teal, brightness: Brightness.dark, useMaterial3: true),
-      home: const TradingScreen(),
+      home: const HomeScreen(),
+    );
+  }
+}
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  int _tab = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: IndexedStack(
+        index: _tab,
+        children: [
+          const TradingScreen(),
+          Scaffold(appBar: AppBar(title: const Text('Yield curve')), body: const SafeArea(child: YieldCurveScreen())),
+          Scaffold(appBar: AppBar(title: const Text('Options chain')), body: const SafeArea(child: OptionsChainScreen())),
+        ],
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _tab,
+        onDestinationSelected: (i) => setState(() => _tab = i),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.candlestick_chart), label: 'Trading'),
+          NavigationDestination(icon: Icon(Icons.show_chart), label: 'Yield curve'),
+          NavigationDestination(icon: Icon(Icons.stacked_bar_chart), label: 'Options'),
+        ],
+      ),
     );
   }
 }

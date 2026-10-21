@@ -150,7 +150,14 @@ class ChartModel extends ChangeNotifier {
   /// Series under the crosshair, drawn on top with `hoveredSeriesOnTop`.
   SeriesModel? hoveredSeries;
 
-  String _scaleIdOf(SeriesModel s) => s.options.priceScaleId ?? _options.defaultVisiblePriceScaleId;
+  String _scaleIdOf(SeriesModel s) => s.options.priceScaleId ?? defaultVisiblePriceScaleId;
+
+  /// Like upstream: the only visible side scale, else the preferred one.
+  String get defaultVisiblePriceScaleId {
+    final left = _options.leftPriceScale.visible, right = _options.rightPriceScale.visible;
+    if (left != right) return left ? leftPriceScaleId : rightPriceScaleId;
+    return _options.defaultVisiblePriceScaleId;
+  }
 
   /// Series of [pane] in drawing order.
   List<SeriesModel> drawOrder(Pane pane) {
@@ -477,6 +484,12 @@ class ChartModel extends ChangeNotifier {
       if (left <= _leftAxisWidth && right <= _rightAxisWidth) break;
       _leftAxisWidth = math.max(_leftAxisWidth, left);
       _rightAxisWidth = math.max(_rightAxisWidth, right);
+    }
+    if (timeScale.hasPendingRange) {
+      // fitContent()/setVisibleLogicalRange() before the first layout:
+      // apply now that the pane width is final.
+      timeScale.applyPendingRange();
+      _recalculateAutoScale();
     }
 
     _resolveCrosshair();

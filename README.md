@@ -10,22 +10,27 @@ coordinates, so they stay sharp.
 
 ## Features
 
-| Area | Status |
+Everything in Lightweight Charts v5.2.1 that applies to Flutter is ported:
+
+| Area | |
 |---|---|
-| Series: Candlestick, Bar, Line, Area, Baseline, Histogram | ✅ |
-| Line types: simple, stepped, curved (monotone, as upstream) | ✅ |
-| Multiple panes: stretch factors, draggable separators, add/remove/swap/move | ✅ |
-| Left and right price scales + overlay scales (e.g. volume) | ✅ |
-| Price scale modes: normal, logarithmic, percentage, indexed-to-100 | ✅ |
-| Time scale: bar spacing, right offset, tick marks by weight, fix edges | ✅ port of upstream |
-| Crosshair: normal / magnet / magnet OHLC / hidden, per-pane, `setCrosshairPosition` | ✅ |
-| Last value labels, price line (last bar / last visible), custom price lines | ✅ |
-| Last price animation (continuous / on data update) | ✅ |
-| Plugins: primitives API, series markers, text & image watermarks | ✅ |
-| `autoscaleInfoProvider`, `barsInLogicalRange`, `takeScreenshot` | ✅ |
-| Events: crosshair move, click, double click, visible logical/time range, size | ✅ |
-| Gestures: pan + kinetic, pinch zoom, long-press crosshair, axis drag, double-tap reset | ✅ |
-| Whitespace data, custom series, conflation | ⏳ not yet |
+| Series: Candlestick, Bar, Line, Area, Baseline, Histogram, **custom series** | ✅ |
+| Whitespace data, line types (simple, stepped, curved monotone) | ✅ |
+| Chart types: time (`ChartController()`), **yield curve** (`.yieldCurve`), **options/price axis** (`.options`) | ✅ |
+| Multiple panes: stretch factors, draggable separators, add/remove/swap/move, `addDefaultPane` | ✅ |
+| Price scales: left, right, overlays (`overlayPriceScales`); normal, log, percentage, indexed-to-100; edge tick marks, ticks | ✅ |
+| Time scale: bar spacing, right offset (bars or pixels), fix edges, lock range on resize, uniform distribution, ignore whitespace, conflation | ✅ |
+| Crosshair: normal / magnet / magnet OHLC / hidden, per pane, `setCrosshairPosition`, tracking mode | ✅ |
+| Last value labels, price line source, custom price lines, base line, last price animation | ✅ |
+| Hit testing: `hoveredSeries` / `hoveredObjectId`, `hoveredSeriesOnTop` | ✅ |
+| Plugins: primitives API, series markers, up/down markers, text & image watermarks | ✅ |
+| Localization: locale, date format, month names, price/percentage/tick mark formatters | ✅ |
+| Events: crosshair move, click, double click, visible logical/time range, size, data changed | ✅ |
+| Gestures: pan + kinetic, pinch, long-press crosshair, axis drag, double-tap reset, mouse wheel — each switchable like `handleScroll` / `handleScale` | ✅ |
+| Attribution logo, `takeScreenshot` | ✅ |
+
+Not applicable in Flutter: `autoSize`/`resize`/`width`/`height` (the widget
+takes its parent's size), `chartElement`, `colorSpace`, `colorParsers`.
 
 ## Usage
 
@@ -37,6 +42,7 @@ final chart = ChartController(
 final candles = chart.addCandlestickSeries();
 candles.setData([
   CandlestickData(time: 1704067200, open: 100, high: 105, low: 98, close: 103),
+  WhitespaceData(time: 1704153600), // a gap
   // ... time is a UTC timestamp in seconds, strictly ascending
 ]);
 
@@ -83,6 +89,18 @@ createTextWatermark(chart.panes()[0],
 chart.priceScale().applyOptions(const PriceScaleOptions(mode: PriceScaleMode.logarithmic));
 ```
 
+Yield curves and options chains:
+
+```dart
+final yields = ChartController.yieldCurve(); // time = months
+yields.addLineSeries().setData([LineData(time: 3, value: 5.4), LineData(time: 120, value: 4.3)]);
+
+final chain = ChartController.options(precision: 0); // time = strike price
+```
+
+Custom series: implement `CustomSeriesView<T>` (`priceValues`, `draw`) and
+add it with `chart.addCustomSeries(view)`.
+
 Custom drawings: extend `ChartPrimitive` (override `paint`, `priceAxisLabels`,
 `timeAxisLabels`, `autoscaleInfo`) and attach it with
 `series.attachPrimitive(...)` or `pane.attachPrimitive(...)`.
@@ -91,18 +109,22 @@ The API names follow upstream (`addCandlestickSeries`, `setData`, `update`,
 `timeScale().fitContent()`, `scrollToRealTime()`, `subscribeCrosshairMove`, …),
 so the upstream docs still apply.
 
-The `example/` app is a trading screen with switchable series types, volume,
-SMA, an RSI pane with buy/sell markers, a watermark, live updates, an OHLC
-legend, history lazy-loading, log/percentage scales and dark mode:
+The `example/` app has three tabs: a trading screen (switchable series types,
+volume, SMA, an RSI pane with buy/sell markers, a watermark, live updates, an
+OHLC legend, history lazy-loading, log/percentage scales, dark mode), a yield
+curve and an options chain:
 
 ```sh
 cd example && flutter run
 ```
 
-## Known limitations
+## Notes
 
-- A horizontal pan on the chart competes with a vertical `ListView` for the
-  gesture. The chart works best on its own screen or with a fixed height.
+- Inside a vertical `ListView`, vertical drags go to the list; set
+  `handleScroll: HandleScrollOptions(vertTouchDrag: false)` so the chart never
+  claims them.
+- `time` is a `num`: UTC seconds on time charts, months on yield curves,
+  prices on options charts. `series.data()` returns values and whitespace.
 - `SeriesOptions` are generated by `tool/gen_series_options.py`; edit the
   script, not `lib/src/series_options.dart`.
 - Labels use the UTC components of `time`. To show exchange-local time, shift
@@ -114,5 +136,7 @@ cd example && flutter run
 Apache License 2.0 (see `LICENSE` and `NOTICE`). The code is derived from
 TradingView Lightweight Charts™. Upstream's NOTICE requires apps that use it
 to show attribution to TradingView with a link to
-https://www.tradingview.com/ somewhere users can see it, for example an
-"About" screen.
+https://www.tradingview.com/. Like upstream, the chart shows the TradingView
+logo by default (`layout.attributionLogo`); pass
+`SwmChart(onAttributionLogoTap: ...)` to open the link. If you hide the logo,
+credit TradingView elsewhere in your app.

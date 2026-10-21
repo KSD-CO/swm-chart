@@ -59,6 +59,10 @@ class TimeScale {
   List<num> _times = const [];
   List<int> _weights = const [];
 
+  /// A fitContent/setLogicalRange requested before the first layout,
+  /// applied once the width is known.
+  void Function()? _pendingRange;
+
   double? _scrollStartX;
   double? _scaleStartX;
   ({double barSpacing, double rightOffset})? _transitionStart;
@@ -169,6 +173,17 @@ class TimeScale {
     _correctBarSpacing();
     _correctOffset();
     _invalidateMarks();
+  }
+
+  bool get hasPendingRange => _pendingRange != null;
+
+  /// Applies a range requested before the first layout. Called by the chart
+  /// once the axis widths, and so the final width, are known.
+  void applyPendingRange() {
+    final pending = _pendingRange;
+    if (pending == null || _width == 0) return;
+    _pendingRange = null;
+    pending();
   }
 
   void update(List<num> times, List<int> weights, int firstChangedPointIndex) {
@@ -389,6 +404,10 @@ class TimeScale {
   }
 
   void fitContent() {
+    if (_width == 0) {
+      _pendingRange = fitContent;
+      return;
+    }
     if (_times.isEmpty) return;
     // Without rightOffsetPixels, include rightOffset so bar spacing leaves room for it.
     final rightOffsetBars = _options.rightOffsetPixels == null ? _options.rightOffset : 0.0;
@@ -398,7 +417,10 @@ class TimeScale {
   void setLogicalRange(LogicalRange range) => _setVisibleRange(range);
 
   void _setVisibleRange(LogicalRange range, {bool applyDefaultOffset = false}) {
-    if (_width == 0) return;
+    if (_width == 0) {
+      _pendingRange = () => _setVisibleRange(range, applyDefaultOffset: applyDefaultOffset);
+      return;
+    }
     final length = range.to - range.from + 1;
     final pixelOffset = applyDefaultOffset ? (_options.rightOffsetPixels ?? 0) : 0.0;
     _setBarSpacing((_width - pixelOffset) / length);
