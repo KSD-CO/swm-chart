@@ -1,3 +1,8 @@
+## 0.5.1
+
+* Screenshots on pub.dev and in the README (`tool/screenshots.sh`).
+* Example: yield curve with fixed edges so the axis end labels stay inside.
+
 ## 0.5.0
 
 * Desktop / web: the crosshair follows the mouse and hides when it leaves;
@@ -15,7 +20,6 @@
   like upstream.
 * Accessibility: `SwmChart.semanticsLabel` and a last-values summary.
 * CI and tag-based publishing workflows.
-* Screenshots on pub.dev and in the README (`tool/screenshots.sh`).
 
 ## 0.4.1
 

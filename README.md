@@ -17,7 +17,7 @@ charts for Flutter. The package is a native Dart port of
 
 ```yaml
 dependencies:
-  swm_chart: ^0.5.0
+  swm_chart: ^0.5.1
 ```
 
 There is no WebView. Everything is drawn with `CustomPainter`, and the
