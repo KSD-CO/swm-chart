@@ -15,6 +15,7 @@ class DemoApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Stock World Monitor Charts',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(colorSchemeSeed: Colors.teal, useMaterial3: true),
       darkTheme: ThemeData(colorSchemeSeed: Colors.teal, brightness: Brightness.dark, useMaterial3: true),
       home: const HomeScreen(),

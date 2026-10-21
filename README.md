@@ -7,6 +7,14 @@
 charts for Flutter. The package is a native Dart port of
 [TradingView Lightweight Charts™](https://github.com/tradingview/lightweight-charts) (based on v5.2.1).
 
+<p>
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/trading_light.png" width="200" alt="Candlesticks with volume, SMA, RSI and markers">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/trading_dark.png" width="200" alt="Dark theme with crosshair">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/area_dark.png" width="200" alt="Area series">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/yield_curve.png" width="200" alt="Yield curve">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/options_chain.png" width="200" alt="Options chain">
+</p>
+
 ```yaml
 dependencies:
   swm_chart: ^0.5.0

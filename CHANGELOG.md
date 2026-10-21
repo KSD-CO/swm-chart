@@ -15,6 +15,7 @@
   like upstream.
 * Accessibility: `SwmChart.semanticsLabel` and a last-values summary.
 * CI and tag-based publishing workflows.
+* Screenshots on pub.dev and in the README (`tool/screenshots.sh`).
 
 ## 0.4.1
 

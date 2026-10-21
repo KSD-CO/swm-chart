@@ -11,6 +11,14 @@ class YieldCurveScreen extends StatefulWidget {
 
 class _YieldCurveScreenState extends State<YieldCurveScreen> {
   late final ChartController _chart = ChartController.yieldCurve(
+    options: ChartOptions(
+      // Nothing to scroll to beyond the curve: fixed edges also keep the
+      // first and last axis labels inside the chart.
+      timeScale: const TimeScaleOptions(ignoreWhitespaceIndices: true, fixLeftEdge: true, fixRightEdge: true),
+      leftPriceScale: const PriceScaleOptions(visible: true),
+      rightPriceScale: const PriceScaleOptions(visible: false),
+      localization: LocalizationOptions(priceFormatter: (v) => '${v.toStringAsFixed(2)}%'),
+    ),
     yieldCurve: const YieldCurveOptions(minimumTimeRange: 360),
   );
 
