@@ -146,6 +146,7 @@ class ChartPainter extends CustomPainter {
         visibleRange: visible,
         paneSize: paneSize,
         backgroundColor: _o.layout.backgroundColor,
+        conflationFactor: ts.conflationFactor(pr),
       );
       _paintBaseLines(canvas, pane, paneSize);
       for (final s in pane.series) {

@@ -9,7 +9,8 @@ import 'paint_context.dart';
 int optimalBarWidth(double barSpacing, double pixelRatio) => (barSpacing * 0.3 * pixelRatio).floor();
 
 void paintBars(SeriesPaintContext ctx, BarSeriesModel series) {
-  final (from, to) = series.itemsInRange(ctx.visibleRange);
+  final items = series.renderItems(ctx.conflationFactor);
+  final (from, to) = items.itemsInRange(ctx.visibleRange);
   if (from >= to) return;
 
   final o = series.options;
@@ -31,10 +32,10 @@ void paintBars(SeriesPaintContext ctx, BarSeriesModel series) {
   final canvas = ctx.canvas;
 
   for (var i = from; i < to; i++) {
-    final d = series.data[i];
+    final d = items.data[i];
     paint.color = series.itemColor(d);
 
-    final x = ts.indexToCoordinate(series.indices[i]);
+    final x = ts.indexToCoordinate(items.indices[i]);
     final openY = series.priceToCoordinate(d.open);
     final highY = series.priceToCoordinate(d.high);
     final lowY = series.priceToCoordinate(d.low);

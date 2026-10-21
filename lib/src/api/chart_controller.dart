@@ -14,6 +14,7 @@ import '../model/price_scale.dart';
 import '../model/series.dart';
 import '../model/time_scale.dart';
 import '../options.dart';
+import '../plugins/custom_series.dart';
 import '../plugins/primitive.dart';
 import '../series_options.dart';
 
@@ -208,6 +209,14 @@ class ChartController {
     int paneIndex = 0,
   ]) =>
       _add(BaselineSeriesModel(options), paneIndex);
+
+  /// Adds a series drawn by [view], like upstream's `addCustomSeries`.
+  SeriesApi<T, CustomSeriesOptions> addCustomSeries<T extends SeriesData>(
+    CustomSeriesView<T> view, [
+    CustomSeriesOptions options = const CustomSeriesOptions(),
+    int paneIndex = 0,
+  ]) =>
+      _add(CustomSeriesModel<T>(view, options), paneIndex);
 
   HistogramSeriesApi addHistogramSeries([
     HistogramSeriesOptions options = const HistogramSeriesOptions(),

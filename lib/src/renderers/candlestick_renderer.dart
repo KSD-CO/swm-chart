@@ -38,17 +38,18 @@ class _Bar {
 }
 
 void paintCandlesticks(SeriesPaintContext ctx, CandlestickSeriesModel series) {
-  final (from, to) = series.itemsInRange(ctx.visibleRange);
+  final items = series.renderItems(ctx.conflationFactor);
+  final (from, to) = items.itemsInRange(ctx.visibleRange);
   if (from >= to) return;
 
   final o = series.options;
   final ts = ctx.timeScale;
   final bars = <_Bar>[];
   for (var i = from; i < to; i++) {
-    final d = series.data[i];
+    final d = items.data[i];
     final up = d.isUp;
     bars.add(_Bar(
-      ts.indexToCoordinate(series.indices[i]),
+      ts.indexToCoordinate(items.indices[i]),
       series.priceToCoordinate(d.open),
       series.priceToCoordinate(d.high),
       series.priceToCoordinate(d.low),

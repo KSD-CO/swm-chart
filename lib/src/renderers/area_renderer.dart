@@ -57,7 +57,7 @@ void _fillArea<K>(
 void paintArea(SeriesPaintContext ctx, AreaSeriesModel series) {
   final visible = visibleLinePoints(ctx, series);
   if (visible == null) return;
-  final (points, from) = visible;
+  final (points, from, items) = visible;
   final o = series.options;
   final pr = ctx.pixelRatio;
 
@@ -73,13 +73,13 @@ void paintArea(SeriesPaintContext ctx, AreaSeriesModel series) {
     from,
     baseY,
     (i) {
-      final d = series.data[i];
+      final d = items.data[i];
       return (d.topColor ?? o.topColor, d.bottomColor ?? o.bottomColor);
     },
     (style) => Gradient.linear(Offset(0, top), Offset(0, bottom), [style.$1, style.$2]),
   );
 
-  Color colorOf(int i) => series.lineColor(series.data[i]);
+  Color colorOf(int i) => series.lineColor(items.data[i]);
   if (o.lineVisible) strokeLine(ctx, series, points, from, colorOf);
   paintPointMarkers(ctx, series, points, from, colorOf);
 }
@@ -87,7 +87,7 @@ void paintArea(SeriesPaintContext ctx, AreaSeriesModel series) {
 void paintBaseline(SeriesPaintContext ctx, BaselineSeriesModel series) {
   final visible = visibleLinePoints(ctx, series);
   if (visible == null) return;
-  final (points, from) = visible;
+  final (points, from, items) = visible;
   final o = series.options;
   final pr = ctx.pixelRatio;
   final width = ctx.paneSize.width * pr;
@@ -104,7 +104,7 @@ void paintBaseline(SeriesPaintContext ctx, BaselineSeriesModel series) {
     from,
     baseY,
     (i) {
-      final d = series.data[i];
+      final d = items.data[i];
       return (
         d.topFillColor1 ?? o.topFillColor1,
         d.topFillColor2 ?? o.topFillColor2,
@@ -126,12 +126,12 @@ void paintBaseline(SeriesPaintContext ctx, BaselineSeriesModel series) {
     final canvas = ctx.canvas;
     canvas.save();
     canvas.clipRect(Rect.fromLTRB(0, 0, width, baseY));
-    strokeLine(ctx, series, points, from, (i) => series.data[i].topLineColor ?? o.topLineColor);
+    strokeLine(ctx, series, points, from, (i) => items.data[i].topLineColor ?? o.topLineColor);
     canvas.restore();
     canvas.save();
     canvas.clipRect(Rect.fromLTRB(0, baseY, width, height));
-    strokeLine(ctx, series, points, from, (i) => series.data[i].bottomLineColor ?? o.bottomLineColor);
+    strokeLine(ctx, series, points, from, (i) => items.data[i].bottomLineColor ?? o.bottomLineColor);
     canvas.restore();
   }
-  paintPointMarkers(ctx, series, points, from, (i) => series.lineColor(series.data[i]));
+  paintPointMarkers(ctx, series, points, from, (i) => series.lineColor(items.data[i]));
 }

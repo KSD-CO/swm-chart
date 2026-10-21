@@ -16,7 +16,11 @@ class SeriesPaintContext {
     required this.visibleRange,
     required this.paneSize,
     required this.backgroundColor,
+    this.conflationFactor = 1,
   });
+
+  /// Bars merged per drawn item (1 = none).
+  final int conflationFactor;
 
   final Canvas canvas;
   final double pixelRatio;

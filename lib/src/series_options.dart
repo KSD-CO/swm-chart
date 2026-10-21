@@ -680,6 +680,71 @@ class BaselineSeriesOptions extends SeriesOptions implements LineLikeSeriesOptio
   }
 }
 
+class CustomSeriesOptions extends SeriesOptions {
+  const CustomSeriesOptions({
+    super.title = '',
+    super.visible = true,
+    super.hitTestTolerance = 3,
+    super.lastValueVisible = true,
+    super.priceLineVisible = true,
+    super.priceLineSource = PriceLineSource.lastBar,
+    super.priceLineWidth = 1,
+    super.priceLineColor,
+    super.priceLineStyle = LineStyle.dashed,
+    super.baseLineVisible = true,
+    super.baseLineColor = const Color(0xFFB2B5BE),
+    super.baseLineWidth = 1,
+    super.baseLineStyle = LineStyle.solid,
+    super.priceFormat = const PriceFormat.price(),
+    super.priceScaleId = 'right',
+    super.autoscaleInfoProvider,
+    this.color = const Color(0xFF2196F3),
+  });
+
+  /// Main color, used for the last value label and price line.
+  final Color color;
+
+  CustomSeriesOptions copyWith({
+    String? title,
+    bool? visible,
+    double? hitTestTolerance,
+    bool? lastValueVisible,
+    bool? priceLineVisible,
+    PriceLineSource? priceLineSource,
+    double? priceLineWidth,
+    Color? priceLineColor,
+    LineStyle? priceLineStyle,
+    bool? baseLineVisible,
+    Color? baseLineColor,
+    double? baseLineWidth,
+    LineStyle? baseLineStyle,
+    PriceFormat? priceFormat,
+    String? priceScaleId,
+    AutoscaleInfoProvider? autoscaleInfoProvider,
+    Color? color,
+  }) {
+    return CustomSeriesOptions(
+      title: title ?? this.title,
+      visible: visible ?? this.visible,
+      hitTestTolerance: hitTestTolerance ?? this.hitTestTolerance,
+      lastValueVisible: lastValueVisible ?? this.lastValueVisible,
+      priceLineVisible: priceLineVisible ?? this.priceLineVisible,
+      priceLineSource: priceLineSource ?? this.priceLineSource,
+      priceLineWidth: priceLineWidth ?? this.priceLineWidth,
+      priceLineColor: priceLineColor ?? this.priceLineColor,
+      priceLineStyle: priceLineStyle ?? this.priceLineStyle,
+      baseLineVisible: baseLineVisible ?? this.baseLineVisible,
+      baseLineColor: baseLineColor ?? this.baseLineColor,
+      baseLineWidth: baseLineWidth ?? this.baseLineWidth,
+      baseLineStyle: baseLineStyle ?? this.baseLineStyle,
+      priceFormat: priceFormat ?? this.priceFormat,
+      priceScaleId: priceScaleId ?? this.priceScaleId,
+      autoscaleInfoProvider: autoscaleInfoProvider ?? this.autoscaleInfoProvider,
+      color: color ?? this.color,
+    );
+  }
+}
+
 class HistogramSeriesOptions extends SeriesOptions {
   const HistogramSeriesOptions({
     super.title = '',

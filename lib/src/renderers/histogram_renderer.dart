@@ -22,7 +22,8 @@ class _Column {
 }
 
 void paintHistogram(SeriesPaintContext ctx, HistogramSeriesModel series) {
-  final (from, to) = series.itemsInRange(ctx.visibleRange);
+  final items = series.renderItems(ctx.conflationFactor);
+  final (from, to) = items.itemsInRange(ctx.visibleRange);
   if (from >= to) return;
 
   final pr = ctx.pixelRatio;
@@ -34,8 +35,8 @@ void paintHistogram(SeriesPaintContext ctx, HistogramSeriesModel series) {
 
   final columns = <_Column>[];
   for (var i = from; i < to; i++) {
-    final item = series.data[i];
-    final index = series.indices[i];
+    final item = items.data[i];
+    final index = items.indices[i];
     final xMedia = ts.indexToCoordinate(index);
     final x = (xMedia * pr).round();
     int left;

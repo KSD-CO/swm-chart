@@ -240,6 +240,7 @@ void main() {
   });
 
   hitTestGroup();
+  extraGroups();
 
   test('attribution logo path parses and is placed at the bottom left', () {
     final path = parseSvgPath('M0 0h10v10H0Z');
@@ -294,5 +295,99 @@ void hitTestGroup() {
       chart.model.click(0, Offset(x, s.priceToCoordinate(10)!));
       expect(clicked!.hoveredSeries, same(s));
     });
+  });
+}
+
+class _RangeData extends SeriesData {
+  const _RangeData({required super.time, required this.low, required this.high});
+
+  final double low;
+  final double high;
+}
+
+class _RangeView extends CustomSeriesView<_RangeData> {
+  int draws = 0;
+
+  @override
+  List<double> priceValues(_RangeData item) => [item.low, item.high];
+
+  @override
+  bool isWhitespace(_RangeData item) => item.low.isNaN;
+
+  @override
+  void draw(CustomSeriesDrawContext<_RangeData> ctx) {
+    draws++;
+    for (final bar in ctx.bars) {
+      ctx.canvas.drawLine(
+        Offset(bar.x, ctx.priceToCoordinate(bar.data.low)),
+        Offset(bar.x, ctx.priceToCoordinate(bar.data.high)),
+        Paint()..color = ctx.options.color,
+      );
+    }
+  }
+}
+
+void extraGroups() {
+  test('custom series: autoscale, last value and whitespace from the view', () {
+    final chart = ChartController();
+    final view = _RangeView();
+    final s = chart.addCustomSeries(view);
+    s.setData([
+      for (var i = 0; i < 10; i++) _RangeData(time: _t0 + i * _day, low: i.toDouble(), high: i + 5.0),
+      _RangeData(time: _t0 + 10 * _day, low: double.nan, high: double.nan),
+    ]);
+    chart.model.layout(const Size(400, 300), 1, _measure);
+    expect(chart.priceScale().getVisibleRange(), const PriceRange(0, 14));
+    expect(s.lastValueData()!.price, 14);
+    expect(s.dataByIndex(10), isNull);
+    expect(s.seriesType(), SeriesType.custom);
+    chart.dispose();
+  });
+
+  test('up/down markers show the direction of an update, then expire', () async {
+    final chart = ChartController();
+    final s = chart.addLineSeries();
+    final plugin = createUpDownMarkers(
+      s,
+      const UpDownMarkersOptions(updateVisibilityDuration: Duration(milliseconds: 10)),
+    );
+    plugin.setData(_line(5, 1));
+    // _line(5, 1) ends at day 5.
+    plugin.update(LineData(time: _t0 + 5 * _day, value: 10));
+    expect(plugin.markers().single.sign, MarkerSign.positive);
+    plugin.update(LineData(time: _t0 + 5 * _day, value: 3));
+    expect(plugin.markers().single.sign, MarkerSign.negative);
+    plugin.update(LineData(time: _t0 + 6 * _day, value: 3)); // new point: no marker
+    expect(plugin.markers(), hasLength(1));
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    expect(plugin.markers(), isEmpty);
+    expect(() => createUpDownMarkers(chart.addHistogramSeries() as dynamic), throwsA(anything));
+    chart.dispose();
+  });
+
+  test('conflation merges bars when bar spacing < 1 device pixel', () {
+    final chart = ChartController(
+      options: const ChartOptions(timeScale: TimeScaleOptions(enableConflation: true, minBarSpacing: 0.01)),
+    );
+    final s = chart.addCandlestickSeries();
+    s.setData([
+      // 5000 bars on ~350px: spacing < 0.25, which conflates at DPR 2.
+      for (var i = 0; i < 5000; i++)
+        CandlestickData(time: _t0 + i * 60, open: i.toDouble(), high: i + 2.0, low: i - 2.0, close: i + 1.0),
+    ]);
+    chart.model.layout(const Size(400, 300), 2, _measure);
+    chart.timeScale().fitContent();
+    chart.model.layout(const Size(400, 300), 2, _measure);
+    final ts = chart.model.timeScale;
+    final factor = ts.conflationFactor(2);
+    expect(factor, greaterThan(1));
+    final model = chart.model.series.first as dynamic;
+    final items = model.renderItems(factor);
+    expect(items.length, lessThan(5000));
+    final first = items.data.first as CandlestickData;
+    expect(first.open, 0);
+    expect(first.high, (factor - 1) + 2.0);
+    expect(first.close, factor.toDouble());
+    chart.dispose();
   });
 }

@@ -53,6 +53,8 @@ classes = [
    ("topLineColor","Color","Color(0xFF26A69A)",None),
    ("bottomFillColor1","Color","Color(0x0DEF5350)",None),("bottomFillColor2","Color","Color(0x47EF5350)",None),
    ("bottomLineColor","Color","Color(0xFFEF5350)",None)], True),
+ ("CustomSeriesOptions", [
+   ("color","Color","Color(0xFF2196F3)","Main color, used for the last value label and price line.")], False),
  ("HistogramSeriesOptions", [
    ("color","Color","Color(0xFF26A69A)",None),("base","double","0","Value the columns grow from.")], False),
 ]

@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import '../data.dart';
 import '../options.dart';
+import '../plugins/custom_series.dart';
 import '../plugins/primitive.dart';
 import '../renderers/area_renderer.dart';
 import '../renderers/bar_renderer.dart';
@@ -15,6 +16,36 @@ import 'price_formatter.dart';
 import 'price_line.dart';
 import 'price_scale.dart';
 import 'time_scale.dart';
+
+/// Items a renderer draws: the series data, or its conflated version.
+class SeriesItems<T extends SeriesData> {
+  SeriesItems(this.data, this.indices);
+
+  final List<T> data;
+
+  /// Time scale index of every item.
+  final List<int> indices;
+
+  int get length => data.length;
+
+  /// First position whose index is >= [index].
+  int lowerBound(int index) {
+    var lo = 0;
+    var hi = indices.length;
+    while (lo < hi) {
+      final mid = (lo + hi) >> 1;
+      if (indices[mid] < index) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    return lo;
+  }
+
+  /// Positions `[from, to)` inside [range] (inclusive indices).
+  (int, int) itemsInRange(IndexRange range) => (lowerBound(range.left), lowerBound(range.right + 1));
+}
 
 enum SeriesUpdateKind {
   /// The last value was replaced by another value.
@@ -45,6 +76,9 @@ abstract class SeriesModel<T extends SeriesData, O extends SeriesOptions> {
 
   /// Bumped on every data change; used by caches (conflation).
   int dataVersion = 0;
+
+  SeriesItems<T>? _conflatedCache;
+  (int, int, List<int>)? _conflatedKey;
 
   final List<PriceLine> priceLines = [];
   final List<ChartPrimitive> primitives = [];
@@ -135,6 +169,38 @@ abstract class SeriesModel<T extends SeriesData, O extends SeriesOptions> {
   }
 
   void setIndices(List<int> indices) => _indices = indices;
+
+  /// Merges a group of consecutive items into one, or returns `null` when
+  /// this series type doesn't support conflation.
+  T? conflateGroup(List<T> group) => null;
+
+  /// Items to draw. With [factor] > 1, groups of [factor] consecutive items
+  /// are merged like upstream's `DataConflater`, the last group absorbing
+  /// the remainder; each group sits at its first item's index.
+  SeriesItems<T> renderItems(int factor) {
+    if (factor <= 1 || _data.length < 2 || conflateGroup(_data.sublist(0, 1)) == null) {
+      return SeriesItems(_data, _indices);
+    }
+    final key = (dataVersion, factor, _indices);
+    final cached = _conflatedCache;
+    if (cached != null && _conflatedKey != null && _conflatedKey!.$1 == key.$1 && _conflatedKey!.$2 == factor &&
+        identical(_conflatedKey!.$3, _indices)) {
+      return cached;
+    }
+    final data = <T>[];
+    final indices = <int>[];
+    var start = 0;
+    while (start < _data.length) {
+      var end = math.min(start + factor, _data.length);
+      // Fold a short remainder into the last group.
+      if (_data.length - end < factor && _data.length - end > 0) end = _data.length;
+      data.add(conflateGroup(_data.sublist(start, end)) as T);
+      indices.add(_indices[start]);
+      start = end;
+    }
+    _conflatedKey = key;
+    return _conflatedCache = SeriesItems(data, indices);
+  }
 
   /// First item position whose time scale index is >= [index].
   int lowerBound(int index) {
@@ -264,6 +330,21 @@ class CandlestickSeriesModel extends OhlcSeriesModel<CandlestickData, Candlestic
   Color itemColor(CandlestickData item) => item.color ?? (item.isUp ? options.upColor : options.downColor);
 
   @override
+  CandlestickData conflateGroup(List<CandlestickData> g) {
+    final last = g.last;
+    return CandlestickData(
+      time: g.first.time,
+      open: g.first.open,
+      high: g.map((d) => d.high).reduce(math.max),
+      low: g.map((d) => d.low).reduce(math.min),
+      close: last.close,
+      color: last.color,
+      borderColor: last.borderColor,
+      wickColor: last.wickColor,
+    );
+  }
+
+  @override
   void paint(SeriesPaintContext ctx) => paintCandlesticks(ctx, this);
 }
 
@@ -272,6 +353,16 @@ class BarSeriesModel extends OhlcSeriesModel<BarData, BarSeriesOptions> {
 
   @override
   Color itemColor(BarData item) => item.color ?? (item.isUp ? options.upColor : options.downColor);
+
+  @override
+  BarData conflateGroup(List<BarData> g) => BarData(
+        time: g.first.time,
+        open: g.first.open,
+        high: g.map((d) => d.high).reduce(math.max),
+        low: g.map((d) => d.low).reduce(math.min),
+        close: g.last.close,
+        color: g.last.color,
+      );
 
   @override
   void paint(SeriesPaintContext ctx) => paintBars(ctx, this);
@@ -305,6 +396,9 @@ class LineSeriesModel extends LineLikeSeriesModel<LineData, LineSeriesOptions> {
   Color lineColor(LineData item) => item.color ?? options.color;
 
   @override
+  LineData conflateGroup(List<LineData> g) => LineData(time: g.first.time, value: g.last.value, color: g.last.color);
+
+  @override
   void paint(SeriesPaintContext ctx) => paintLine(ctx, this);
 }
 
@@ -313,6 +407,18 @@ class AreaSeriesModel extends LineLikeSeriesModel<AreaData, AreaSeriesOptions> {
 
   @override
   Color lineColor(AreaData item) => item.lineColor ?? options.lineColor;
+
+  @override
+  AreaData conflateGroup(List<AreaData> g) {
+    final l = g.last;
+    return AreaData(
+      time: g.first.time,
+      value: l.value,
+      lineColor: l.lineColor,
+      topColor: l.topColor,
+      bottomColor: l.bottomColor,
+    );
+  }
 
   @override
   void paint(SeriesPaintContext ctx) => paintArea(ctx, this);
@@ -325,6 +431,21 @@ class BaselineSeriesModel extends LineLikeSeriesModel<BaselineData, BaselineSeri
   Color lineColor(BaselineData item) => item.value >= options.baseValue
       ? (item.topLineColor ?? options.topLineColor)
       : (item.bottomLineColor ?? options.bottomLineColor);
+
+  @override
+  BaselineData conflateGroup(List<BaselineData> g) {
+    final l = g.last;
+    return BaselineData(
+      time: g.first.time,
+      value: l.value,
+      topLineColor: l.topLineColor,
+      topFillColor1: l.topFillColor1,
+      topFillColor2: l.topFillColor2,
+      bottomLineColor: l.bottomLineColor,
+      bottomFillColor1: l.bottomFillColor1,
+      bottomFillColor2: l.bottomFillColor2,
+    );
+  }
 
   @override
   void paint(SeriesPaintContext ctx) => paintBaseline(ctx, this);
@@ -346,6 +467,10 @@ class HistogramSeriesModel extends SeriesModel<HistogramData, HistogramSeriesOpt
   Color itemColor(HistogramData item) => item.color ?? options.color;
 
   @override
+  HistogramData conflateGroup(List<HistogramData> g) =>
+      HistogramData(time: g.first.time, value: g.last.value, color: g.last.color);
+
+  @override
   AutoscaleInfo? baseAutoscaleInfo(IndexRange range) {
     // Columns grow from `base`, so it must stay in view.
     final info = super.baseAutoscaleInfo(range);
@@ -355,4 +480,52 @@ class HistogramSeriesModel extends SeriesModel<HistogramData, HistogramSeriesOpt
 
   @override
   void paint(SeriesPaintContext ctx) => paintHistogram(ctx, this);
+}
+
+class CustomSeriesModel<T extends SeriesData> extends SeriesModel<T, CustomSeriesOptions> {
+  CustomSeriesModel(this.view, super.options);
+
+  final CustomSeriesView<T> view;
+
+  @override
+  bool isWhitespace(SeriesData item) => super.isWhitespace(item) || view.isWhitespace(item as T);
+
+  @override
+  double minValue(T item) => view.priceValues(item).reduce(math.min);
+
+  @override
+  double maxValue(T item) => view.priceValues(item).reduce(math.max);
+
+  @override
+  double closeValue(T item) => view.priceValues(item).last;
+
+  @override
+  List<double> magnetValues(T item, {required bool ohlc}) => ohlc ? view.priceValues(item) : [closeValue(item)];
+
+  @override
+  Color itemColor(T item) => options.color;
+
+  @override
+  void paint(SeriesPaintContext ctx) {
+    var (from, to) = itemsInRange(ctx.visibleRange);
+    from = math.max(0, from - 1);
+    to = math.min(data.length, to + 1);
+    final bars = [
+      for (var i = from; i < to; i++)
+        CustomBarItem<T>(x: ctx.timeScale.indexToCoordinate(indices[i]), index: indices[i], data: data[i]),
+    ];
+    // Custom views draw in logical pixels; the series canvas is in bitmap pixels.
+    ctx.canvas.save();
+    ctx.canvas.scale(ctx.pixelRatio);
+    view.draw(CustomSeriesDrawContext<T>(
+      canvas: ctx.canvas,
+      paneSize: ctx.paneSize,
+      pixelRatio: ctx.pixelRatio,
+      barSpacing: ctx.timeScale.barSpacing,
+      bars: bars,
+      options: options,
+      priceToCoordinate: priceToCoordinate,
+    ));
+    ctx.canvas.restore();
+  }
 }

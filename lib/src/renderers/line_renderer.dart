@@ -2,6 +2,7 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+import '../data.dart';
 import '../model/series.dart';
 import '../series_options.dart';
 import 'draw_utils.dart';
@@ -9,17 +10,22 @@ import 'paint_context.dart';
 import 'walk_line.dart';
 
 /// Visible points of a line-like series in bitmap coordinates, extended by
-/// one point on each side so the line continues past the pane edges.
-(LinePoints, int)? visibleLinePoints(SeriesPaintContext ctx, LineLikeSeriesModel series) {
-  var (from, to) = series.itemsInRange(ctx.visibleRange);
+/// one point on each side so the line continues past the pane edges. The
+/// int is the position of the first point in the returned items.
+(LinePoints, int, SeriesItems<T>)? visibleLinePoints<T extends SingleValueData>(
+  SeriesPaintContext ctx,
+  LineLikeSeriesModel<T, LineLikeSeriesOptions> series,
+) {
+  final items = series.renderItems(ctx.conflationFactor);
+  var (from, to) = items.itemsInRange(ctx.visibleRange);
   from = math.max(0, from - 1);
-  to = math.min(series.data.length, to + 1);
+  to = math.min(items.length, to + 1);
   if (from >= to) return null;
   final pr = ctx.pixelRatio;
   final ts = ctx.timeScale;
-  final xs = List<double>.generate(to - from, (i) => ts.indexToCoordinate(series.indices[from + i]) * pr);
-  final ys = List<double>.generate(to - from, (i) => series.priceToCoordinate(series.data[from + i].value) * pr);
-  return (LinePoints(xs, ys), from);
+  final xs = List<double>.generate(to - from, (i) => ts.indexToCoordinate(items.indices[from + i]) * pr);
+  final ys = List<double>.generate(to - from, (i) => series.priceToCoordinate(items.data[from + i].value) * pr);
+  return (LinePoints(xs, ys), from, items);
 }
 
 Paint linePaint(LineLikeSeriesOptions o, double pr) => Paint()
@@ -82,8 +88,8 @@ void paintPointMarkers(
 void paintLine(SeriesPaintContext ctx, LineSeriesModel series) {
   final visible = visibleLinePoints(ctx, series);
   if (visible == null) return;
-  final (points, from) = visible;
-  Color colorOf(int i) => series.lineColor(series.data[i]);
+  final (points, from, items) = visible;
+  Color colorOf(int i) => series.lineColor(items.data[i]);
   if (series.options.lineVisible) strokeLine(ctx, series, points, from, colorOf);
   paintPointMarkers(ctx, series, points, from, colorOf);
 }
