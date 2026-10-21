@@ -172,7 +172,7 @@ abstract class SeriesModel<T extends SeriesData, O extends SeriesOptions> {
 
   /// Merges a group of consecutive items into one, or returns `null` when
   /// this series type doesn't support conflation.
-  T? conflateGroup(List<T> group) => null;
+  T? conflateGroup(List<T> g) => null;
 
   /// Items to draw. With [factor] > 1, groups of [factor] consecutive items
   /// are merged like upstream's `DataConflater`, the last group absorbing
