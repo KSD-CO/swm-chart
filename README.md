@@ -91,7 +91,7 @@ final markers = createSeriesMarkers(candles, [
 
 // watermark
 createTextWatermark(chart.panes()[0],
-    const TextWatermarkOptions(lines: [TextWatermarkLine(text: 'BTC/USD')]));
+    const TextWatermarkOptions(lines: [TextWatermarkLine(text: 'SWM Chart')]));
 
 // log / percentage scale
 chart.priceScale().applyOptions(const PriceScaleOptions(mode: PriceScaleMode.logarithmic));

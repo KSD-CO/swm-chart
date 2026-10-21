@@ -220,8 +220,7 @@ class _TradingScreenState extends State<TradingScreen> {
       _chart.panes()[0],
       const TextWatermarkOptions(
         lines: [
-          TextWatermarkLine(text: 'BTC/USD', color: Color(0x1F808080), fontSize: 44, fontWeight: FontWeight.bold),
-          TextWatermarkLine(text: '5m · swm_chart', color: Color(0x1F808080), fontSize: 16),
+          TextWatermarkLine(text: 'SWM Chart', color: Color(0x1F808080), fontSize: 44, fontWeight: FontWeight.bold),
         ],
       ),
     );
