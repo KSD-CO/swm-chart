@@ -267,8 +267,12 @@ class ChartController {
   TimeScaleApi timeScale() => _timeScaleApi;
 
   /// The price scale [id] (`right`, `left` or an overlay id) of pane [paneIndex].
-  PriceScaleApi priceScale([String id = rightPriceScaleId, int paneIndex = 0]) =>
-      PriceScaleApi._(_model, _model.panes[paneIndex], id);
+  PriceScaleApi priceScale([String id = rightPriceScaleId, int paneIndex = 0]) {
+    while (_model.panes.length <= paneIndex) {
+      _model.addPane();
+    }
+    return PriceScaleApi._(_model, _model.panes[paneIndex], id);
+  }
 
   // ---- events ----
 
@@ -367,6 +371,18 @@ class BarsInfo {
   final num? to;
 }
 
+/// Formats prices like a series' price axis, like upstream's `IPriceFormatter`.
+class PriceFormatterApi {
+  PriceFormatterApi._(this._model, this._series);
+
+  final ChartModel _model;
+  final SeriesModel _series;
+
+  String format(double price) => _model.formatSeriesPrice(_series, price);
+
+  List<String> formatTickmarks(List<double> prices) => [for (final p in prices) format(p)];
+}
+
 /// Handle of a custom price line.
 class PriceLineApi {
   PriceLineApi._(this._model, this._line);
@@ -406,6 +422,12 @@ class SeriesApi<T extends SeriesData, O extends SeriesOptions> {
   /// [item] is a [T] or [WhitespaceData]. Updating bars older than the last
   /// one is not supported, as upstream.
   void update(SeriesData item) => _model.updateSeries(_series, item);
+
+  /// Removes the last [count] items and returns them, like upstream's `pop`.
+  List<SeriesData> pop([int count = 1]) => _model.popSeries(_series, count);
+
+  /// The formatter of the series' price axis labels.
+  PriceFormatterApi priceFormatter() => PriceFormatterApi._(_model, _series);
 
   /// The series data as given, including whitespace.
   List<SeriesData> data() => List.unmodifiable(_series.allItems);
@@ -567,6 +589,28 @@ class PaneApi {
       ];
 
   PriceScaleApi priceScale(String id) => PriceScaleApi._(_model, _pane, id);
+
+  // Like upstream's `IPaneApi.addSeries`: add a series to this pane.
+  CandlestickSeriesApi addCandlestickSeries([CandlestickSeriesOptions o = const CandlestickSeriesOptions()]) =>
+      _chart.addCandlestickSeries(o, paneIndex());
+
+  BarSeriesApi addBarSeries([BarSeriesOptions o = const BarSeriesOptions()]) => _chart.addBarSeries(o, paneIndex());
+
+  LineSeriesApi addLineSeries([LineSeriesOptions o = const LineSeriesOptions()]) => _chart.addLineSeries(o, paneIndex());
+
+  AreaSeriesApi addAreaSeries([AreaSeriesOptions o = const AreaSeriesOptions()]) => _chart.addAreaSeries(o, paneIndex());
+
+  BaselineSeriesApi addBaselineSeries([BaselineSeriesOptions o = const BaselineSeriesOptions()]) =>
+      _chart.addBaselineSeries(o, paneIndex());
+
+  HistogramSeriesApi addHistogramSeries([HistogramSeriesOptions o = const HistogramSeriesOptions()]) =>
+      _chart.addHistogramSeries(o, paneIndex());
+
+  SeriesApi<T, CustomSeriesOptions> addCustomSeries<T extends SeriesData>(
+    CustomSeriesView<T> view, [
+    CustomSeriesOptions o = const CustomSeriesOptions(),
+  ]) =>
+      _chart.addCustomSeries(view, o, paneIndex());
 
   /// Moves this pane to [index].
   void moveTo(int index) {

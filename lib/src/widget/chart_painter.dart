@@ -149,7 +149,7 @@ class ChartPainter extends CustomPainter {
         conflationFactor: ts.conflationFactor(pr),
       );
       _paintBaseLines(canvas, pane, paneSize);
-      for (final s in pane.series) {
+      for (final s in model.drawOrder(pane)) {
         if (s.visible && !s.priceScale.isEmpty) s.paint(ctx);
       }
       _paintPriceLines(canvas, pane, paneSize);

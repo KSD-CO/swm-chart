@@ -120,7 +120,7 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
         if ((p.dy - y).abs() <= _separatorHitSlop) return _Hit(_Region.separator, i, p);
       }
     }
-    if (p.dy >= m.size.height - m.timeAxisHeight) {
+    if (p.dy >= m.size.height - m.timeAxisHeight || panes.isEmpty) {
       return _Hit(_Region.timeAxis, -1, Offset(p.dx - m.leftAxisWidth, 0));
     }
     var index = panes.length - 1;

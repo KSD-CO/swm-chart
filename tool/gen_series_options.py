@@ -14,7 +14,7 @@ common = [
  ("baseLineWidth","double","1",None),
  ("baseLineStyle","LineStyle","LineStyle.solid",None),
  ("priceFormat","PriceFormat","PriceFormat.price()",None),
- ("priceScaleId","String","'right'","`right`, `left`, or any other id for an invisible overlay scale."),
+ ("priceScaleId","String?",None,"`right`, `left`, or any other id for an invisible overlay scale. `null` uses the chart's `defaultVisiblePriceScaleId`."),
  ("autoscaleInfoProvider","AutoscaleInfoProvider?",None,"Overrides the autoscale range of this series."),
 ]
 linelike = [

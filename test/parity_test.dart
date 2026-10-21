@@ -241,6 +241,8 @@ void main() {
 
   hitTestGroup();
   extraGroups();
+  apiGroup();
+  chartOptionsGroup();
 
   test('attribution logo path parses and is placed at the bottom left', () {
     final path = parseSvgPath('M0 0h10v10H0Z');
@@ -388,6 +390,57 @@ void extraGroups() {
     expect(first.open, 0);
     expect(first.high, (factor - 1) + 2.0);
     expect(first.close, factor.toDouble());
+    chart.dispose();
+  });
+}
+
+void apiGroup() {
+  test('pop, priceFormatter, pane.addSeries', () {
+    final chart = ChartController();
+    final s = chart.addLineSeries()..setData(_line(10, 1));
+    final removed = s.pop(3);
+    expect(removed, hasLength(3));
+    expect(s.data(), hasLength(7));
+    expect(chart.model.timeScale.pointsCount, 7);
+    expect(s.priceFormatter().format(1.234), '1.23');
+    final pane = chart.addPane();
+    final h = pane.addHistogramSeries();
+    expect(h.getPane().paneIndex(), 1);
+    chart.dispose();
+  });
+}
+
+void chartOptionsGroup() {
+  test('defaultVisiblePriceScaleId puts series without an id on the left', () {
+    final chart = ChartController(
+      options: const ChartOptions(
+        defaultVisiblePriceScaleId: 'left',
+        leftPriceScale: PriceScaleOptions(visible: true),
+      ),
+    );
+    final s = chart.addLineSeries()..setData(_line(5, 1));
+    expect(s.priceScale().id, 'left');
+    chart.dispose();
+  });
+
+  test('addDefaultPane: false starts without panes', () {
+    final chart = ChartController(options: const ChartOptions(addDefaultPane: false));
+    expect(chart.panes(), isEmpty);
+    chart.model.layout(const Size(400, 300), 1, _measure);
+    chart.addLineSeries().setData(_line(5, 1));
+    expect(chart.panes(), hasLength(1));
+    chart.dispose();
+  });
+
+  test('hoveredSeriesOnTop draws the hovered series last', () {
+    final chart = ChartController();
+    final a = chart.addLineSeries()..setData(_line(30, 1));
+    chart.addLineSeries().setData([for (final d in _line(30, 1)) LineData(time: d.time, value: d.value + 100)]);
+    chart.model.layout(const Size(400, 300), 1, _measure);
+    final x = chart.timeScale().timeToCoordinate(_t0 + 10 * _day)!;
+    chart.model.setCrosshairPosition(0, Offset(x, a.priceToCoordinate(10)!));
+    final order = chart.model.drawOrder(chart.model.panes.first);
+    expect(order.last, chart.model.series.first);
     chart.dispose();
   });
 }

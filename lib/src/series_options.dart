@@ -64,8 +64,8 @@ abstract class SeriesOptions {
   final double baseLineWidth;
   final LineStyle baseLineStyle;
   final PriceFormat priceFormat;
-  /// `right`, `left`, or any other id for an invisible overlay scale.
-  final String priceScaleId;
+  /// `right`, `left`, or any other id for an invisible overlay scale. `null` uses the chart's `defaultVisiblePriceScaleId`.
+  final String? priceScaleId;
   /// Overrides the autoscale range of this series.
   final AutoscaleInfoProvider? autoscaleInfoProvider;
 }
@@ -102,7 +102,7 @@ class CandlestickSeriesOptions extends SeriesOptions {
     super.baseLineWidth = 1,
     super.baseLineStyle = LineStyle.solid,
     super.priceFormat = const PriceFormat.price(),
-    super.priceScaleId = 'right',
+    super.priceScaleId,
     super.autoscaleInfoProvider,
     this.upColor = const Color(0xFF26A69A),
     this.downColor = const Color(0xFFEF5350),
@@ -194,7 +194,7 @@ class BarSeriesOptions extends SeriesOptions {
     super.baseLineWidth = 1,
     super.baseLineStyle = LineStyle.solid,
     super.priceFormat = const PriceFormat.price(),
-    super.priceScaleId = 'right',
+    super.priceScaleId,
     super.autoscaleInfoProvider,
     this.upColor = const Color(0xFF26A69A),
     this.downColor = const Color(0xFFEF5350),
@@ -271,7 +271,7 @@ class LineSeriesOptions extends SeriesOptions implements LineLikeSeriesOptions {
     super.baseLineWidth = 1,
     super.baseLineStyle = LineStyle.solid,
     super.priceFormat = const PriceFormat.price(),
-    super.priceScaleId = 'right',
+    super.priceScaleId,
     super.autoscaleInfoProvider,
     this.lineWidth = 3,
     this.lineStyle = LineStyle.solid,
@@ -397,7 +397,7 @@ class AreaSeriesOptions extends SeriesOptions implements LineLikeSeriesOptions {
     super.baseLineWidth = 1,
     super.baseLineStyle = LineStyle.solid,
     super.priceFormat = const PriceFormat.price(),
-    super.priceScaleId = 'right',
+    super.priceScaleId,
     super.autoscaleInfoProvider,
     this.lineWidth = 3,
     this.lineStyle = LineStyle.solid,
@@ -541,7 +541,7 @@ class BaselineSeriesOptions extends SeriesOptions implements LineLikeSeriesOptio
     super.baseLineWidth = 1,
     super.baseLineStyle = LineStyle.solid,
     super.priceFormat = const PriceFormat.price(),
-    super.priceScaleId = 'right',
+    super.priceScaleId,
     super.autoscaleInfoProvider,
     this.lineWidth = 3,
     this.lineStyle = LineStyle.solid,
@@ -696,7 +696,7 @@ class CustomSeriesOptions extends SeriesOptions {
     super.baseLineWidth = 1,
     super.baseLineStyle = LineStyle.solid,
     super.priceFormat = const PriceFormat.price(),
-    super.priceScaleId = 'right',
+    super.priceScaleId,
     super.autoscaleInfoProvider,
     this.color = const Color(0xFF2196F3),
   });
@@ -761,7 +761,7 @@ class HistogramSeriesOptions extends SeriesOptions {
     super.baseLineWidth = 1,
     super.baseLineStyle = LineStyle.solid,
     super.priceFormat = const PriceFormat.price(),
-    super.priceScaleId = 'right',
+    super.priceScaleId,
     super.autoscaleInfoProvider,
     this.color = const Color(0xFF26A69A),
     this.base = 0,

@@ -80,7 +80,7 @@ class PriceAxisLabelSpec {
 class ChartModel extends ChangeNotifier {
   ChartModel(this._options, {this.behavior = const TimeHorzScaleBehavior()})
       : timeScale = TimeScale(_options.timeScale) {
-    panes.add(Pane(_options));
+    if (_options.addDefaultPane) panes.add(Pane(_options));
   }
 
   ChartOptions _options;
@@ -146,6 +146,18 @@ class ChartModel extends ChangeNotifier {
   CrosshairState? get crosshair => _crosshair;
 
   bool get hasCrosshair => _crosshairPoint != null;
+
+  /// Series under the crosshair, drawn on top with `hoveredSeriesOnTop`.
+  SeriesModel? hoveredSeries;
+
+  String _scaleIdOf(SeriesModel s) => s.options.priceScaleId ?? _options.defaultVisiblePriceScaleId;
+
+  /// Series of [pane] in drawing order.
+  List<SeriesModel> drawOrder(Pane pane) {
+    final hovered = hoveredSeries;
+    if (!_options.hoveredSeriesOnTop || hovered == null || !pane.series.contains(hovered)) return pane.series;
+    return [...pane.series.where((s) => s != hovered), hovered];
+  }
 
   Duration get now => _clock.elapsed;
 
@@ -259,7 +271,7 @@ class ChartModel extends ChangeNotifier {
   void addSeries(SeriesModel s, {int paneIndex = 0}) {
     _ensurePane(paneIndex);
     final pane = panes[paneIndex];
-    s.priceScale = pane.priceScale(s.options.priceScaleId, _options);
+    s.priceScale = pane.priceScale(_scaleIdOf(s), _options);
     pane.series.add(s);
     if (s.data.isNotEmpty) _rebuildTimeline();
     invalidate();
@@ -285,7 +297,7 @@ class ChartModel extends ChangeNotifier {
     if (from == to) return;
     from.series.remove(s);
     to.series.add(s);
-    s.priceScale = to.priceScale(s.options.priceScaleId, _options);
+    s.priceScale = to.priceScale(_scaleIdOf(s), _options);
     _cleanupIfPaneIsEmpty(from);
     _resetCrosshairIfPaneGone();
     invalidate();
@@ -293,7 +305,7 @@ class ChartModel extends ChangeNotifier {
 
   void seriesOptionsChanged(SeriesModel s) {
     final index = paneIndexOf(s);
-    if (index >= 0) s.priceScale = panes[index].priceScale(s.options.priceScaleId, _options);
+    if (index >= 0) s.priceScale = panes[index].priceScale(_scaleIdOf(s), _options);
     invalidate();
   }
 
@@ -302,6 +314,14 @@ class ChartModel extends ChangeNotifier {
     _rebuildTimeline();
     _emitDataChanged(s);
     invalidate();
+  }
+
+  List<SeriesData> popSeries(SeriesModel s, int count) {
+    final removed = s.pop(count);
+    _rebuildTimeline();
+    _emitDataChanged(s);
+    invalidate();
+    return removed;
   }
 
   void updateSeries(SeriesModel s, SeriesData item) {
@@ -669,8 +689,10 @@ class ChartModel extends ChangeNotifier {
     _crosshairPoint = point;
     _crosshairExact = exact;
     _resolveCrosshair();
+    final params = _eventParams(_crosshair);
+    hoveredSeries = params.hit?.series;
     notifyListeners();
-    _emit(crosshairMoveListeners, _eventParams(_crosshair));
+    _emit(crosshairMoveListeners, params);
   }
 
   void _resolveCrosshair() {

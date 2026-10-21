@@ -170,6 +170,16 @@ abstract class SeriesModel<T extends SeriesData, O extends SeriesOptions> {
 
   void setIndices(List<int> indices) => _indices = indices;
 
+  /// Removes the last [count] items (values and whitespace) and returns them.
+  List<SeriesData> pop(int count) {
+    final n = count.clamp(0, _all.length);
+    final removed = _all.sublist(_all.length - n);
+    _all = _all.sublist(0, _all.length - n);
+    _data = [for (final d in _all) ?_valueItem(d)];
+    dataVersion++;
+    return removed;
+  }
+
   /// Merges a group of consecutive items into one, or returns `null` when
   /// this series type doesn't support conflation.
   T? conflateGroup(List<T> g) => null;

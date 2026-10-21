@@ -558,7 +558,19 @@ class ChartOptions {
     this.handleScale = const HandleScaleOptions(),
     this.kineticScroll = const KineticScrollOptions(),
     this.trackingMode = const TrackingModeOptions(),
+    this.addDefaultPane = true,
+    this.hoveredSeriesOnTop = true,
+    this.defaultVisiblePriceScaleId = 'right',
   });
+
+  /// Create the first pane up front; otherwise panes appear with series.
+  final bool addDefaultPane;
+
+  /// Draw the series under the pointer above the others in its pane.
+  final bool hoveredSeriesOnTop;
+
+  /// Price scale of series without a `priceScaleId`: `right` or `left`.
+  final String defaultVisiblePriceScaleId;
 
   final LayoutOptions layout;
   final GridOptions grid;
@@ -589,6 +601,9 @@ class ChartOptions {
     HandleScaleOptions? handleScale,
     KineticScrollOptions? kineticScroll,
     TrackingModeOptions? trackingMode,
+    bool? addDefaultPane,
+    bool? hoveredSeriesOnTop,
+    String? defaultVisiblePriceScaleId,
   }) {
     return ChartOptions(
       layout: layout ?? this.layout,
@@ -603,6 +618,9 @@ class ChartOptions {
       handleScale: handleScale ?? this.handleScale,
       kineticScroll: kineticScroll ?? this.kineticScroll,
       trackingMode: trackingMode ?? this.trackingMode,
+      addDefaultPane: addDefaultPane ?? this.addDefaultPane,
+      hoveredSeriesOnTop: hoveredSeriesOnTop ?? this.hoveredSeriesOnTop,
+      defaultVisiblePriceScaleId: defaultVisiblePriceScaleId ?? this.defaultVisiblePriceScaleId,
     );
   }
 }
