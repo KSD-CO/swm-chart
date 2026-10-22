@@ -1,3 +1,10 @@
+## 0.6.1
+
+* Touch: with the crosshair shown (after a tap or a long press), a
+  one-finger drag moves it across the bars instead of scrolling, like
+  TradingView's mobile app; a tap hides it and drags scroll again. Pointer
+  handlers (drawing tools) still get the drag first.
+
 ## 0.6.0
 
 * Drawing tools (`DrawingEditor`, `DrawingsPrimitive`, `Drawing`): trend

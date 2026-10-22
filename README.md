@@ -202,7 +202,7 @@ flutter drive --profile -d <device> \
 
 | | Touch | Mouse |
 |---|---|---|
-| Crosshair | long-press and move; tap to show/hide | follows the pointer |
+| Crosshair | tap to show / hide, then drag to move it; or long-press and move | follows the pointer |
 | Scroll / zoom | drag (locked to its main direction), pinch | drag, wheel |
 | Scale an axis | drag it; double-tap resets | drag it; double-click resets |
 | Resize panes | drag the separator | drag the separator (`resizeRow` cursor) |

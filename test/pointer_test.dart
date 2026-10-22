@@ -123,4 +123,31 @@ void main() {
     final y = pane.priceToCoordinate(110)!;
     expect(pane.coordinateToPrice(y), closeTo(110, 0.01));
   });
+
+  testWidgets('with the crosshair shown, a drag moves it instead of scrolling', (tester) async {
+    final chart = await _pump(tester);
+    final points = <Offset?>[];
+    chart.subscribeCrosshairMove((p) => points.add(p.point));
+    final before = chart.timeScale().scrollPosition();
+
+    // A tap shows the crosshair.
+    await tester.tapAt(const Offset(100, 120));
+    await tester.pump(kDoubleTapTimeout);
+    expect(chart.model.crosshair, isNotNull);
+
+    // A drag moves it along, and the chart stays put.
+    await tester.dragFrom(const Offset(100, 120), const Offset(150, 30));
+    await tester.pumpAndSettle();
+    expect(chart.timeScale().scrollPosition(), before);
+    expect(chart.model.crosshair, isNotNull);
+    expect(points.last!.dx, greaterThan(200));
+
+    // A tap hides it; then a drag scrolls again.
+    await tester.tapAt(const Offset(200, 120));
+    await tester.pump(kDoubleTapTimeout);
+    expect(chart.model.crosshair, isNull);
+    await tester.dragFrom(const Offset(200, 150), const Offset(120, 0));
+    await tester.pumpAndSettle();
+    expect(chart.timeScale().scrollPosition(), lessThan(before));
+  });
 }

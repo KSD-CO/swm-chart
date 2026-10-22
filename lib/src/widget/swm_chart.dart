@@ -28,7 +28,7 @@ class _Hit {
   final Offset local;
 }
 
-enum _DragMode { none, scroll, pinch, priceAxisScale, timeAxisScale, separator, captured }
+enum _DragMode { none, scroll, pinch, priceAxisScale, timeAxisScale, separator, captured, crosshair }
 
 /// Touch area around a pane separator, in logical pixels.
 const double _separatorHitSlop = 8;
@@ -243,17 +243,28 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
         _model.startPaneResize(hit.index);
         setState(() => _activeSeparator = hit.index);
       case _Region.pane:
-        if (_model.hasCrosshair) _model.setCrosshairPosition(null, null);
-        _crosshairPinned = false;
+        final crosshairShown = _crosshairPinned && _model.hasCrosshair;
         // A drawing / editing tool may take a one-pointer drag.
         if (d.pointerCount == 1 &&
             widget.controller.hasPointerHandlers &&
             widget.controller.handlePointer(ChartPointerPhase.down, ChartPointerSource.drag, hit.index, hit.local)) {
+          if (_model.hasCrosshair) _model.setCrosshairPosition(null, null);
+          _crosshairPinned = false;
           _mode = _DragMode.captured;
           _capturedPane = hit.index;
           _capturedPoint = hit.local;
           return;
         }
+        // With the crosshair shown (after a tap or a long press), one finger
+        // moves it across the bars instead of scrolling, like TradingView's
+        // mobile app; a tap hides it again.
+        if (crosshairShown && !isMouse && d.pointerCount == 1) {
+          _mode = _DragMode.crosshair;
+          _model.setCrosshairPosition(hit.index, hit.local);
+          return;
+        }
+        if (_model.hasCrosshair) _model.setCrosshairPosition(null, null);
+        _crosshairPinned = false;
         _scrollTime = isMouse ? o.handleScroll.pressedMouseMove : o.handleScroll.horzTouchDrag;
         _scrollPrice = isMouse ? o.handleScroll.pressedMouseMove : o.handleScroll.vertTouchDrag;
         if (d.pointerCount >= 2 && o.handleScale.pinch) {
@@ -298,6 +309,17 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
     final y = d.localFocalPoint.dy - paneTop;
     switch (_mode) {
       case _DragMode.none:
+        return;
+      case _DragMode.crosshair:
+        // A second finger (a pinch) drops the crosshair.
+        if (d.pointerCount > 1) {
+          _model.setCrosshairPosition(null, null);
+          _crosshairPinned = false;
+          _mode = _DragMode.none;
+          return;
+        }
+        final at = _hitTest(d.localFocalPoint);
+        if (at.region == _Region.pane) _model.setCrosshairPosition(at.index, at.local);
         return;
       case _DragMode.captured:
         final pane = _capturedPane;
@@ -370,6 +392,8 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
         _capturedPane = null;
       case _DragMode.none:
       case _DragMode.pinch:
+      // The crosshair stays where it was left.
+      case _DragMode.crosshair:
         break;
     }
     _mode = _DragMode.none;
