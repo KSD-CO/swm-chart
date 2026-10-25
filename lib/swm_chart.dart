@@ -21,4 +21,6 @@ export 'src/plugins/series_markers.dart';
 export 'src/plugins/up_down_markers.dart';
 export 'src/plugins/watermark.dart';
 export 'src/series_options.dart';
+export 'src/widget/donut.dart';
+export 'src/widget/sparkline.dart';
 export 'src/widget/swm_chart.dart';

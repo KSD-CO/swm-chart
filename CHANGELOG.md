@@ -1,3 +1,19 @@
+## 0.8.0
+
+* `SwmDonut`: a donut (ring) chart for shares of a whole. Slices clockwise
+  from 12 o'clock with a gap between them; touch to select one (reported
+  through `onSelect`, drawn thicker), any widget in the hole.
+  `SwmDonut.sliceAt` hit-tests a point; `SwmDonutPainter` paints one onto
+  any canvas.
+
+## 0.7.0
+
+* `SwmSparkline`: a small, non-interactive line for list rows, cards and
+  tiles — one `CustomPainter`, no axes or gestures, so a list of dozens
+  stays light. Green / red by direction (or against a `baseline`, drawn
+  dashed), optional gradient area, curved line and last-point dot.
+  `SwmSparklinePainter` paints one onto any canvas (e.g. into an image).
+
 ## 0.6.1
 
 * Touch: with the crosshair shown (after a tap or a long press), a

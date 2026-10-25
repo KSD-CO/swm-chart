@@ -41,7 +41,7 @@ Everything in Lightweight Charts v5.2.1 that applies to Flutter is ported:
 | Last value labels, price line source, custom price lines, base line, last price animation | ✅ |
 | Hit testing: `hoveredSeries` / `hoveredObjectId`, `hoveredSeriesOnTop` | ✅ |
 | Plugins: primitives API, series markers, up/down markers, text & image watermarks | ✅ |
-| Beyond upstream: **drawing tools** with an editor, band fill, price levels, volume profile, pointer capture | ✅ |
+| Beyond upstream: **drawing tools** with an editor, band fill, price levels, volume profile, pointer capture, **sparklines**, **donut charts** | ✅ |
 | Localization: locale, date format, month names, price/percentage/tick mark formatters | ✅ |
 | Events: crosshair move, click, double click, visible logical/time range, size, data changed | ✅ |
 | Gestures: pan + kinetic, pinch, long-press crosshair, axis drag, double-tap reset, mouse wheel — each switchable like `handleScroll` / `handleScale` | ✅ |
@@ -171,6 +171,42 @@ curve and an options chain:
 
 ```sh
 cd example && flutter run
+```
+
+### Sparklines
+
+For list rows and cards, `SwmSparkline` draws a small line without a chart
+engine behind it — no axes, scales or gestures:
+
+```dart
+SwmSparkline(
+  values: closes,          // oldest first; non-finite values are skipped
+  width: 80,
+  height: 32,
+  baseline: previousClose, // optional dashed reference; decides green / red
+  curved: true,
+)
+```
+
+`SwmSparklinePainter` paints the same line onto any `Canvas`, e.g. into an
+image with a `PictureRecorder`.
+
+### Donut charts
+
+`SwmDonut` shows shares of a whole, e.g. a portfolio's allocation:
+
+```dart
+SwmDonut(
+  slices: [
+    for (final h in holdings) SwmDonutSlice(value: h.value, color: h.color),
+  ],
+  size: 130,
+  innerRadius: 38,
+  thickness: 30,
+  selected: touched,                       // drawn thicker
+  onSelect: (i) => setState(() => touched = i), // null on release
+  center: Text(touched == null ? 'Total' : holdings[touched!].symbol),
+)
 ```
 
 ## Performance
