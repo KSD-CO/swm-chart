@@ -13,11 +13,14 @@ charts for Flutter. The package is a native Dart port of
   <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/area_dark.png" width="200" alt="Area series">
   <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/yield_curve.png" width="200" alt="Yield curve">
   <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/options_chain.png" width="200" alt="Options chain">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/drawing_tools.png" width="200" alt="Drawing tools: Fibonacci, Elliott wave, trend line">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/overlays.png" width="200" alt="Bollinger bands, pivots and volume profile">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/watchlist.png" width="200" alt="Sparklines and a donut chart">
 </p>
 
 ```yaml
 dependencies:
-  swm_chart: ^0.5.1
+  swm_chart: ^0.8.1
 ```
 
 There is no WebView. Everything is drawn with `CustomPainter`, and the
@@ -164,10 +167,11 @@ The API names follow upstream (`addCandlestickSeries`, `setData`, `update`,
 `timeScale().fitContent()`, `scrollToRealTime()`, `subscribeCrosshairMove`, …),
 so the upstream docs still apply.
 
-The `example/` app has three tabs: a trading screen (switchable series types,
+The `example/` app has five tabs: a trading screen (switchable series types,
 volume, SMA, an RSI pane with buy/sell markers, a watermark, live updates, an
 OHLC legend, history lazy-loading, log/percentage scales, dark mode), a yield
-curve and an options chain:
+curve, an options chain, drawing tools and overlays, and a watchlist with
+sparklines and a donut:
 
 ```sh
 cd example && flutter run

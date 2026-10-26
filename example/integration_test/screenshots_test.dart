@@ -47,5 +47,14 @@ void main() {
 
     await tester.tap(find.widgetWithText(NavigationDestination, 'Options'));
     await checkpoint(tester, 'options_chain');
+
+    await tester.tap(find.widgetWithText(NavigationDestination, 'Tools'));
+    await checkpoint(tester, 'drawing_tools');
+
+    await tester.tap(find.text('Overlays'));
+    await checkpoint(tester, 'overlays');
+
+    await tester.tap(find.widgetWithText(NavigationDestination, 'Watchlist'));
+    await checkpoint(tester, 'watchlist');
   });
 }

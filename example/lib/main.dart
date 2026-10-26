@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:swm_chart/swm_chart.dart';
 
 import 'other_charts.dart';
+import 'tools_screen.dart';
+import 'watchlist_screen.dart';
 
 void main() => runApp(const DemoApp());
 
@@ -48,6 +50,14 @@ class _HomeScreenState extends State<HomeScreen> {
             appBar: AppBar(title: const Text('Options chain')),
             body: const SafeArea(child: OptionsChainScreen()),
           ),
+          Scaffold(
+            appBar: AppBar(title: const Text('Drawing tools & overlays')),
+            body: const SafeArea(child: ToolsScreen()),
+          ),
+          Scaffold(
+            appBar: AppBar(title: const Text('Watchlist')),
+            body: const SafeArea(child: WatchlistScreen()),
+          ),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -57,6 +67,8 @@ class _HomeScreenState extends State<HomeScreen> {
           NavigationDestination(icon: Icon(Icons.candlestick_chart), label: 'Trading'),
           NavigationDestination(icon: Icon(Icons.show_chart), label: 'Yield curve'),
           NavigationDestination(icon: Icon(Icons.stacked_bar_chart), label: 'Options'),
+          NavigationDestination(icon: Icon(Icons.draw), label: 'Tools'),
+          NavigationDestination(icon: Icon(Icons.donut_large), label: 'Watchlist'),
         ],
       ),
     );

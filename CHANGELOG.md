@@ -1,3 +1,8 @@
+## 0.8.1
+
+* Screenshots of the drawing tools, overlays, sparklines and donut.
+* Example: Tools tab (drawings / overlays) and Watchlist tab.
+
 ## 0.8.0
 
 * `SwmDonut`: a donut (ring) chart for shares of a whole. Slices clockwise
