@@ -20,6 +20,7 @@ export 'src/plugins/drawings.dart';
 export 'src/plugins/overlays.dart';
 export 'src/plugins/primitive.dart';
 export 'src/plugins/series_markers.dart';
+export 'src/plugins/trading_lines.dart';
 export 'src/plugins/up_down_markers.dart';
 export 'src/plugins/watermark.dart';
 export 'src/series_options.dart';
