@@ -103,6 +103,13 @@ abstract class PrimitiveContext {
 
   /// Data of the series at a logical index (series primitives only).
   SeriesData? seriesDataAt(int index);
+
+  /// Logical index under the crosshair, `null` when it is hidden.
+  int? get crosshairIndex;
+
+  /// Crosshair position in this pane, `null` when it is hidden or in
+  /// another pane.
+  Offset? get crosshairPosition;
 }
 
 /// What a primitive gets to draw one frame.

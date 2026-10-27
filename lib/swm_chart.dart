@@ -16,6 +16,7 @@ export 'src/options.dart';
 export 'src/indicators/attach.dart';
 export 'src/indicators/indicators.dart';
 export 'src/plugins/custom_series.dart';
+export 'src/plugins/legend.dart';
 export 'src/plugins/drawings.dart';
 export 'src/plugins/overlays.dart';
 export 'src/plugins/primitive.dart';

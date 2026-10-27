@@ -10,6 +10,12 @@ import '../plugins/overlays.dart';
 import '../series_options.dart';
 import 'indicators.dart';
 
+final Expando<IndicatorHandle> _handles = Expando('indicator');
+
+/// The indicator [series] belongs to, if it was added by
+/// [ChartIndicators.addIndicator] (used by legends to group its lines).
+IndicatorHandle? indicatorOf(SeriesApi series) => _handles[series.model];
+
 /// An indicator on a chart, returned by [ChartIndicators.addIndicator].
 class IndicatorHandle {
   IndicatorHandle._(this.chart, this.indicator, this.source, this.volume, this.paneIndex);
@@ -231,7 +237,7 @@ extension ChartIndicators on ChartController {
             color: line.color,
             lineWidth: line.lineWidth,
             lineStyle: line.lineStyle,
-            title: indicator.overlay ? '' : title,
+            title: title,
             priceScaleId: scaleId,
             lastValueVisible: !indicator.overlay,
             priceLineVisible: false,
@@ -242,6 +248,7 @@ extension ChartIndicators on ChartController {
         ),
       };
       handle.series.add(series);
+      _handles[series.model] = handle;
     }
     for (final level in indicator.levels) {
       handle.series.first.createPriceLine(

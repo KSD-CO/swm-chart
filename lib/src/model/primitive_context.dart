@@ -68,4 +68,14 @@ class PrimitiveContextImpl implements PrimitivePaintContext {
 
   @override
   SeriesData? seriesDataAt(int index) => series?.itemAt(index);
+
+  @override
+  int? get crosshairIndex => model.crosshair?.index;
+
+  @override
+  Offset? get crosshairPosition {
+    final c = model.crosshair;
+    if (c == null || c.paneIndex != model.panes.indexOf(pane)) return null;
+    return Offset(c.x, c.y);
+  }
 }
