@@ -5,9 +5,23 @@ import 'package:swm_chart/swm_chart.dart';
 
 import 'main.dart' show FakeFeed, sma;
 
-enum ToolsMode { drawings, overlays }
+enum ToolsMode {
+  drawings('Drawings', Icons.draw),
+  overlays('Overlays', Icons.layers),
+  indicators('Indicators', Icons.insights),
+  orders('Orders', Icons.swap_vert),
+  heikinAshi('Heikin-Ashi', Icons.candlestick_chart),
+  renko('Renko', Icons.view_week),
+  compare('Compare', Icons.compare_arrows);
 
-/// Drawing tools and analysis overlays on an hourly chart.
+  const ToolsMode(this.label, this.icon);
+
+  final String label;
+  final IconData icon;
+}
+
+/// Drawing tools, overlays, indicators, trading lines, derived chart types
+/// and symbol comparison on an hourly chart.
 class ToolsScreen extends StatefulWidget {
   const ToolsScreen({super.key, this.mode = ToolsMode.drawings});
 
@@ -24,13 +38,17 @@ class ToolsScreenState extends State<ToolsScreen> {
   late ToolsMode _mode = widget.mode;
   late final List<CandlestickData> _bars;
 
+  /// A longer history for indicators, chart types and comparisons.
+  late final List<CandlestickData> _long;
+
   ChartController? _chart;
 
   @override
   void initState() {
     super.initState();
     final now = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
-    _bars = FakeFeed(interval: _interval).history(now - now % _interval, 30000, _count);
+    _long = FakeFeed(interval: _interval).history(now - now % _interval, 30000, 200);
+    _bars = _long.sublist(_long.length - _count);
     _build();
   }
 
@@ -51,7 +69,13 @@ class ToolsScreenState extends State<ToolsScreen> {
         timeScale: TimeScaleOptions(timeVisible: true, secondsVisible: false, rightOffset: 4),
       ),
     );
-    final candles = chart.addCandlestickSeries(const CandlestickSeriesOptions(borderVisible: false))..setData(_bars);
+    final data = switch (_mode) {
+      ToolsMode.drawings || ToolsMode.overlays => _bars,
+      ToolsMode.heikinAshi => heikinAshi(_long),
+      ToolsMode.renko => renko(_long, boxSize: 50),
+      _ => _long,
+    };
+    final candles = chart.addCandlestickSeries(const CandlestickSeriesOptions(borderVisible: false))..setData(data);
     chart.timeScale().fitContent(); // applied once laid out
     _chart = chart;
     switch (_mode) {
@@ -59,7 +83,65 @@ class ToolsScreenState extends State<ToolsScreen> {
         _addDrawings(chart);
       case ToolsMode.overlays:
         _addOverlays(chart, candles);
+      case ToolsMode.indicators:
+        _addIndicators(chart, candles);
+      case ToolsMode.orders:
+        _addOrders(chart, candles);
+      case ToolsMode.heikinAshi:
+        createLegend(chart, const LegendOptions(title: 'BTC/USD · 1h · Heikin-Ashi'));
+      case ToolsMode.renko:
+        createLegend(chart, const LegendOptions(title: 'BTC/USD · Renko 50', showChange: false));
+      case ToolsMode.compare:
+        _addComparisons(chart);
     }
+  }
+
+  // ---- indicators ----
+
+  void _addIndicators(ChartController chart, CandlestickSeriesApi candles) {
+    chart.addIndicator(Bollinger(), source: candles);
+    chart.addIndicator(Ema(50, color: const Color(0xFFE91E63)), source: candles);
+    chart.addIndicator(Rsi(14), source: candles);
+    chart.addIndicator(Macd(), source: candles);
+    chart.panes()[0].setStretchFactor(2.2);
+    createLegend(chart, const LegendOptions(title: 'BTC/USD · 1h'));
+    // Show the legend following the crosshair.
+    final bar = _long[_long.length - 30];
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_chart == chart) chart.setCrosshairPosition(bar.close, bar.time, candles);
+    });
+  }
+
+  // ---- trading lines ----
+
+  void _addOrders(ChartController chart, CandlestickSeriesApi candles) {
+    final last = _long.last.close;
+    double at(double pct) => (last * (1 + pct / 100) * 100).roundToDouble() / 100;
+    TradingLines(candles, onAlert: (alert, price) => debugPrint('Alert ${alert.id} at $price'))
+      ..add(TradingLine(id: 'pos', kind: TradingLineKind.position, price: at(-0.9), quantity: 0.5))
+      ..add(TradingLine(id: 'tp', kind: TradingLineKind.takeProfit, price: at(1.6), quantity: 0.5))
+      ..add(TradingLine(id: 'sl', kind: TradingLineKind.stopLoss, price: at(-2.2), quantity: 0.5))
+      ..add(TradingLine(id: 'buy', kind: TradingLineKind.order, price: at(-1.6), quantity: 0.25))
+      ..add(TradingLine(id: 'alert', kind: TradingLineKind.alert, price: at(0.8), label: 'Alert ↑'));
+    createLegend(chart, const LegendOptions(title: 'BTC/USD · 1h'));
+  }
+
+  // ---- comparison ----
+
+  /// Another symbol on the same hours: a seeded random walk.
+  List<LineData> _symbol(int seed, double start, double drift) {
+    final r = math.Random(seed);
+    var v = start;
+    return [
+      for (final b in _long)
+        LineData(time: b.time, value: v = math.max(1, v * (1 + (r.nextDouble() - 0.5 + drift) * 0.012))),
+    ];
+  }
+
+  void _addComparisons(ChartController chart) {
+    chart.addComparison(_symbol(3, 2400, 0.06), title: 'ETH');
+    chart.addComparison(_symbol(5, 150, -0.04), title: 'SOL');
+    createLegend(chart, const LegendOptions(title: 'BTC/USD vs ETH, SOL · 1h'));
   }
 
   // ---- drawings ----
@@ -245,13 +327,22 @@ class ToolsScreenState extends State<ToolsScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.all(8),
-          child: SegmentedButton<ToolsMode>(
-            segments: const [
-              ButtonSegment(value: ToolsMode.drawings, label: Text('Drawings'), icon: Icon(Icons.draw)),
-              ButtonSegment(value: ToolsMode.overlays, label: Text('Overlays'), icon: Icon(Icons.layers)),
-            ],
-            selected: {_mode},
-            onSelectionChanged: (s) => mode = s.first,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final m in ToolsMode.values)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: ChoiceChip(
+                      avatar: Icon(m.icon, size: 16),
+                      label: Text(m.label),
+                      selected: m == _mode,
+                      onSelected: (_) => mode = m,
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
         Expanded(

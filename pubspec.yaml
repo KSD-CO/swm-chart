@@ -2,25 +2,29 @@ name: swm_chart
 description: >-
   Stock World Monitor Charts: high-performance financial charts for Flutter,
   a native Dart port of TradingView Lightweight Charts.
-version: 0.8.1
+version: 0.9.0
 homepage: https://stockworldmonitor.com/
 repository: https://github.com/KSD-CO/swm-chart
 issue_tracker: https://github.com/KSD-CO/swm-chart/issues
 screenshots:
   - description: Candlesticks with volume, SMA, an RSI pane, buy/sell markers and the crosshair.
     path: screenshots/trading_light.png
-  - description: Dark theme with the crosshair, price line and last value labels.
-    path: screenshots/trading_dark.png
-  - description: Area series with a last price animation in dark mode.
-    path: screenshots/area_dark.png
-  - description: Yield curve chart with a months axis and two curves.
-    path: screenshots/yield_curve.png
-  - description: Options chain chart with a strike price axis, implied volatility and open interest.
-    path: screenshots/options_chain.png
+  - description: Built-in indicators - Bollinger, EMA, RSI and MACD panes - with a legend following the crosshair.
+    path: screenshots/indicators.png
+  - description: Trading lines - position with P&L, take profit, stop loss, a buy limit order and a price alert.
+    path: screenshots/orders.png
   - description: Drawing tools - Fibonacci retracement, Elliott wave, trend line, rectangle, resistance and text.
     path: screenshots/drawing_tools.png
   - description: Overlays - Bollinger band fill, pivot levels with axis labels and a volume profile.
     path: screenshots/overlays.png
+  - description: Compare symbols on a percentage scale.
+    path: screenshots/compare.png
+  - description: Renko bricks built from hourly bars.
+    path: screenshots/renko.png
+  - description: Dark theme with the crosshair, price line and last value labels.
+    path: screenshots/trading_dark.png
+  - description: Yield curve chart with a months axis and two curves.
+    path: screenshots/yield_curve.png
   - description: Watchlist with sparklines and a portfolio donut chart.
     path: screenshots/watchlist.png
 topics:

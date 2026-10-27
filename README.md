@@ -9,18 +9,23 @@ charts for Flutter. The package is a native Dart port of
 
 <p>
   <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/trading_light.png" width="200" alt="Candlesticks with volume, SMA, RSI and markers">
-  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/trading_dark.png" width="200" alt="Dark theme with crosshair">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/indicators.png" width="200" alt="Indicators with a legend">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/orders.png" width="200" alt="Orders, TP/SL and alerts">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/drawing_tools.png" width="200" alt="Drawing tools">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/overlays.png" width="200" alt="Bollinger, pivots and volume profile">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/compare.png" width="200" alt="Compare symbols">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/renko.png" width="200" alt="Renko">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/heikin_ashi.png" width="200" alt="Heikin-Ashi">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/trading_dark.png" width="200" alt="Dark theme">
   <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/area_dark.png" width="200" alt="Area series">
   <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/yield_curve.png" width="200" alt="Yield curve">
   <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/options_chain.png" width="200" alt="Options chain">
-  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/drawing_tools.png" width="200" alt="Drawing tools: Fibonacci, Elliott wave, trend line">
-  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/overlays.png" width="200" alt="Bollinger bands, pivots and volume profile">
-  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/watchlist.png" width="200" alt="Sparklines and a donut chart">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/watchlist.png" width="200" alt="Sparklines and a donut">
 </p>
 
 ```yaml
 dependencies:
-  swm_chart: ^0.8.1
+  swm_chart: ^0.9.0
 ```
 
 There is no WebView. Everything is drawn with `CustomPainter`, and the
@@ -45,6 +50,11 @@ Everything in Lightweight Charts v5.2.1 that applies to Flutter is ported:
 | Hit testing: `hoveredSeries` / `hoveredObjectId`, `hoveredSeriesOnTop` | ✅ |
 | Plugins: primitives API, series markers, up/down markers, text & image watermarks | ✅ |
 | Beyond upstream: **drawing tools** with an editor, band fill, price levels, volume profile, pointer capture, **sparklines**, **donut charts** | ✅ |
+| **Indicators**: SMA, EMA, WMA, Bollinger, RSI, MACD, Stochastic, ATR, VWAP, Ichimoku — incremental, one line to add | ✅ |
+| **Trading lines**: draggable orders, TP / SL, positions with P&L, price alerts | ✅ |
+| **Legend & tooltip** following the crosshair | ✅ |
+| **Chart types & timeframes**: Heikin-Ashi, Renko, line break, range bars; resample to minutes … months | ✅ |
+| **Compare symbols** on a percentage scale | ✅ |
 | Localization: locale, date format, month names, price/percentage/tick mark formatters | ✅ |
 | Events: crosshair move, click, double click, visible logical/time range, size, data changed | ✅ |
 | Gestures: pan + kinetic, pinch, long-press crosshair, axis drag, double-tap reset, mouse wheel — each switchable like `handleScroll` / `handleScale` | ✅ |
@@ -134,6 +144,67 @@ Ichimoku cloud with a second colour where the lines cross),
 optional axis labels and hit ids) and `VolumeProfilePrimitive` (horizontal
 volume bins with a POC).
 
+### Indicators
+
+```dart
+chart.addIndicator(Bollinger(), source: candles);          // over the candles
+chart.addIndicator(Ema(50), source: candles);
+final rsi = chart.addIndicator(Rsi(14), source: candles);   // its own pane, 70 / 30 levels
+chart.addIndicator(Macd(), source: candles);
+chart.addIndicator(Vwap(), source: candles, volume: volumeSeries);
+rsi.remove();
+```
+
+Built in: `Sma`, `Ema`, `Wma`, `Bollinger`, `Rsi`, `Macd`, `Stochastic`,
+`Atr`, `Vwap`, `Ichimoku` (cloud projected ahead). They follow the source
+as it updates and only recompute the last bar on a tick. Extend `Indicator`
+(`lines`, `compute(input, from, out)`) for your own, or call `computeAll`
+to use the math without a chart.
+
+### Legend and tooltip
+
+```dart
+createLegend(chart, const LegendOptions(title: 'BTC/USD · 1h'));
+createLegend(chart, const LegendOptions(mode: LegendMode.tooltip));
+```
+
+Rows at the top-left of each pane (OHLC and change for candles, one row per
+indicator) follow the crosshair, or show the last bar when it is hidden.
+
+### Orders, positions and alerts
+
+```dart
+final trading = TradingLines(candles,
+    onDragEnd: (line) => broker.modify(line.id, line.price),
+    onAlert: (alert, price) => notify('${alert.id} at $price'));
+trading
+  ..add(TradingLine(id: 'pos', kind: TradingLineKind.position, price: 29730, quantity: 0.5))
+  ..add(TradingLine(id: 'tp', kind: TradingLineKind.takeProfit, price: 30480, quantity: 0.5))
+  ..add(TradingLine(id: 'sl', kind: TradingLineKind.stopLoss, price: 29340, quantity: 0.5))
+  ..add(TradingLine(id: 'a1', kind: TradingLineKind.alert, price: 30240));
+```
+
+Orders, TP / SL and alerts can be dragged (rounded to the price step);
+labels show the quantity and P&L against the position or the last price.
+Alerts fire when the last price crosses them (`AlertCondition`).
+
+### Chart types and timeframes
+
+```dart
+candles.setData(heikinAshi(bars));
+candles.setData(renko(bars, boxSize: 50));   // also lineBreak, rangeBars
+final hourly = resample(minuteBars, const Timeframe.hours(1));   // .weeks(), .months()
+final live = Resampler(const Timeframe.minutes(15));
+candles.update(live.add(tick));                  // streaming
+```
+
+### Compare symbols
+
+```dart
+chart.addComparison(ethBars, title: 'ETH');   // switches the scale to %
+chart.addComparison(solBars, title: 'SOL');
+```
+
 ### Drawing tools
 
 `DrawingEditor` puts a drawing layer on a pane and edits it with the pointer:
@@ -170,8 +241,8 @@ so the upstream docs still apply.
 The `example/` app has five tabs: a trading screen (switchable series types,
 volume, SMA, an RSI pane with buy/sell markers, a watermark, live updates, an
 OHLC legend, history lazy-loading, log/percentage scales, dark mode), a yield
-curve, an options chain, drawing tools and overlays, and a watchlist with
-sparklines and a donut:
+curve, an options chain, pro tools (drawings, overlays, indicators, orders,
+Heikin-Ashi, Renko, compare) and a watchlist with sparklines and a donut:
 
 ```sh
 cd example && flutter run

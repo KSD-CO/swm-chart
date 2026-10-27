@@ -12,6 +12,7 @@ List<CandlestickData> _bars() => [
 ];
 
 void main() {
+  percentLegendTests();
   test('rows: OHLC with change, indicators grouped, last bar without crosshair', () {
     final chart = ChartController();
     final candles = chart.addCandlestickSeries(const CandlestickSeriesOptions(title: 'BTC'))..setData(_bars());
@@ -61,5 +62,19 @@ void main() {
       await mouse.removePointer();
       chart.dispose();
     }
+  });
+}
+
+void percentLegendTests() {
+  test('legend shows prices even on a percentage scale', () {
+    final chart = ChartController();
+    final candles = chart.addCandlestickSeries()..setData(_bars());
+    chart.addComparison([for (final b in _bars()) LineData(time: b.time, value: b.close * 2)], title: 'ETH');
+    final legend = createLegend(chart);
+    final rows = legend.rowsOf(chart.panes()[0], null);
+    expect(rows[0].values[3].text, '160.00');
+    expect(rows[1].values.single.text, '320.00');
+    expect(candles.priceScale().options.mode, PriceScaleMode.percentage);
+    chart.dispose();
   });
 }

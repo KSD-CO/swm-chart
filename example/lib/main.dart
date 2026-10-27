@@ -51,7 +51,7 @@ class _HomeScreenState extends State<HomeScreen> {
             body: const SafeArea(child: OptionsChainScreen()),
           ),
           Scaffold(
-            appBar: AppBar(title: const Text('Drawing tools & overlays')),
+            appBar: AppBar(title: const Text('Pro tools')),
             body: const SafeArea(child: ToolsScreen()),
           ),
           Scaffold(

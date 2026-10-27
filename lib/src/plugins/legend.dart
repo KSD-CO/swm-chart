@@ -140,7 +140,7 @@ class ChartLegend {
     final item = _itemOf(s, index);
     if (item == null) return null;
     final model = s.model as SeriesModel<SeriesData, dynamic>;
-    return LegendValue(s.formatPrice(model.closeValue(item)), model.itemColor(item));
+    return LegendValue(_price(s, model.closeValue(item)), model.itemColor(item));
   }
 
   LegendRow? _rowOf(SeriesApi s, int? index) {
@@ -152,12 +152,12 @@ class ChartLegend {
     final values = <LegendValue>[];
     if (item is OhlcData && _options.showOhlc) {
       values
-        ..add(LegendValue(s.formatPrice(item.open), color, label: 'O'))
-        ..add(LegendValue(s.formatPrice(item.high), color, label: 'H'))
-        ..add(LegendValue(s.formatPrice(item.low), color, label: 'L'))
-        ..add(LegendValue(s.formatPrice(item.close), color, label: 'C'));
+        ..add(LegendValue(_price(s, item.open), color, label: 'O'))
+        ..add(LegendValue(_price(s, item.high), color, label: 'H'))
+        ..add(LegendValue(_price(s, item.low), color, label: 'L'))
+        ..add(LegendValue(_price(s, item.close), color, label: 'C'));
     } else {
-      values.add(LegendValue(s.formatPrice(model.closeValue(item)), color));
+      values.add(LegendValue(_price(s, model.closeValue(item)), color));
     }
     if (_options.showChange && item is OhlcData) {
       final change = _change(s, item);
@@ -167,6 +167,11 @@ class ChartLegend {
     }
     return LegendRow(name, values);
   }
+
+  /// A price as a price, even when the scale shows percentages (the axis
+  /// does that; the legend shows actual values, like TradingView).
+  String _price(SeriesApi s, double price) =>
+      (chart.options.localization.priceFormatter ?? s.model.formatter.call)(price);
 
   /// Change of [item]'s close from the previous bar's close, in percent.
   double? _change(SeriesApi s, OhlcData item) {

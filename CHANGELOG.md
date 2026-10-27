@@ -1,3 +1,19 @@
+## 0.9.0
+
+* Indicators: `Sma`, `Ema`, `Wma`, `Bollinger`, `Rsi`, `Macd`,
+  `Stochastic`, `Atr`, `Vwap`, `Ichimoku`, added with
+  `chart.addIndicator(indicator, source:)`. Incremental on ticks and new
+  bars; oscillators get their own pane with levels.
+* `TradingLines`: draggable orders, take profit / stop loss, positions with
+  P&L, and price alerts (crossing / up / down) with `onAlert`.
+* `createLegend`: legend rows or a tooltip following the crosshair.
+* Chart types and timeframes: `heikinAshi` / `HeikinAshi`, `renko`,
+  `lineBreak`, `rangeBars`, `resample` / `resampleSum` / `Resampler`
+  (`Timeframe` minutes … months).
+* `chart.addComparison`: compare symbols on a percentage scale.
+* `PrimitiveContext.crosshairIndex` / `crosshairPosition`.
+* Example: Pro tools tab with all of the above; new screenshots.
+
 ## 0.8.1
 
 * Screenshots of the drawing tools, overlays, sparklines and donut.

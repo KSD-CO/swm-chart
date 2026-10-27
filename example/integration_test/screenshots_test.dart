@@ -54,6 +54,19 @@ void main() {
     await tester.tap(find.text('Overlays'));
     await checkpoint(tester, 'overlays');
 
+    for (final (chip, name) in [
+      ('Indicators', 'indicators'),
+      ('Orders', 'orders'),
+      ('Heikin-Ashi', 'heikin_ashi'),
+      ('Renko', 'renko'),
+      ('Compare', 'compare'),
+    ]) {
+      await tester.ensureVisible(find.text(chip));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text(chip));
+      await checkpoint(tester, name);
+    }
+
     await tester.tap(find.widgetWithText(NavigationDestination, 'Watchlist'));
     await checkpoint(tester, 'watchlist');
   });
