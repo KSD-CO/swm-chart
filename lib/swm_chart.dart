@@ -13,6 +13,8 @@ export 'src/model/price_line.dart' show PriceLineOptions;
 export 'src/model/price_scale.dart' show PriceRange;
 export 'src/model/time_scale.dart' show LogicalRange;
 export 'src/options.dart';
+export 'src/indicators/attach.dart';
+export 'src/indicators/indicators.dart';
 export 'src/plugins/custom_series.dart';
 export 'src/plugins/drawings.dart';
 export 'src/plugins/overlays.dart';

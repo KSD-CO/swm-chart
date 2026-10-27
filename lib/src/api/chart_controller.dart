@@ -563,6 +563,13 @@ class SeriesApi<T extends SeriesData, O extends SeriesOptions> {
 
   ChartModel get _model => _chart._model;
 
+  /// The internal series model (read-only use inside the package).
+  @internal
+  SeriesModel<T, O> get model => _series;
+
+  /// The chart this series belongs to.
+  ChartController get chart => _chart;
+
   O get options => _series.options;
 
   void applyOptions(O options) {
