@@ -349,4 +349,19 @@ void main() {
       expect(upswing, everyElement(greaterThan(0.8)));
     });
   });
+
+  test('volume profile splits each bucket into up and down volume', () {
+    final day = DateTime(2026, 1, 1);
+    final bars = [
+      TaPoint(date: day, open: 10, high: 11, low: 10, close: 11, volume: 100),
+      TaPoint(date: day, open: 11, high: 11, low: 10, close: 10, volume: 300),
+    ];
+    final vp = Ta.volumeProfile(bars, buckets: 1);
+    expect(vp.buckets.single.volume, 400);
+    final grid = Ta.volumeProfile(bars, buckets: 4);
+    final up = grid.buckets.fold(0.0, (a, b) => a + b.upVolume!);
+    final all = grid.buckets.fold(0.0, (a, b) => a + b.volume);
+    expect(up, closeTo(100, 1e-9));
+    expect(all, closeTo(400, 1e-9));
+  });
 }

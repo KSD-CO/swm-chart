@@ -1,3 +1,9 @@
+## 0.10.1
+
+* `Ta.volumeProfile`: each `VolumeBucket` has `upVolume`, the part traded
+  on up bars, to colour the profile by buyers and sellers
+  (`VolumeProfileBin.upVolume`).
+
 ## 0.10.0
 
 * 16 more chart indicators: `WilliamsR`, `Adx` (+DI / −DI), `Obv`, `Cci`,

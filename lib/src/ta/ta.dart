@@ -50,7 +50,11 @@ class VolumeBucket {
   final double priceLow;
   final double priceHigh;
   final double volume;
-  const VolumeBucket({required this.priceLow, required this.priceHigh, required this.volume});
+
+  /// The part of [volume] traded on up bars (close ≥ open, or with no open
+  /// known); the rest was on down bars.
+  final double? upVolume;
+  const VolumeBucket({required this.priceLow, required this.priceHigh, required this.volume, this.upVolume});
 }
 
 class VolumeProfileResult {
@@ -588,6 +592,7 @@ class Ta {
     }
 
     final vols = List<double>.filled(buckets, 0);
+    final ups = List<double>.filled(buckets, 0);
     final bucketSize = range / buckets;
 
     for (final p in points) {
@@ -600,8 +605,10 @@ class Ta {
       final endBucket = ((cHigh - lo) / bucketSize).floor().clamp(0, buckets - 1);
       final span = endBucket - startBucket + 1;
       final volPerBucket = vol / span;
+      final isUp = p.open == null || p.close >= p.open!;
       for (int b = startBucket; b <= endBucket; b++) {
         vols[b] += volPerBucket;
+        if (isUp) ups[b] += volPerBucket;
       }
     }
 
@@ -616,7 +623,12 @@ class Ta {
 
     final result = List.generate(
       buckets,
-      (i) => VolumeBucket(priceLow: lo + i * bucketSize, priceHigh: lo + (i + 1) * bucketSize, volume: vols[i]),
+      (i) => VolumeBucket(
+        priceLow: lo + i * bucketSize,
+        priceHigh: lo + (i + 1) * bucketSize,
+        volume: vols[i],
+        upVolume: ups[i],
+      ),
     );
 
     return VolumeProfileResult(buckets: result, pocPrice: lo + (pocIdx + 0.5) * bucketSize, pocVolume: pocVol);
