@@ -50,7 +50,8 @@ Everything in Lightweight Charts v5.2.1 that applies to Flutter is ported:
 | Hit testing: `hoveredSeries` / `hoveredObjectId`, `hoveredSeriesOnTop` | ✅ |
 | Plugins: primitives API, series markers, up/down markers, text & image watermarks | ✅ |
 | Beyond upstream: **drawing tools** with an editor, band fill, price levels, volume profile, pointer capture, **sparklines**, **donut charts** | ✅ |
-| **Indicators**: SMA, EMA, WMA, Bollinger, RSI, MACD, Stochastic, ATR, VWAP, Ichimoku — incremental, one line to add | ✅ |
+| **Indicators** (26): SMA, EMA, WMA, Bollinger, RSI, MACD, Stochastic, ATR, VWAP, Ichimoku, Williams %R, ADX, OBV, CCI, MFI, CMF, Aroon, ROC, Parabolic SAR, KAMA, Keltner, Donchian, Supertrend, Volume MA, Sine Wave, Even Better Sinewave — one line to add | ✅ |
+| **Technical analysis** (`Ta`): ZigZag, Elliott waves, support / resistance, chart and candlestick patterns, auto trendlines, divergences, Fibonacci, pivot points, regression channel, volume profile | ✅ |
 | **Trading lines**: draggable orders, TP / SL, positions with P&L, price alerts | ✅ |
 | **Legend & tooltip** following the crosshair | ✅ |
 | **Chart types & timeframes**: Heikin-Ashi, Renko, line break, range bars; resample to minutes … months | ✅ |
@@ -156,10 +157,30 @@ rsi.remove();
 ```
 
 Built in: `Sma`, `Ema`, `Wma`, `Bollinger`, `Rsi`, `Macd`, `Stochastic`,
-`Atr`, `Vwap`, `Ichimoku` (cloud projected ahead). They follow the source
-as it updates and only recompute the last bar on a tick. Extend `Indicator`
-(`lines`, `compute(input, from, out)`) for your own, or call `computeAll`
-to use the math without a chart.
+`Atr`, `Vwap`, `Ichimoku` (cloud projected ahead) — these only recompute
+the last bar on a tick — and `WilliamsR`, `Adx`, `Obv`, `Cci`, `Mfi`,
+`Cmf`, `Aroon`, `Roc`, `ParabolicSar`, `Kama`, `Keltner`, `Donchian`,
+`Supertrend`, `VolumeSma`, `SineWave`, `EvenBetterSinewave`. Extend
+`Indicator` (`lines`, `compute(input, from, out)`) or `TaIndicator`
+(`series(bars)`) for your own, or call `computeAll` to use the math
+without a chart.
+
+### Technical analysis without a chart
+
+`Ta` has the same math as plain functions over a list of bars, plus the
+analysis tools — for screeners, alerts and backtests:
+
+```dart
+final bars = [for (final c in candles) TaPoint(date: c.date, open: c.o, high: c.h, low: c.l, close: c.c, volume: c.v)];
+final rsi = Ta.rsi(bars);                        // List<double?>
+final levels = Ta.supportResistance(bars);       // support / resistance levels
+final patterns = Ta.detectPatterns(bars);        // head & shoulders, triangles, flags…
+final waves = Ta.elliottWaves(bars);             // automatic Elliott count
+final bullish = Ta.rsiBullishDivergence(bars);
+```
+
+Implement `TaBar` on your own bar class to pass it in directly. Import
+`package:swm_chart/ta.dart` for just this part.
 
 ### Legend and tooltip
 

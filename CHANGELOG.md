@@ -1,3 +1,19 @@
+## 0.10.0
+
+* 16 more chart indicators: `WilliamsR`, `Adx` (+DI / −DI), `Obv`, `Cci`,
+  `Mfi`, `Cmf`, `Aroon`, `Roc`, `ParabolicSar`, `Kama`, `Keltner`,
+  `Donchian`, `Supertrend`, `VolumeSma`, `SineWave`, `EvenBetterSinewave`
+  (26 in all). Built on `TaIndicator`: recomputed over the series on each
+  update.
+* `Ta`: technical analysis as plain functions over OHLCV bars (`TaBar`,
+  implement it on your own bar type, or use `TaPoint`) — every indicator
+  above plus the analysis tools: ZigZag, automatic Elliott wave counts,
+  support / resistance, chart patterns (head & shoulders, double tops,
+  triangles, wedges, flags, cup & handle…), candlestick patterns, automatic
+  trendlines, RSI divergences, Fibonacci levels, pivot points, regression
+  channel and volume profile. Moved from Stock World Monitor, so the app,
+  its screener, alerts and backtests use the same math.
+
 ## 0.9.0
 
 * Indicators: `Sma`, `Ema`, `Wma`, `Bollinger`, `Rsi`, `Macd`,
