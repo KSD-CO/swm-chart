@@ -518,3 +518,32 @@ class TimeScale {
   /// Weights of points, exposed for tests.
   List<int> get weights => _weights;
 }
+
+/// The (fractional) logical index of [time] on bars at [times] (ascending):
+/// interpolated between bars, extrapolated by the nearest step beyond the
+/// first or last bar. `null` without bars.
+double? logicalOfTime(List<num> times, num time) {
+  final n = times.length;
+  if (n == 0) return null;
+  if (n == 1) return time == times[0] ? 0 : null;
+  if (time <= times[0]) return (time - times[0]) / (times[1] - times[0]);
+  if (time >= times[n - 1]) return n - 1 + (time - times[n - 1]) / (times[n - 1] - times[n - 2]);
+  var lo = 0, hi = n - 1;
+  while (hi - lo > 1) {
+    final mid = (lo + hi) >> 1;
+    times[mid] <= time ? lo = mid : hi = mid;
+  }
+  return lo + (time - times[lo]) / (times[hi] - times[lo]);
+}
+
+/// The time at logical index [logical] on bars at [times]; the inverse of
+/// [logicalOfTime].
+num? timeOfLogical(List<num> times, double logical) {
+  final n = times.length;
+  if (n == 0) return null;
+  if (n == 1) return logical == 0 ? times[0] : null;
+  if (logical <= 0) return times[0] + logical * (times[1] - times[0]);
+  if (logical >= n - 1) return times[n - 1] + (logical - (n - 1)) * (times[n - 1] - times[n - 2]);
+  final i = logical.floor();
+  return times[i] + (logical - i) * (times[i + 1] - times[i]);
+}

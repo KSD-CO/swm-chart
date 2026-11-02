@@ -135,6 +135,35 @@ abstract class Drawing {
 
   /// Prices labelled on the price axis while unselected.
   List<double> get axisPrices => const [];
+
+  /// The prices of the drawing's lines at bar [logical] — a trend line's
+  /// price there, a channel's two rails — for alerts such as "price
+  /// crossed my trend line". Empty where the drawing doesn't reach.
+  /// Computed in price terms, so on a log price scale a sloped line's
+  /// values are approximate.
+  List<double> pricesAt(double logical) => const [];
+
+  /// The name [DrawingCodec] saves the drawing under; override it in a
+  /// custom drawing (the default, the class name, changes with renames
+  /// and minification).
+  String get kind => runtimeType.toString();
+}
+
+/// The price at [logical] on the line through [a] and [b], or `null` for a
+/// vertical line.
+double? _lineAt(DrawingAnchor a, DrawingAnchor b, double logical) {
+  final dx = b.logical - a.logical;
+  if (dx.abs() < 1e-12) return null;
+  return a.price + (b.price - a.price) * (logical - a.logical) / dx;
+}
+
+/// Whether [logical] lies within [a]…[b] along the time axis, the ends
+/// extended as asked.
+bool _within(DrawingAnchor a, DrawingAnchor b, double logical, {bool left = false, bool right = false}) {
+  final lo = math.min(a.logical, b.logical), hi = math.max(a.logical, b.logical);
+  final leftEnd = a.logical <= b.logical ? left : right;
+  final rightEnd = a.logical <= b.logical ? right : left;
+  return (leftEnd || logical >= lo) && (rightEnd || logical <= hi);
 }
 
 /// What [DrawingsPrimitive.hitTest] reports as `hoveredObjectId`.
@@ -384,6 +413,72 @@ class DrawingEditor {
   Drawing? _moving;
   bool _moved = false;
 
+  // Undo / redo: the drawings as they were before each change.
+  final List<List<_DrawingState>> _undo = [];
+  final List<List<_DrawingState>> _redo = [];
+  List<_DrawingState>? _beforeMove;
+
+  /// Changes [undo] can step back through.
+  int maxHistory = 50;
+
+  bool get canUndo => _undo.isNotEmpty;
+  bool get canRedo => _redo.isNotEmpty;
+
+  /// Called whenever [canUndo] / [canRedo] may have changed.
+  void Function()? onHistoryChanged;
+
+  /// Records the drawings as they are now, before a change made outside
+  /// the editor (a new style, a text edit…), so [undo] can bring it back.
+  /// The editor's own changes (create, move, reshape, remove, clear) are
+  /// recorded already.
+  void checkpoint() => _pushUndo(_snapshot());
+
+  /// Steps back to before the last change.
+  void undo() {
+    if (_undo.isEmpty) return;
+    _redo.add(_snapshot());
+    _restore(_undo.removeLast());
+  }
+
+  /// Redoes the last change [undo] stepped back from.
+  void redo() {
+    if (_redo.isEmpty) return;
+    _undo.add(_snapshot());
+    _restore(_redo.removeLast());
+  }
+
+  List<_DrawingState> _snapshot() => [for (final d in layer.drawings) _DrawingState(d)];
+
+  void _pushUndo(List<_DrawingState> state) {
+    _undo.add(state);
+    if (_undo.length > maxHistory) _undo.removeAt(0);
+    _redo.clear();
+    onHistoryChanged?.call();
+  }
+
+  void _restore(List<_DrawingState> state) {
+    for (final s in state) {
+      s.apply();
+    }
+    layer.drawings = [for (final s in state) s.drawing];
+    final id = layer.selectedId;
+    if (id != null && layer.byId(id) == null) select(null);
+    layer.requestUpdate();
+    onHistoryChanged?.call();
+  }
+
+  /// Each drawing's line prices at [time] (see [Drawing.pricesAt]), for
+  /// alerts; drawings that don't reach it are left out.
+  List<(Drawing, List<double>)> pricesAt(num time) {
+    final logical = chart.timeScale().timeToLogical(time);
+    if (logical == null) return const [];
+    return [
+      for (final d in layer.drawings)
+        if (d.visible)
+          if (d.pricesAt(logical) case final p when p.isNotEmpty) (d, p),
+    ];
+  }
+
   /// The tool new drawings come from; `null` for selecting and editing.
   DrawingFactory? get tool => _tool;
 
@@ -411,9 +506,14 @@ class DrawingEditor {
     onSelectionChanged?.call(selected);
   }
 
-  void add(Drawing drawing) => layer.add(drawing);
+  void add(Drawing drawing) {
+    checkpoint();
+    layer.add(drawing);
+  }
 
   Drawing? remove(Object id) {
+    if (layer.byId(id) == null) return null;
+    checkpoint();
     final wasSelected = layer.selectedId == id;
     final d = layer.remove(id);
     if (wasSelected) onSelectionChanged?.call(null);
@@ -426,6 +526,7 @@ class DrawingEditor {
   }
 
   void clear() {
+    if (layer.drawings.isNotEmpty) checkpoint();
     layer.drawings = const [];
     select(null);
   }
@@ -456,6 +557,7 @@ class DrawingEditor {
     _placed = 0;
     _dragAnchor = null;
     if (!keepTool) _tool = null;
+    checkpoint();
     layer.add(d);
     onCreated?.call(d);
     if (!keepTool) select(d.id);
@@ -478,6 +580,7 @@ class DrawingEditor {
         _dragAnchor = hit!.handle;
         _moveStart = DrawingAnchor(e.logical, e.price!);
         _moveFrom = List.of(d.anchors);
+        _beforeMove = _snapshot();
         return true;
       case ChartPointerPhase.move:
         final d = _moving;
@@ -500,8 +603,10 @@ class DrawingEditor {
           d.anchors = _moveFrom!;
           layer.requestUpdate();
         } else if (d != null && _moved) {
+          if (_beforeMove case final before?) _pushUndo(before);
           onChanged?.call(d);
         }
+        _beforeMove = null;
         _moving = null;
         _dragAnchor = null;
         _moveFrom = null;
@@ -706,6 +811,15 @@ class TrendLineDrawing extends Drawing {
   }
 
   @override
+  List<double> pricesAt(double logical) {
+    if (anchors.length < 2) return const [];
+    final a = anchors[0], b = anchors[1];
+    if (!_within(a, b, logical, left: extendLeft, right: extendRight)) return const [];
+    final p = _lineAt(a, b, logical);
+    return p == null ? const [] : [p];
+  }
+
+  @override
   void paint(Canvas canvas, DrawingContext c) {
     final seg = _segment(c);
     if (seg == null) return;
@@ -739,6 +853,10 @@ class HorizontalLineDrawing extends Drawing {
 
   /// Text drawn above the line at its right end.
   String? label;
+
+  @override
+  List<double> pricesAt(double logical) =>
+      anchors.isEmpty || (ray && logical < anchors[0].logical) ? const [] : [anchors[0].price];
 
   @override
   int get anchorCount => 1;
@@ -818,6 +936,14 @@ class RectangleDrawing extends Drawing {
   @override
   int get anchorCount => 2;
 
+  /// Its bottom and top while [logical] is within its width.
+  @override
+  List<double> pricesAt(double logical) {
+    if (anchors.length < 2 || !_within(anchors[0], anchors[1], logical)) return const [];
+    final a = anchors[0].price, b = anchors[1].price;
+    return [math.min(a, b), math.max(a, b)];
+  }
+
   @override
   int get hitPriority => style.fillColor == null ? 1 : 0;
 
@@ -889,6 +1015,18 @@ class ParallelChannelDrawing extends Drawing {
 
   @override
   int get anchorCount => 3;
+
+  /// Its two rails (and the middle line when shown) while [logical] is
+  /// within its length.
+  @override
+  List<double> pricesAt(double logical) {
+    if (anchors.length < 3 || !_within(anchors[0], anchors[1], logical)) return const [];
+    final base = _lineAt(anchors[0], anchors[1], logical);
+    final third = _lineAt(anchors[0], anchors[1], anchors[2].logical);
+    if (base == null || third == null) return const [];
+    final offset = anchors[2].price - third;
+    return [base, base + offset, if (middleLine) base + offset / 2];
+  }
 
   @override
   int get hitPriority => style.fillColor == null ? 1 : 0;
@@ -1267,5 +1405,28 @@ class FreehandDrawing extends Drawing {
       best = math.min(best, _distanceToSegment(p, c.points[i - 1], c.points[i]));
     }
     return best <= tolerance ? best : null;
+  }
+}
+
+/// A drawing as it was: its anchors, style and flags, for undo.
+class _DrawingState {
+  _DrawingState(this.drawing)
+    : anchors = List.of(drawing.anchors),
+      style = drawing.style,
+      visible = drawing.visible,
+      locked = drawing.locked;
+
+  final Drawing drawing;
+  final List<DrawingAnchor> anchors;
+  final DrawingStyle style;
+  final bool visible;
+  final bool locked;
+
+  void apply() {
+    drawing
+      ..anchors = List.of(anchors)
+      ..style = style
+      ..visible = visible
+      ..locked = locked;
   }
 }

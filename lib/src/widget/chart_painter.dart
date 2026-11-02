@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show Listenable;
 import 'package:flutter/rendering.dart';
 
 import '../model/chart_model.dart';
@@ -61,11 +62,29 @@ Color contrastColor(Color background) {
   return luminance > 160 ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
 }
 
+/// Which of the chart's two layers a [ChartPainter] draws.
+///
+/// [content] lays the chart out and draws the background, grid, series,
+/// price lines, axes and the primitives under the series. [overlay] draws,
+/// on top and in the same order as one layer would, everything that follows
+/// the pointer or animates: the other primitives (legend, trading lines,
+/// drawings), the crosshair with its axis labels and the last price pulse.
+/// The content sits in its own repaint boundary, so a crosshair move or a
+/// pulse frame repaints only the overlay — no layout, no series.
+enum ChartLayer { content, overlay }
+
 class ChartPainter extends CustomPainter {
-  ChartPainter({required this.model, required this.pixelRatio, required this.textCache, this.activeSeparator})
-    : super(repaint: model);
+  ChartPainter({
+    required this.model,
+    required this.pixelRatio,
+    required this.textCache,
+    this.activeSeparator,
+    this.layer = ChartLayer.content,
+  }) : super(repaint: layer == ChartLayer.content ? model : Listenable.merge([model, model.overlay]));
 
   final ChartModel model;
+  final ChartLayer layer;
+  bool get _content => layer == ChartLayer.content;
   final double pixelRatio;
   final TextCache textCache;
 
@@ -87,19 +106,23 @@ class ChartPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) return;
-    model.layout(size, pixelRatio, (t) => _text(t).width);
+    // The overlay paints right after the content (same frame) or on its
+    // own when only the crosshair moved; either way the layout is current.
+    if (_content) {
+      model.layout(size, pixelRatio, (t) => _text(t).width);
 
-    final bottomColor = _o.layout.backgroundBottomColor;
-    canvas.drawRect(
-      Offset.zero & size,
-      bottomColor == null
-          ? (Paint()..color = _o.layout.backgroundColor)
-          : (Paint()
-              ..shader = ui.Gradient.linear(Offset.zero, Offset(0, size.height), [
-                _o.layout.backgroundColor,
-                bottomColor,
-              ])),
-    );
+      final bottomColor = _o.layout.backgroundBottomColor;
+      canvas.drawRect(
+        Offset.zero & size,
+        bottomColor == null
+            ? (Paint()..color = _o.layout.backgroundColor)
+            : (Paint()
+                ..shader = ui.Gradient.linear(Offset.zero, Offset(0, size.height), [
+                  _o.layout.backgroundColor,
+                  bottomColor,
+                ])),
+      );
+    }
 
     for (var i = 0; i < model.panes.length; i++) {
       final pane = model.panes[i];
@@ -107,20 +130,24 @@ class ChartPainter extends CustomPainter {
       canvas.save();
       canvas.clipRect(rect);
       canvas.translate(rect.left, rect.top);
-      _paintPane(canvas, i, pane, rect.size);
+      _content ? _paintPane(canvas, i, pane, rect.size) : _paintPaneOverlay(canvas, i, pane, rect.size);
       canvas.restore();
 
-      if (model.leftAxisWidth > 0) _paintPriceAxis(canvas, i, pane, AxisSide.left);
-      if (model.rightAxisWidth > 0) _paintPriceAxis(canvas, i, pane, AxisSide.right);
-      if (i < model.panes.length - 1) _paintSeparator(canvas, i, pane, size.width);
+      for (final side in AxisSide.values) {
+        final width = side == AxisSide.left ? model.leftAxisWidth : model.rightAxisWidth;
+        if (width <= 0) continue;
+        _content ? _paintPriceAxis(canvas, i, pane, side) : _paintPriceAxisCrosshair(canvas, i, pane, side);
+      }
+      if (_content && i < model.panes.length - 1) _paintSeparator(canvas, i, pane, size.width);
     }
 
-    if (_o.layout.attributionLogo && model.panes.isNotEmpty) {
+    if (_content && _o.layout.attributionLogo && model.panes.isNotEmpty) {
       final logo = attributionLogoRect(model.paneRect(model.panes.length - 1));
       if (logo.top >= 0) paintAttributionLogo(canvas, logo.topLeft, darkBackground: isDarkTheme(_o.layout.textColor));
     }
 
-    if (model.timeAxisHeight > 0) _paintTimeAxis(canvas, size);
+    if (model.timeAxisHeight > 0) _content ? _paintTimeAxis(canvas, size) : _paintTimeAxisCrosshair(canvas, size);
+    if (!_content) model.overlayPainted();
   }
 
   void _paintSeparator(Canvas canvas, int index, Pane pane, double width) {
@@ -137,7 +164,6 @@ class ChartPainter extends CustomPainter {
   void _paintPane(Canvas canvas, int index, Pane pane, Size paneSize) {
     final ts = model.timeScale;
     final visible = ts.visibleStrictRange();
-    final crosshair = model.crosshair;
 
     canvas.save();
     canvas.scale(1 / pr);
@@ -167,7 +193,12 @@ class ChartPainter extends CustomPainter {
       _paintPriceLines(canvas, pane, paneSize);
     }
     canvas.restore();
+  }
 
+  /// What a pane shows over its content, in the order a single layer
+  /// would draw it.
+  void _paintPaneOverlay(Canvas canvas, int index, Pane pane, Size paneSize) {
+    final crosshair = model.crosshair;
     _paintPrimitives(canvas, pane, PrimitiveZOrder.normal);
 
     canvas.save();
@@ -386,12 +417,28 @@ class ChartPainter extends CustomPainter {
       _paintAxisLabel(canvas, left, width, label.render, label.text, label.background, label.textColor, isLeft, textX);
     }
 
+    canvas.restore();
+  }
+
+  /// The crosshair's price label on the axis on [side] of [pane].
+  void _paintPriceAxisCrosshair(Canvas canvas, int index, Pane pane, AxisSide side) {
     final c = model.crosshair;
     final horz = _o.crosshair.horzLine;
-    if (c != null && c.paneIndex == index && horz.visible && horz.labelVisible && !ps.isEmpty) {
-      final text = ps.formatLogical(ps.coordinateToDisplay(c.y));
-      _paintAxisLabel(canvas, left, width, c.y, text, horz.labelBackgroundColor, null, isLeft, textX);
-    }
+    final ps = model.scaleOnSide(pane, side);
+    if (c == null || c.paneIndex != index || !horz.visible || !horz.labelVisible || ps.isEmpty) return;
+    final isLeft = side == AxisSide.left;
+    final width = isLeft ? model.leftAxisWidth : model.rightAxisWidth;
+    final left = isLeft ? 0.0 : model.size.width - width;
+    final padding = _o.layout.fontSize / 12 * 5;
+    const tickLength = 5.0;
+    double textX(TextPainter t) =>
+        isLeft ? left + width - 1 - tickLength - padding - t.width : left + 1 + tickLength + padding;
+
+    canvas.save();
+    canvas.clipRect(Rect.fromLTWH(left, pane.top, width, pane.height));
+    canvas.translate(0, pane.top);
+    final text = ps.formatLogical(ps.coordinateToDisplay(c.y));
+    _paintAxisLabel(canvas, left, width, c.y, text, horz.labelBackgroundColor, null, isLeft, textX);
     canvas.restore();
   }
 
@@ -484,13 +531,21 @@ class ChartPainter extends CustomPainter {
       _paintTimeLabel(canvas, label.coordinate, top, height, label.text, label.backgroundColor, label.textColor);
     }
 
+    canvas.restore();
+    canvas.restore();
+  }
+
+  /// The crosshair's time label on the time axis.
+  void _paintTimeAxisCrosshair(Canvas canvas, Size size) {
     final c = model.crosshair;
     final vert = _o.crosshair.vertLine;
-    final time = c == null ? null : ts.indexToTime(c.index);
-    if (c != null && time != null && vert.visible && vert.labelVisible) {
-      _paintTimeLabel(canvas, c.x, top, height, model.formatTime(time), vert.labelBackgroundColor, null);
-    }
-    canvas.restore();
+    final time = c == null ? null : model.timeScale.indexToTime(c.index);
+    if (c == null || time == null || !vert.visible || !vert.labelVisible) return;
+    final top = size.height - model.timeAxisHeight;
+    final height = model.timeAxisHeight;
+    canvas.save();
+    canvas.clipRect(Rect.fromLTWH(model.leftAxisWidth, top, model.paneWidth, height));
+    _paintTimeLabel(canvas, c.x, top, height, model.formatTime(time), vert.labelBackgroundColor, null);
     canvas.restore();
   }
 
@@ -512,6 +567,7 @@ class ChartPainter extends CustomPainter {
   @override
   bool shouldRepaint(ChartPainter oldDelegate) =>
       oldDelegate.model != model ||
+      oldDelegate.layer != layer ||
       oldDelegate.pixelRatio != pixelRatio ||
       oldDelegate.activeSeparator != activeSeparator;
 }

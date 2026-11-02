@@ -1,3 +1,31 @@
+## 0.11.0
+
+* Faster crosshair and animations: the chart paints in two layers. The
+  content (grid, series, axes) sits in its own repaint boundary; the
+  overlay (crosshair and its axis labels, legend, trading lines,
+  drawings, the last price pulse) paints over it. A crosshair move or a
+  pulse frame repaints only the overlay — no layout, no series. About
+  3× less paint work per crosshair move on 5,000 bars with 6 lines.
+  `ChartModel.overlay` notifies overlay-only changes.
+* `FanPrimitive`: a forecast fan (cone) — nested ranges (e.g. 80% and
+  95%) and a center line drawn forward from a bar into the future, on
+  logical indices past the last bar. Takes part in autoscale; smooth or
+  straight edges.
+* `DrawingCodec`: save drawings as JSON-ready maps and load them back,
+  with anchors stored by time (they don't shift when history is paged in).
+  All built-in drawings are known; `DrawingKind` adds custom ones.
+* `DrawingEditor`: undo / redo (`undo`, `redo`, `canUndo`, `canRedo`,
+  `onHistoryChanged`, `checkpoint` for changes made outside the editor)
+  over creating, moving, reshaping, removing and clearing.
+* `Drawing.pricesAt(logical)` and `DrawingEditor.pricesAt(time)`: a
+  drawing's line prices at a bar — trend line, horizontal line, channel
+  rails, rectangle — for alerts.
+* `CrosshairSync`: keeps the crosshair of several charts on the same time.
+* `TimeScaleApi.timeToLogical` / `logicalToTime` (and `logicalOfTime` /
+  `timeOfLogical`): fractional logical index ↔ time, interpolated between
+  bars and extrapolated past them.
+* `Drawing.kind`: the name a drawing is saved under.
+
 ## 0.10.1
 
 * `Ta.volumeProfile`: each `VolumeBucket` has `upVolume`, the part traded

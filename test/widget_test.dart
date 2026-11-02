@@ -36,6 +36,35 @@ void main() {
     expect(chart.timeScale().width(), 400 - chart.priceScale().width());
   });
 
+  testWidgets('a crosshair move repaints only the overlay layer', (tester) async {
+    final chart = await _pump(tester);
+    var content = 0, overlay = 0;
+    void onContent() => content++;
+    void onOverlay() => overlay++;
+    chart.model.addListener(onContent);
+    chart.model.overlay.addListener(onOverlay);
+    addTearDown(() {
+      chart.model.removeListener(onContent);
+      chart.model.overlay.removeListener(onOverlay);
+    });
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: const Offset(100, 100));
+    addTearDown(gesture.removePointer);
+    for (var x = 100.0; x < 200; x += 10) {
+      await gesture.moveTo(Offset(x, 120));
+      await tester.pump();
+    }
+
+    // The content layer (and its layout) was never invalidated; the
+    // overlay was, once per move, and the crosshair is there.
+    expect(content, 0);
+    expect(overlay, greaterThanOrEqualTo(10));
+    expect(chart.model.crosshair, isNotNull);
+    expect(find.byType(CustomPaint), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('dragging the pane scrolls into history', (tester) async {
     final chart = await _pump(tester);
     final before = chart.timeScale().scrollPosition();

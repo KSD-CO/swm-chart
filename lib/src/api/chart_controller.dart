@@ -823,6 +823,14 @@ class TimeScaleApi {
 
   void applyOptions(TimeScaleOptions options) => _model.applyOptions(_model.options.copyWith(timeScale: options));
 
+  /// The (fractional) logical index of [time]: between bars it's
+  /// interpolated, past the data extrapolated by the nearest bar step.
+  /// `null` before any data.
+  double? timeToLogical(num time) => logicalOfTime(_ts.times, time);
+
+  /// The time at logical index [logical]; the inverse of [timeToLogical].
+  num? logicalToTime(double logical) => timeOfLogical(_ts.times, logical);
+
   /// Shows all data.
   void fitContent() {
     _model.cancelAnimations();

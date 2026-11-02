@@ -101,6 +101,13 @@ class ChartModel extends ChangeNotifier {
 
   int? _crosshairPane;
   Offset? _crosshairPoint;
+
+  /// Fires when only what the overlay layer draws changed — the crosshair
+  /// moved, or the last price animation needs its next frame. Listeners of
+  /// the model itself (the content layer, which also lays the chart out)
+  /// aren't told, so moving the crosshair doesn't redraw every series.
+  Listenable get overlay => _overlay;
+  final _OverlaySignal _overlay = _OverlaySignal();
   bool _crosshairExact = false;
   CrosshairState? _crosshair;
 
@@ -765,7 +772,8 @@ class ChartModel extends ChangeNotifier {
     _resolveCrosshair();
     final params = _eventParams(_crosshair);
     hovered = params.hit;
-    notifyListeners();
+    // Only the overlay draws the crosshair (and what follows it).
+    _overlay.fire();
     _emit(crosshairMoveListeners, params);
   }
 
@@ -881,8 +889,15 @@ class ChartModel extends ChangeNotifier {
     _animationFrameScheduled = true;
     SchedulerBinding.instance.scheduleFrameCallback((_) {
       _animationFrameScheduled = false;
-      invalidate();
+      // The pulse is drawn by the overlay; the content stays as it was.
+      if (!_disposed) _overlay.fire();
     });
+  }
+
+  /// Called after the overlay layer painted: keeps a running last price
+  /// animation going without a full layout and repaint each frame.
+  void overlayPainted() {
+    if (_needsAnimationFrame()) _scheduleAnimationFrame();
   }
 
   // ---- notifications ----
@@ -949,6 +964,7 @@ class ChartModel extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _overlay.dispose();
     _animationId++;
     for (final pane in panes) {
       for (final p in pane.primitives) {
@@ -962,4 +978,9 @@ class ChartModel extends ChangeNotifier {
     }
     super.dispose();
   }
+}
+
+/// A [ChangeNotifier] anyone holding it can fire.
+class _OverlaySignal extends ChangeNotifier {
+  void fire() => notifyListeners();
 }

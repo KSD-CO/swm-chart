@@ -639,15 +639,31 @@ class _SwmChartState extends State<SwmChart> with SingleTickerProviderStateMixin
           },
           child: RepaintBoundary(
             key: _boundaryKey,
-            child: SizedBox.expand(
-              child: CustomPaint(
-                painter: ChartPainter(
-                  model: _model,
-                  pixelRatio: pixelRatio,
-                  textCache: _textCache,
-                  activeSeparator: _activeSeparator ?? _hoverSeparator,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // The content in its own boundary: a crosshair move or a
+                // pulse frame repaints only the overlay above it.
+                RepaintBoundary(
+                  child: CustomPaint(
+                    painter: ChartPainter(
+                      model: _model,
+                      pixelRatio: pixelRatio,
+                      textCache: _textCache,
+                      activeSeparator: _activeSeparator ?? _hoverSeparator,
+                    ),
+                  ),
                 ),
-              ),
+                CustomPaint(
+                  willChange: true,
+                  painter: ChartPainter(
+                    model: _model,
+                    pixelRatio: pixelRatio,
+                    textCache: _textCache,
+                    layer: ChartLayer.overlay,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
