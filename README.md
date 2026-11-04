@@ -49,9 +49,9 @@ Everything in Lightweight Charts v5.2.1 that applies to Flutter is ported:
 | Last value labels, price line source, custom price lines, base line, last price animation | ✅ |
 | Hit testing: `hoveredSeries` / `hoveredObjectId`, `hoveredSeriesOnTop` | ✅ |
 | Plugins: primitives API, series markers, up/down markers, text & image watermarks | ✅ |
-| Beyond upstream: **drawing tools** with an editor, band fill, price levels, volume profile, pointer capture, **sparklines**, **donut charts** | ✅ |
+| Beyond upstream: **drawing tools** with an editor (undo / redo, save / load as JSON), band fill, price levels, **volume profile** (value area, per session), **forecast fan**, **crosshair sync** across charts, pointer capture, **sparklines**, **donut charts** | ✅ |
 | **Indicators** (73): moving averages (SMA, EMA, WMA, Hull, DEMA, TEMA, RMA, VWMA, ALMA, LSMA, ZLEMA, T3, McGinley, KAMA, Envelope, Alligator), bands and stops (Bollinger, %B, bandwidth, Keltner, Donchian, Ichimoku, Supertrend, Parabolic SAR, Chandelier exit), oscillators (RSI, Stoch RSI, MACD, PPO, Stochastic, Williams %R, CCI, ROC, Momentum, CMO, TSI, TRIX, Ultimate, Awesome, Accelerator, DPO, Coppock, KST, Fisher, Connors RSI, RVGI, SMI, Aroon, ADX, Vortex, Elder ray, Balance of power, Choppiness, Mass index, Sine Wave, Even Better Sinewave), volume (VWAP, OBV, MFI, CMF, A/D, Chaikin oscillator, PVT, NVI / PVI, Klinger, Force index, Ease of movement, Volume oscillator, Volume MA) and volatility (ATR, standard deviation, historical volatility, Ulcer index) — one line to add | ✅ |
-| **Technical analysis** (`Ta`): ZigZag, Elliott waves, support / resistance, chart and candlestick patterns, auto trendlines, divergences, Fibonacci, pivot points, regression channel, volume profile | ✅ |
+| **Technical analysis** (`Ta`): every indicator as a plain function, plus ZigZag, Elliott waves, support / resistance, chart and candlestick patterns, auto trendlines, divergences, Williams fractals, Fibonacci, pivot points, regression channel, volume profile with value area and per-session profiles | ✅ |
 | **Trading lines**: draggable orders, TP / SL, positions with P&L, price alerts | ✅ |
 | **Legend & tooltip** following the crosshair | ✅ |
 | **Chart types & timeframes**: Heikin-Ashi, Renko, line break, range bars; resample to minutes … months | ✅ |
@@ -142,8 +142,66 @@ Custom drawings: extend `ChartPrimitive` (override `paint`, `priceAxisLabels`,
 Overlays beyond upstream: `BandFillPrimitive` (Bollinger, Keltner, an
 Ichimoku cloud with a second colour where the lines cross),
 `PriceLevelsPrimitive` (pivots, support / resistance, Fibonacci zones, with
-optional axis labels and hit ids) and `VolumeProfilePrimitive` (horizontal
-volume bins with a POC).
+optional axis labels and hit ids), `VolumeProfilePrimitive` and
+`SessionVolumeProfilePrimitive` (see below) and `FanPrimitive` (a forecast
+cone).
+
+### Volume profile
+
+```dart
+final vp = Ta.volumeProfile(bars, buckets: 32);
+print('POC ${vp.pocPrice}, value area ${vp.valueAreaLow}–${vp.valueAreaHigh}');
+
+candles.attachPrimitive(VolumeProfilePrimitive(
+  bins: [for (final b in vp.buckets)
+    VolumeProfileBin(low: b.priceLow, high: b.priceHigh, volume: b.volume, upVolume: b.upVolume)],
+  options: const VolumeProfileOptions(valueArea: 0.7), // VAH / VAL dashed, the rest dimmed
+));
+
+// one profile per trading day, each over its own bars (intraday data)
+final sessions = Ta.sessionVolumeProfiles(bars, buckets: 24);
+candles.attachPrimitive(SessionVolumeProfilePrimitive(sessions: [
+  for (final s in sessions)
+    SessionProfile(from: times[s.from], to: times[s.to], bins: [
+      for (final b in s.profile.buckets)
+        VolumeProfileBin(low: b.priceLow, high: b.priceHigh, volume: b.volume, upVolume: b.upVolume),
+    ]),
+]));
+```
+
+The value area is the range around the point of control holding 70% of the
+volume (`Ta.valueAreaShare`), grown toward the busier side one row at a
+time; `Ta.valueArea(volumes, poc)` computes it for any profile. Sessions are
+calendar days by default — pass `sessionOf` for anything else. To follow the
+bars on screen, refit the bins in `subscribeVisibleLogicalRangeChange`.
+
+### Forecast fan
+
+```dart
+final fan = FanPrimitive(
+  anchorTime: last.time,
+  anchorValue: last.close,
+  steps: [for (final s in forecast)
+    FanStep(mid: s.mid, ranges: [(s.lo80, s.hi80), (s.lo95, s.hi95)])],
+);
+candles.attachPrimitive(fan);
+chart.timeScale().applyOptions(const TimeScaleOptions(rightOffset: 20)); // room ahead
+```
+
+Steps sit on the logical index past the last bar, so no whitespace data is
+needed; the ranges take part in autoscale.
+
+### Several charts in step
+
+```dart
+final sync = CrosshairSync([(priceChart, candles), (otherChart, otherCandles)]);
+// …
+sync.dispose();
+```
+
+Pointing at a moment on one chart moves every other chart's crosshair to the
+same time — across symbols, and across intervals (`timeScale().timeToLogical`
+places it between bars).
 
 ### Indicators
 
@@ -156,13 +214,20 @@ chart.addIndicator(Vwap(), source: candles, volume: volumeSeries);
 rsi.remove();
 ```
 
-Built in: `Sma`, `Ema`, `Wma`, `Bollinger`, `Rsi`, `Macd`, `Stochastic`,
-`Atr`, `Vwap`, `Ichimoku` (cloud projected ahead) — these only recompute
-the last bar on a tick — and `WilliamsR`, `Adx`, `Obv`, `Cci`, `Mfi`,
-`Cmf`, `Aroon`, `Roc`, `ParabolicSar`, `Kama`, `Keltner`, `Donchian`,
-`Supertrend`, `VolumeSma`, `SineWave`, `EvenBetterSinewave`, and 47 more
-(`Hma`, `StochRsi`, `Tsi`, `Klinger`, `UlcerIndex`… — see the changelog
-for the list). Extend
+73 built in. Overlays go on the price pane, the rest in a pane of their
+own with their usual levels:
+
+| Group | Indicators |
+|---|---|
+| Moving averages | `Sma`, `Ema`, `Wma`, `Hma`, `Dema`, `Tema`, `Rma`, `Vwma`, `Alma`, `Lsma`, `Zlema`, `T3`, `McGinley`, `Kama`, `Envelope`, `Alligator` |
+| Bands, clouds, stops | `Bollinger`, `Keltner`, `Donchian`, `Ichimoku` (cloud projected ahead), `Supertrend`, `ParabolicSar`, `ChandelierExit` |
+| Momentum | `Rsi`, `StochRsi`, `Stochastic`, `Macd`, `Ppo`, `WilliamsR`, `Cci`, `Roc`, `Momentum`, `Cmo`, `Tsi`, `Trix`, `UltimateOscillator`, `AwesomeOscillator`, `AcceleratorOscillator`, `Dpo`, `Coppock`, `Kst`, `FisherTransform`, `ConnorsRsi`, `Rvi`, `Smi` |
+| Trend | `Adx`, `Aroon`, `Vortex`, `ElderRay`, `BalanceOfPower`, `Choppiness`, `MassIndex`, `SineWave`, `EvenBetterSinewave` |
+| Volume | `Vwap`, `Obv`, `Mfi`, `Cmf`, `AccumulationDistribution`, `ChaikinOscillator`, `PriceVolumeTrend`, `VolumeIndexes` (NVI / PVI), `Klinger`, `ForceIndex`, `EaseOfMovement`, `VolumeOscillator`, `VolumeSma` |
+| Volatility | `Atr`, `StandardDeviation`, `HistoricalVolatility`, `BollingerPercentB`, `BollingerWidth`, `UlcerIndex` |
+
+`Sma`, `Ema`, `Wma`, `Bollinger`, `Rsi`, `Macd`, `Stochastic`, `Atr`,
+`Vwap` and `Ichimoku` only recompute the last bar on a tick. Extend
 `Indicator` (`lines`, `compute(input, from, out)`) or `TaIndicator`
 (`series(bars)`) for your own, or call `computeAll` to use the math
 without a chart.
@@ -179,7 +244,12 @@ final levels = Ta.supportResistance(bars);       // support / resistance levels
 final patterns = Ta.detectPatterns(bars);        // head & shoulders, triangles, flags…
 final waves = Ta.elliottWaves(bars);             // automatic Elliott count
 final bullish = Ta.rsiBullishDivergence(bars);
+final hull = Ta.hma(bars, 21);                   // any indicator, as a series
+final s = Ta.stochRsi(bars);                     // several lines come as a record: s.k, s.d
+final f = Ta.fractals(bars);                     // Williams fractals: f.up, f.down (bar indices)
 ```
+
+Every result lines up with the bars, `null` through the warm-up.
 
 Implement `TaBar` on your own bar class to pass it in directly. Import
 `package:swm_chart/ta.dart` for just this part.
@@ -246,7 +316,23 @@ editor.deleteSelected();
 Built in: trend line / ray / extended line / arrow, horizontal line and ray,
 vertical line, cross line, rectangle, ellipse, parallel channel, Fibonacci
 retracement, text, price & date measurement, multi-point paths with labels
-(Elliott waves, XABCD) and freehand. Anchors are a fractional logical index
+(Elliott waves, XABCD) and freehand.
+
+`editor.undo()` / `editor.redo()` step through adding, moving, reshaping and
+deleting (`canUndo`, `canRedo`, `onHistoryChanged`; `checkpoint()` before a
+change you make yourself, e.g. a colour). `DrawingCodec` saves drawings as
+JSON with the anchors stored by time, so they stay put when older history
+is paged in:
+
+```dart
+final codec = DrawingCodec();
+final saved = jsonEncode(codec.encodeAll(editor.drawings, chart.timeScale().logicalToTime));
+// later, once the data is loaded:
+editor.layer.drawings = codec.decodeAll(jsonDecode(saved), chart.timeScale().timeToLogical);
+```
+
+`Drawing.pricesAt(logical)` / `editor.pricesAt(time)` give a drawing's
+price(s) at a bar — e.g. to alert when the price crosses a trend line. Anchors are a fractional logical index
 and a price, so drawings can extend past the last bar. For anything else,
 extend `Drawing` (`anchorCount`, `paint`, `hitDistance`). Set `snap` for a
 magnet, `keepTool` to draw several in a row, and
