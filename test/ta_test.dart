@@ -364,4 +364,63 @@ void main() {
     expect(up, closeTo(100, 1e-9));
     expect(all, closeTo(400, 1e-9));
   });
+
+  group('value area', () {
+    test('grows from the point of control toward the busier side', () {
+      // Rows 0..6; POC at 3 (40). 70% of 100 = 70: 3 (40) + 4 (20) = 60,
+      // then 2 (15) beats 5 (5) → 75.
+      expect(Ta.valueArea([2, 8, 15, 40, 20, 5, 10], 3), (2, 4));
+    });
+
+    test('is the whole range for a flat profile of one bucket', () {
+      final day = DateTime(2026, 1, 1);
+      final vp = Ta.volumeProfile([TaPoint(date: day, open: 10, high: 10, low: 10, close: 10, volume: 5)]);
+      expect((vp.valueAreaLow, vp.valueAreaHigh), (10, 10));
+    });
+
+    test('a profile reports VAL ≤ POC ≤ VAH holding ~70%', () {
+      final day = DateTime(2026, 1, 1);
+      final bars = [
+        for (var i = 0; i < 60; i++)
+          TaPoint(
+            date: day.add(Duration(minutes: i)),
+            open: 100 + (i % 9),
+            high: 102 + (i % 9),
+            low: 99 + (i % 9),
+            close: 101 + (i % 9),
+            volume: 100.0 + (i % 9 == 4 ? 900 : 0),
+          ),
+      ];
+      final vp = Ta.volumeProfile(bars, buckets: 20);
+      expect(vp.valueAreaLow, lessThanOrEqualTo(vp.pocPrice));
+      expect(vp.valueAreaHigh, greaterThanOrEqualTo(vp.pocPrice));
+      final total = vp.buckets.fold(0.0, (s, b) => s + b.volume);
+      final inside = vp.buckets
+          .where((b) => b.priceLow >= vp.valueAreaLow - 1e-9 && b.priceHigh <= vp.valueAreaHigh + 1e-9)
+          .fold(0.0, (s, b) => s + b.volume);
+      expect(inside / total, greaterThanOrEqualTo(0.7));
+    });
+  });
+
+  test('session profiles split intraday bars by day', () {
+    final bars = [
+      for (var d = 0; d < 3; d++)
+        for (var h = 0; h < 6; h++)
+          TaPoint(
+            date: DateTime(2026, 1, 5 + d, 9 + h),
+            open: 100.0 + d * 10,
+            high: 103.0 + d * 10 + h,
+            low: 98.0 + d * 10,
+            close: 101.0 + d * 10 + h,
+            volume: 100,
+          ),
+    ];
+    final sessions = Ta.sessionVolumeProfiles(bars, buckets: 8);
+    expect(sessions.length, 3);
+    expect([for (final s in sessions) (s.from, s.to)], [(0, 5), (6, 11), (12, 17)]);
+    // Each over its own range: day 3 sits higher than day 1.
+    expect(sessions[2].profile.pocPrice, greaterThan(sessions[0].profile.pocPrice));
+    // A custom key: all in one.
+    expect(Ta.sessionVolumeProfiles(bars, sessionOf: (_) => 0).single.to, 17);
+  });
 }

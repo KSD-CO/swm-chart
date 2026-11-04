@@ -8,6 +8,7 @@ import 'package:flutter/painting.dart';
 
 import '../options.dart';
 import '../renderers/draw_utils.dart';
+import '../ta/ta.dart' show Ta;
 import 'primitive.dart';
 
 // ---- band fill ----
@@ -323,6 +324,9 @@ class VolumeProfileOptions {
     this.color = const Color(0x55787B86),
     this.pocColor = const Color(0xCCFFB300),
     this.gap = 1,
+    this.valueArea,
+    this.valueAreaLineColor = const Color(0x99FFB300),
+    this.outsideOpacity = 0.45,
   });
 
   /// Edge of the pane the bars grow from.
@@ -341,6 +345,83 @@ class VolumeProfileOptions {
 
   /// Space between bars, in logical pixels.
   final double gap;
+
+  /// Share of the volume the value area holds (0.7 by convention); `null`
+  /// doesn't mark one. Bins outside it are drawn at [outsideOpacity], and
+  /// its high (VAH) and low (VAL) as dashed lines in [valueAreaLineColor].
+  final double? valueArea;
+  final Color? valueAreaLineColor;
+  final double outsideOpacity;
+}
+
+/// The value area of [bins] (lowest price first) as the indices of its
+/// first and last bin, or null for none / no volume.
+(int, int)? _valueAreaOf(List<VolumeProfileBin> bins, double? share) {
+  if (share == null || bins.isEmpty) return null;
+  var poc = 0;
+  for (var i = 1; i < bins.length; i++) {
+    if (bins[i].volume > bins[poc].volume) poc = i;
+  }
+  if (bins[poc].volume <= 0) return null;
+  return Ta.valueArea([for (final b in bins) b.volume], poc, share: share);
+}
+
+/// Draws [bins] as horizontal bars from [edge] (right edge growing left
+/// when [fromRight]), the largest [full] long: up / down split, POC, the
+/// value area brighter and its edges as dashed lines from [lineFrom] to
+/// [lineTo].
+void _paintProfile(
+  PrimitivePaintContext ctx,
+  List<VolumeProfileBin> bins,
+  VolumeProfileOptions o, {
+  required double edge,
+  required bool fromRight,
+  required double full,
+  required double lineFrom,
+  required double lineTo,
+}) {
+  final maxVolume = bins.fold(0.0, (a, b) => math.max(a, b.volume));
+  if (maxVolume <= 0) return;
+  final poc = o.pocColor == null ? null : bins.reduce((a, b) => b.volume > a.volume ? b : a);
+  final va = _valueAreaOf(bins, o.valueArea);
+  final canvas = ctx.canvas;
+  for (final (i, b) in bins.indexed) {
+    final y1 = ctx.priceToCoordinate(b.high);
+    final y2 = ctx.priceToCoordinate(b.low);
+    if (y1 == null || y2 == null) continue;
+    final top = math.min(y1, y2) + o.gap / 2;
+    final bottom = math.max(y1, y2) - o.gap / 2;
+    if (bottom <= top) continue;
+    final len = full * b.volume / maxVolume;
+    final inside = va == null || (i >= va.$1 && i <= va.$2);
+    Color tone(Color c) => inside ? c : c.withValues(alpha: c.a * o.outsideOpacity);
+    Rect bar(double from, double length) => fromRight
+        ? Rect.fromLTRB(edge - from - length, top, edge - from, bottom)
+        : Rect.fromLTRB(edge + from, top, edge + from + length, bottom);
+    final up = b.upVolume;
+    if (identical(b, poc)) {
+      canvas.drawRect(bar(0, len), Paint()..color = o.pocColor!);
+    } else if (up == null) {
+      canvas.drawRect(bar(0, len), Paint()..color = tone(o.color));
+    } else {
+      final upLen = full * up.clamp(0, b.volume) / maxVolume;
+      canvas.drawRect(bar(0, upLen), Paint()..color = tone(o.upColor));
+      canvas.drawRect(bar(upLen, len - upLen), Paint()..color = tone(o.downColor));
+    }
+  }
+  final lineColor = o.valueAreaLineColor;
+  if (va != null && lineColor != null) {
+    final paint = Paint()
+      ..color = lineColor
+      ..strokeWidth = 1;
+    for (final price in [bins[va.$2].high, bins[va.$1].low]) {
+      final y = ctx.priceToCoordinate(price);
+      if (y == null) continue;
+      for (var x = lineFrom; x < lineTo; x += 6) {
+        canvas.drawLine(Offset(x, y), Offset(math.min(x + 3, lineTo), y), paint);
+      }
+    }
+  }
 }
 
 /// A volume-by-price histogram along a pane edge. Attach to the price
@@ -375,34 +456,94 @@ class VolumeProfilePrimitive extends ChartPrimitive {
   @override
   void paint(PrimitivePaintContext ctx) {
     if (_bins.isEmpty) return;
-    final o = _options;
-    final maxVolume = _bins.fold(0.0, (a, b) => math.max(a, b.volume));
-    if (maxVolume <= 0) return;
     final width = ctx.paneSize.width;
-    final full = width * o.widthFraction;
-    final poc = o.pocColor == null ? null : _bins.reduce((a, b) => b.volume > a.volume ? b : a);
-    final canvas = ctx.canvas;
-    for (final b in _bins) {
-      final y1 = ctx.priceToCoordinate(b.high);
-      final y2 = ctx.priceToCoordinate(b.low);
-      if (y1 == null || y2 == null) continue;
-      final top = math.min(y1, y2) + o.gap / 2;
-      final bottom = math.max(y1, y2) - o.gap / 2;
-      if (bottom <= top) continue;
-      final len = full * b.volume / maxVolume;
-      Rect bar(double from, double length) => o.side == VolumeProfileSide.right
-          ? Rect.fromLTRB(width - from - length, top, width - from, bottom)
-          : Rect.fromLTRB(from, top, from + length, bottom);
-      final up = b.upVolume;
-      if (identical(b, poc)) {
-        canvas.drawRect(bar(0, len), Paint()..color = o.pocColor!);
-      } else if (up == null) {
-        canvas.drawRect(bar(0, len), Paint()..color = o.color);
-      } else {
-        final upLen = full * up.clamp(0, b.volume) / maxVolume;
-        canvas.drawRect(bar(0, upLen), Paint()..color = o.upColor);
-        canvas.drawRect(bar(upLen, len - upLen), Paint()..color = o.downColor);
-      }
+    final right = _options.side == VolumeProfileSide.right;
+    _paintProfile(
+      ctx,
+      _bins,
+      _options,
+      edge: right ? width : 0,
+      fromRight: right,
+      full: width * _options.widthFraction,
+      lineFrom: 0,
+      lineTo: width,
+    );
+  }
+}
+
+/// One session of a [SessionVolumeProfilePrimitive]: the times of its
+/// first and last bar, and its profile's bins (lowest price first).
+class SessionProfile {
+  const SessionProfile({required this.from, required this.to, required this.bins});
+
+  final num from;
+  final num to;
+  final List<VolumeProfileBin> bins;
+}
+
+/// A volume profile per session (a trading day on intraday bars, say),
+/// each drawn over its own stretch of bars: growing right from the
+/// session's first bar, the largest bin [VolumeProfileOptions.widthFraction]
+/// of the session's width, with its value area (VAH / VAL across the
+/// session) and point of control. Attach to the price series.
+///
+/// ```dart
+/// final sessions = Ta.sessionVolumeProfiles(bars);
+/// series.attachPrimitive(SessionVolumeProfilePrimitive(sessions: [
+///   for (final s in sessions)
+///     SessionProfile(from: times[s.from], to: times[s.to], bins: [
+///       for (final b in s.profile.buckets)
+///         VolumeProfileBin(low: b.priceLow, high: b.priceHigh, volume: b.volume, upVolume: b.upVolume),
+///     ]),
+/// ]));
+/// ```
+class SessionVolumeProfilePrimitive extends ChartPrimitive {
+  SessionVolumeProfilePrimitive({
+    List<SessionProfile> sessions = const [],
+    VolumeProfileOptions options = const VolumeProfileOptions(widthFraction: 0.7, valueArea: 0.7),
+  }) : _sessions = sessions,
+       _options = options;
+
+  List<SessionProfile> _sessions;
+  VolumeProfileOptions _options;
+
+  List<SessionProfile> get sessions => _sessions;
+
+  set sessions(List<SessionProfile> value) {
+    _sessions = value;
+    requestUpdate();
+  }
+
+  VolumeProfileOptions get options => _options;
+
+  set options(VolumeProfileOptions value) {
+    _options = value;
+    requestUpdate();
+  }
+
+  @override
+  PrimitiveZOrder get zOrder => PrimitiveZOrder.bottom;
+
+  @override
+  void paint(PrimitivePaintContext ctx) {
+    final width = ctx.paneSize.width;
+    final half = ctx.barSpacing / 2;
+    for (final s in _sessions) {
+      final x0 = ctx.timeToCoordinate(s.from);
+      final x1 = ctx.timeToCoordinate(s.to);
+      if (x0 == null || x1 == null) continue;
+      final left = x0 - half, right = x1 + half;
+      if (right < 0 || left > width || right - left < 4) continue;
+      _paintProfile(
+        ctx,
+        s.bins,
+        _options,
+        edge: left,
+        fromRight: false,
+        full: (right - left) * _options.widthFraction,
+        lineFrom: left,
+        lineTo: right,
+      );
     }
   }
 }

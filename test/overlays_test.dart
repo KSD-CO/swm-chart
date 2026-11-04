@@ -60,6 +60,25 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a value area and per-session profiles render', (tester) async {
+    final (_, candles) = await _pump(tester);
+    final bins = [
+      for (var p = 96.0; p < 124; p += 2)
+        VolumeProfileBin(low: p, high: p + 2, volume: 100 + (p % 6) * 30, upVolume: 60),
+    ];
+    candles.attachPrimitive(VolumeProfilePrimitive(bins: bins, options: const VolumeProfileOptions(valueArea: 0.7)));
+    candles.attachPrimitive(
+      SessionVolumeProfilePrimitive(
+        sessions: [
+          for (var s = 0; s < 6; s++)
+            SessionProfile(from: _t0 + s * 20 * _day, to: _t0 + (s * 20 + 19) * _day, bins: bins),
+        ],
+      ),
+    );
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a level with an id is reported under a click', (tester) async {
     final (chart, candles) = await _pump(tester);
     candles.attachPrimitive(PriceLevelsPrimitive(levels: const [PriceLevel(price: 110, id: 'r1')]));

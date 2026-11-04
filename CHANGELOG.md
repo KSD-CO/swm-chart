@@ -1,3 +1,17 @@
+## 0.12.0
+
+* Value area: `VolumeProfileResult.valueAreaLow` / `valueAreaHigh` (VAL /
+  VAH), the range around the point of control holding 70% of the volume,
+  and `Ta.valueArea` to compute it for any profile.
+* `Ta.sessionVolumeProfiles`: a volume profile per session — by default
+  each calendar day of intraday bars, or any key via `sessionOf`.
+* `VolumeProfileOptions.valueArea`: marks the value area — bins outside
+  it dimmed (`outsideOpacity`), VAH and VAL as dashed lines
+  (`valueAreaLineColor`).
+* `SessionVolumeProfilePrimitive`: each session's profile drawn over its
+  own bars, growing right from the session's first bar, with its point of
+  control and value area.
+
 ## 0.11.0
 
 * Faster crosshair and animations: the chart paints in two layers. The

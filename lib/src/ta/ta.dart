@@ -61,7 +61,32 @@ class VolumeProfileResult {
   final List<VolumeBucket> buckets;
   final double pocPrice;
   final double pocVolume;
-  const VolumeProfileResult({required this.buckets, required this.pocPrice, required this.pocVolume});
+
+  /// The value area: the price range around the point of control holding
+  /// [Ta.valueAreaShare] of the volume (70% by convention) — its low (VAL)
+  /// and high (VAH). Equal to the whole range for a single bucket.
+  final double valueAreaLow;
+  final double valueAreaHigh;
+
+  const VolumeProfileResult({
+    required this.buckets,
+    required this.pocPrice,
+    required this.pocVolume,
+    double? valueAreaLow,
+    double? valueAreaHigh,
+  }) : valueAreaLow = valueAreaLow ?? pocPrice,
+       valueAreaHigh = valueAreaHigh ?? pocPrice;
+}
+
+/// The volume profile of one session (a trading day, say): the bars it
+/// spans, as indices into the input, and its profile.
+class SessionVolumeProfile {
+  /// First and last bar of the session (inclusive), indices into the bars
+  /// given to [Ta.sessionVolumeProfiles].
+  final int from;
+  final int to;
+  final VolumeProfileResult profile;
+  const SessionVolumeProfile({required this.from, required this.to, required this.profile});
 }
 
 class MacdResult {
@@ -588,6 +613,8 @@ class Ta {
         buckets: [VolumeBucket(priceLow: lo, priceHigh: hi, volume: points.fold(0.0, (s, p) => s + (p.volume ?? 0)))],
         pocPrice: (lo + hi) / 2,
         pocVolume: points.fold(0.0, (s, p) => s + (p.volume ?? 0)),
+        valueAreaLow: lo,
+        valueAreaHigh: hi,
       );
     }
 
@@ -631,7 +658,66 @@ class Ta {
       ),
     );
 
-    return VolumeProfileResult(buckets: result, pocPrice: lo + (pocIdx + 0.5) * bucketSize, pocVolume: pocVol);
+    final (vaLo, vaHi) = valueArea(vols, pocIdx);
+    return VolumeProfileResult(
+      buckets: result,
+      pocPrice: lo + (pocIdx + 0.5) * bucketSize,
+      pocVolume: pocVol,
+      valueAreaLow: result[vaLo].priceLow,
+      valueAreaHigh: result[vaHi].priceHigh,
+    );
+  }
+
+  /// The share of volume the value area holds, by convention.
+  static const valueAreaShare = 0.7;
+
+  /// The value area of a profile's [volumes] (lowest price first) around
+  /// the point of control [poc]: starting there, it grows one row at a
+  /// time toward whichever neighbour traded more, until it holds [share]
+  /// of the total volume. The first and last row in it, as indices.
+  static (int, int) valueArea(List<double> volumes, int poc, {double share = valueAreaShare}) {
+    if (volumes.isEmpty) return (0, 0);
+    final total = volumes.fold(0.0, (s, v) => s + v);
+    var lo = poc, hi = poc;
+    var held = volumes[poc];
+    while (held < total * share && (lo > 0 || hi < volumes.length - 1)) {
+      final below = lo > 0 ? volumes[lo - 1] : -1.0;
+      final above = hi < volumes.length - 1 ? volumes[hi + 1] : -1.0;
+      if (above >= below) {
+        hi++;
+        held += above;
+      } else {
+        lo--;
+        held += below;
+      }
+    }
+    return (lo, hi);
+  }
+
+  /// A volume profile for each session of [points], in order: a session is
+  /// a run of consecutive bars with the same [sessionOf] key — by default
+  /// the calendar day (local) of the bar, for intraday bars. Each profile
+  /// is over its session's own price range, in [buckets] rows.
+  static List<SessionVolumeProfile> sessionVolumeProfiles(
+    List<TaBar> points, {
+    int buckets = 24,
+    Object Function(TaBar bar)? sessionOf,
+  }) {
+    final key = sessionOf ?? (TaBar b) => DateTime(b.date.year, b.date.month, b.date.day);
+    final out = <SessionVolumeProfile>[];
+    var start = 0;
+    for (var i = 1; i <= points.length; i++) {
+      if (i < points.length && key(points[i]) == key(points[start])) continue;
+      out.add(
+        SessionVolumeProfile(
+          from: start,
+          to: i - 1,
+          profile: volumeProfile(points.sublist(start, i), buckets: buckets),
+        ),
+      );
+      start = i;
+    }
+    return out;
   }
 
   // ── Fibonacci Retracement ────────────────────────────────────────────────
