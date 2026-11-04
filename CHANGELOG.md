@@ -1,3 +1,24 @@
+## 0.13.0
+
+* 47 more chart indicators — 73 built in — each one line to add, each
+  over a new `Ta` function:
+  * Moving averages: `Hma`, `Dema`, `Tema`, `Rma`, `Vwma`, `Alma`,
+    `Lsma`, `Zlema`, `T3`, `McGinley`, `Envelope`, `Alligator`,
+    `ChandelierExit`.
+  * Oscillators: `StochRsi`, `Trix`, `UltimateOscillator`,
+    `AwesomeOscillator`, `AcceleratorOscillator`, `Ppo`, `Dpo`,
+    `Momentum`, `Cmo`, `Tsi`, `Coppock`, `Kst`, `FisherTransform`,
+    `ConnorsRsi`, `Rvi`, `Smi`, `Choppiness`, `Vortex`, `ElderRay`,
+    `BalanceOfPower`, `MassIndex`.
+  * Volume: `AccumulationDistribution`, `ChaikinOscillator`,
+    `PriceVolumeTrend`, `VolumeIndexes` (NVI / PVI), `Klinger`,
+    `ForceIndex`, `EaseOfMovement`, `VolumeOscillator`.
+  * Volatility: `StandardDeviation`, `HistoricalVolatility`,
+    `BollingerPercentB`, `BollingerWidth`, `UlcerIndex`.
+* `Ta`: the functions above, plus `Ta.trueRange`, `Ta.wma`, `Ta.rma`,
+  `Ta.fractals` (Williams fractals) and `Ta.opens`. Multi-line results
+  are records, e.g. `Ta.stochRsi(bars).k`.
+
 ## 0.12.0
 
 * Value area: `VolumeProfileResult.valueAreaLow` / `valueAreaHigh` (VAL /

@@ -9,6 +9,7 @@ import 'dart:math';
 import 'dart:math' as math;
 
 import 'bar.dart';
+import 'series.dart';
 
 class AtrResult {
   final List<double?> values;
@@ -2094,6 +2095,678 @@ class Ta {
     out.sort((x, y) => x.end.compareTo(y.end));
     return out;
   }
+
+  // ══ More indicators ═════════════════════════════════════════════════════
+  // The rest of the common built-in set (TradingView's names). Each returns
+  // series aligned with [points], null through its warm-up.
+
+  static List<double?> _c(List<TaBar> p) => [for (final b in p) b.close];
+  static List<double?> _h(List<TaBar> p) => [for (final b in p) b.high ?? b.close];
+  static List<double?> _l(List<TaBar> p) => [for (final b in p) b.low ?? b.close];
+  static List<double?> _o(List<TaBar> p) => [for (final b in p) b.open ?? b.close];
+  static List<double?> _v(List<TaBar> p) => [for (final b in p) b.volume ?? 0];
+
+  static List<double?> _src(List<TaBar> p, List<double?>? source) => source ?? _c(p);
+
+  /// True range of each bar (the first is its high − low).
+  static List<double?> trueRange(List<TaBar> points) => [
+    for (var i = 0; i < points.length; i++)
+      () {
+        final h = points[i].high ?? points[i].close, l = points[i].low ?? points[i].close;
+        if (i == 0) return h - l;
+        final pc = points[i - 1].close;
+        return max(h - l, max((h - pc).abs(), (l - pc).abs()));
+      }(),
+  ];
+
+  // ── moving averages ──────────────────────────────────────────────────────
+
+  /// Weighted moving average of the closes (or [source]).
+  static List<double?> wma(List<TaBar> points, int period, {List<double?>? source}) =>
+      sWma(_src(points, source), period);
+
+  /// Wilder's smoothed moving average (RMA / SMMA).
+  static List<double?> rma(List<TaBar> points, int period, {List<double?>? source}) =>
+      sRma(_src(points, source), period);
+
+  /// Hull moving average: WMA(2·WMA(n/2) − WMA(n), √n) — fast and smooth.
+  static List<double?> hma(List<TaBar> points, int period, {List<double?>? source}) {
+    final s = _src(points, source);
+    final half = sWma(s, max(1, period ~/ 2)), full = sWma(s, period);
+    final diff = [
+      for (var i = 0; i < s.length; i++)
+        if (half[i] == null || full[i] == null) null else 2 * half[i]! - full[i]!,
+    ];
+    return sWma(diff, max(1, sqrt(period).round()));
+  }
+
+  /// Double EMA: 2·EMA − EMA(EMA).
+  static List<double?> dema(List<TaBar> points, int period, {List<double?>? source}) {
+    final e1 = sEma(_src(points, source), period), e2 = sEma(e1, period);
+    return [
+      for (var i = 0; i < e1.length; i++)
+        if (e1[i] == null || e2[i] == null) null else 2 * e1[i]! - e2[i]!,
+    ];
+  }
+
+  /// Triple EMA: 3·EMA − 3·EMA² + EMA³.
+  static List<double?> tema(List<TaBar> points, int period, {List<double?>? source}) {
+    final e1 = sEma(_src(points, source), period), e2 = sEma(e1, period), e3 = sEma(e2, period);
+    return [
+      for (var i = 0; i < e1.length; i++)
+        if (e1[i] == null || e2[i] == null || e3[i] == null) null else 3 * e1[i]! - 3 * e2[i]! + e3[i]!,
+    ];
+  }
+
+  /// Volume-weighted moving average: Σ(close·volume) / Σvolume.
+  static List<double?> vwma(List<TaBar> points, int period) {
+    final pv = sSum([for (final b in points) b.close * (b.volume ?? 0)], period);
+    final vol = sSum(_v(points), period);
+    return [
+      for (var i = 0; i < points.length; i++)
+        if (pv[i] == null || vol[i] == null || vol[i] == 0) null else pv[i]! / vol[i]!,
+    ];
+  }
+
+  /// Arnaud Legoux moving average: a Gaussian-weighted window centred at
+  /// [offset] (0…1) of it, [sigma] its width.
+  static List<double?> alma(List<TaBar> points, int period, {double offset = 0.85, double sigma = 6}) {
+    final s = _c(points);
+    final out = List<double?>.filled(s.length, null);
+    if (period < 1 || s.length < period) return out;
+    final m = offset * (period - 1), w = period / sigma;
+    final weights = [for (var k = 0; k < period; k++) exp(-(k - m) * (k - m) / (2 * w * w))];
+    final norm = weights.reduce((a, b) => a + b);
+    for (var i = period - 1; i < s.length; i++) {
+      var sum = 0.0;
+      for (var k = 0; k < period; k++) {
+        sum += weights[k] * s[i - period + 1 + k]!;
+      }
+      out[i] = sum / norm;
+    }
+    return out;
+  }
+
+  /// Least squares moving average (linear regression curve).
+  static List<double?> lsma(List<TaBar> points, int period) => sLinReg(_c(points), period);
+
+  /// Zero-lag EMA: the EMA of close + (close − close[lag]), lag = (n − 1) / 2.
+  static List<double?> zlema(List<TaBar> points, int period) {
+    final c = _c(points), lag = (period - 1) ~/ 2;
+    return sEma([for (var i = 0; i < c.length; i++) i < lag ? null : 2 * c[i]! - c[i - lag]!], period);
+  }
+
+  /// Tillson T3: six chained EMAs blended with volume factor [vFactor].
+  static List<double?> t3(List<TaBar> points, int period, {double vFactor = 0.7}) {
+    final e1 = sEma(_c(points), period), e2 = sEma(e1, period), e3 = sEma(e2, period);
+    final e4 = sEma(e3, period), e5 = sEma(e4, period), e6 = sEma(e5, period);
+    final a = vFactor;
+    final c1 = -a * a * a, c2 = 3 * a * a + 3 * a * a * a;
+    final c3 = -6 * a * a - 3 * a - 3 * a * a * a, c4 = 1 + 3 * a + a * a * a + 3 * a * a;
+    return [
+      for (var i = 0; i < e1.length; i++)
+        if (e3[i] == null || e4[i] == null || e5[i] == null || e6[i] == null)
+          null
+        else
+          c1 * e6[i]! + c2 * e5[i]! + c3 * e4[i]! + c4 * e3[i]!,
+    ];
+  }
+
+  /// McGinley dynamic: an average that speeds up in fast markets.
+  static List<double?> mcGinley(List<TaBar> points, int period) {
+    final c = _c(points);
+    final out = List<double?>.filled(c.length, null);
+    if (c.length < period || period < 1) return out;
+    var md = sSma(c, period)[period - 1]!;
+    out[period - 1] = md;
+    for (var i = period; i < c.length; i++) {
+      final ratio = md == 0 ? 1.0 : c[i]! / md;
+      md += (c[i]! - md) / (period * pow(ratio, 4));
+      out[i] = md;
+    }
+    return out;
+  }
+
+  /// Envelope: an SMA (or EMA) with bands [percent]% above and below.
+  static ({List<double?> mid, List<double?> upper, List<double?> lower}) envelope(
+    List<TaBar> points,
+    int period, {
+    double percent = 2.5,
+    bool exponential = false,
+  }) {
+    final mid = exponential ? sEma(_c(points), period) : sSma(_c(points), period);
+    return (
+      mid: mid,
+      upper: [for (final m in mid) m == null ? null : m * (1 + percent / 100)],
+      lower: [for (final m in mid) m == null ? null : m * (1 - percent / 100)],
+    );
+  }
+
+  // ── oscillators ──────────────────────────────────────────────────────────
+
+  /// Stochastic RSI: the stochastic of RSI, %K smoothed [k], %D [d].
+  static ({List<double?> k, List<double?> d}) stochRsi(
+    List<TaBar> points, {
+    int rsiPeriod = 14,
+    int stochPeriod = 14,
+    int k = 3,
+    int d = 3,
+  }) {
+    final r = rsi(points, period: rsiPeriod);
+    final hi = sHighest(r, stochPeriod), lo = sLowest(r, stochPeriod);
+    final raw = [
+      for (var i = 0; i < r.length; i++)
+        if (r[i] == null || hi[i] == null || lo[i] == null)
+          null
+        else
+          hi[i] == lo[i] ? 50.0 : 100 * (r[i]! - lo[i]!) / (hi[i]! - lo[i]!),
+    ];
+    final kLine = sSma(raw, k);
+    return (k: kLine, d: sSma(kLine, d));
+  }
+
+  /// TRIX: the 1-bar % rate of change of a triple-smoothed EMA, and its
+  /// [signal] EMA.
+  static ({List<double?> trix, List<double?> signal}) trix(List<TaBar> points, {int period = 18, int signal = 9}) {
+    final e3 = sEma(sEma(sEma(_c(points), period), period), period);
+    final t = [
+      for (var i = 0; i < e3.length; i++)
+        if (i == 0 || e3[i] == null || e3[i - 1] == null || e3[i - 1] == 0)
+          null
+        else
+          10000 * (e3[i]! - e3[i - 1]!) / e3[i - 1]!,
+    ];
+    return (trix: t, signal: sEma(t, signal));
+  }
+
+  /// Ultimate oscillator (Williams): buying pressure over three windows.
+  static List<double?> ultimateOscillator(List<TaBar> points, {int fast = 7, int mid = 14, int slow = 28}) {
+    final n = points.length;
+    final bp = List<double?>.filled(n, null), tr = List<double?>.filled(n, null);
+    for (var i = 1; i < n; i++) {
+      final pc = points[i - 1].close;
+      final low = min(points[i].low ?? points[i].close, pc);
+      final high = max(points[i].high ?? points[i].close, pc);
+      bp[i] = points[i].close - low;
+      tr[i] = high - low;
+    }
+    double? avg(int i, List<double?> sb, List<double?> st) =>
+        sb[i] == null || st[i] == null || st[i] == 0 ? null : sb[i]! / st[i]!;
+    final b1 = sSum(bp, fast), t1 = sSum(tr, fast);
+    final b2 = sSum(bp, mid), t2 = sSum(tr, mid);
+    final b3 = sSum(bp, slow), t3 = sSum(tr, slow);
+    return [
+      for (var i = 0; i < n; i++)
+        () {
+          final a1 = avg(i, b1, t1), a2 = avg(i, b2, t2), a3 = avg(i, b3, t3);
+          if (a1 == null || a2 == null || a3 == null) return null;
+          return 100 * (4 * a1 + 2 * a2 + a3) / 7;
+        }(),
+    ];
+  }
+
+  /// Awesome oscillator: SMA(5) − SMA(34) of the bars' midpoints.
+  static List<double?> awesomeOscillator(List<TaBar> points, {int fast = 5, int slow = 34}) {
+    final hl2 = [for (final b in points) ((b.high ?? b.close) + (b.low ?? b.close)) / 2];
+    return sMinus(sSma(hl2, fast), sSma(hl2, slow));
+  }
+
+  /// Accelerator oscillator: AO − SMA(AO, 5).
+  static List<double?> acceleratorOscillator(List<TaBar> points) {
+    final ao = awesomeOscillator(points);
+    return sMinus(ao, sSma(ao, 5));
+  }
+
+  /// Percentage price oscillator: (EMA fast − EMA slow) / EMA slow in %,
+  /// with its signal line and histogram.
+  static ({List<double?> ppo, List<double?> signal, List<double?> histogram}) ppo(
+    List<TaBar> points, {
+    int fast = 12,
+    int slow = 26,
+    int signal = 9,
+  }) {
+    final f = sEma(_c(points), fast), s = sEma(_c(points), slow);
+    final line = [
+      for (var i = 0; i < f.length; i++)
+        if (f[i] == null || s[i] == null || s[i] == 0) null else 100 * (f[i]! - s[i]!) / s[i]!,
+    ];
+    final sig = sEma(line, signal);
+    return (ppo: line, signal: sig, histogram: sMinus(line, sig));
+  }
+
+  /// Detrended price oscillator: close[n/2 + 1 ago] − SMA(n).
+  static List<double?> dpo(List<TaBar> points, {int period = 21}) {
+    final c = _c(points), ma = sSma(c, period), back = period ~/ 2 + 1;
+    return [
+      for (var i = 0; i < c.length; i++)
+        if (ma[i] == null || i - back < 0) null else c[i - back]! - ma[i]!,
+    ];
+  }
+
+  /// Momentum: close − close[n ago].
+  static List<double?> momentum(List<TaBar> points, {int period = 10}) {
+    final c = _c(points);
+    return [for (var i = 0; i < c.length; i++) i < period ? null : c[i]! - c[i - period]!];
+  }
+
+  /// Chande momentum oscillator: 100·(Σup − Σdown) / (Σup + Σdown).
+  static List<double?> cmo(List<TaBar> points, {int period = 9}) {
+    final c = _c(points);
+    final up = <double?>[null], down = <double?>[null];
+    for (var i = 1; i < c.length; i++) {
+      final d = c[i]! - c[i - 1]!;
+      up.add(max(0, d));
+      down.add(max(0, -d));
+    }
+    final su = sSum(up, period), sd = sSum(down, period);
+    return [
+      for (var i = 0; i < c.length; i++)
+        if (su[i] == null || sd[i] == null || su[i]! + sd[i]! == 0)
+          (su[i] == null ? null : 0.0)
+        else
+          100 * (su[i]! - sd[i]!) / (su[i]! + sd[i]!),
+    ];
+  }
+
+  /// True strength index: double-smoothed momentum over its double-smoothed
+  /// size, ×100, and its [signal] EMA.
+  static ({List<double?> tsi, List<double?> signal}) tsi(
+    List<TaBar> points, {
+    int long = 25,
+    int short = 13,
+    int signal = 13,
+  }) {
+    final c = _c(points);
+    final m = <double?>[null, for (var i = 1; i < c.length; i++) c[i]! - c[i - 1]!];
+    final num = sEma(sEma(m, long), short);
+    final den = sEma(sEma([for (final v in m) v?.abs()], long), short);
+    final t = [
+      for (var i = 0; i < c.length; i++)
+        if (num[i] == null || den[i] == null || den[i] == 0) null else 100 * num[i]! / den[i]!,
+    ];
+    return (tsi: t, signal: sEma(t, signal));
+  }
+
+  /// Coppock curve: WMA(10) of ROC(14) + ROC(11).
+  static List<double?> coppock(List<TaBar> points, {int wmaPeriod = 10, int longRoc = 14, int shortRoc = 11}) {
+    final c = _c(points);
+    double? rocAt(int i, int n) => i < n || c[i - n] == 0 ? null : 100 * (c[i]! - c[i - n]!) / c[i - n]!;
+    final sum = [
+      for (var i = 0; i < c.length; i++)
+        () {
+          final a = rocAt(i, longRoc), b = rocAt(i, shortRoc);
+          return a == null || b == null ? null : a + b;
+        }(),
+    ];
+    return sWma(sum, wmaPeriod);
+  }
+
+  /// Know Sure Thing: weighted sum of four smoothed rates of change, and
+  /// its 9-bar SMA signal.
+  static ({List<double?> kst, List<double?> signal}) kst(List<TaBar> points) {
+    final c = _c(points);
+    List<double?> roc(int n) => [
+      for (var i = 0; i < c.length; i++) i < n || c[i - n] == 0 ? null : 100 * (c[i]! - c[i - n]!) / c[i - n]!,
+    ];
+    final r1 = sSma(roc(10), 10), r2 = sSma(roc(15), 10), r3 = sSma(roc(20), 10), r4 = sSma(roc(30), 15);
+    final k = [
+      for (var i = 0; i < c.length; i++)
+        if (r1[i] == null || r2[i] == null || r3[i] == null || r4[i] == null)
+          null
+        else
+          r1[i]! + 2 * r2[i]! + 3 * r3[i]! + 4 * r4[i]!,
+    ];
+    return (kst: k, signal: sSma(k, 9));
+  }
+
+  /// Fisher transform of the bars' midpoints over [period], and its
+  /// trigger (the value a bar earlier).
+  static ({List<double?> fisher, List<double?> trigger}) fisherTransform(List<TaBar> points, {int period = 9}) {
+    final hl2 = [for (final b in points) ((b.high ?? b.close) + (b.low ?? b.close)) / 2];
+    final hi = sHighest(hl2, period), lo = sLowest(hl2, period);
+    final out = List<double?>.filled(points.length, null);
+    var value = 0.0, fish = 0.0;
+    for (var i = 0; i < points.length; i++) {
+      if (hi[i] == null || lo[i] == null) continue;
+      final range = hi[i]! - lo[i]!;
+      final x = range == 0 ? 0.0 : (hl2[i] - lo[i]!) / range - 0.5;
+      value = (0.66 * x + 0.67 * value).clamp(-0.999, 0.999);
+      fish = 0.5 * log((1 + value) / (1 - value)) + 0.5 * fish;
+      out[i] = fish;
+    }
+    return (fisher: out, trigger: sShift(out, 1));
+  }
+
+  /// Connors RSI: the average of RSI(3), the RSI(2) of the up/down streak
+  /// and the percent rank of the 1-bar change over 100 bars.
+  static List<double?> connorsRsi(List<TaBar> points, {int rsiPeriod = 3, int streakPeriod = 2, int rankPeriod = 100}) {
+    final c = _c(points);
+    final r = rsi(points, period: rsiPeriod);
+    final streak = List<double>.filled(c.length, 0);
+    for (var i = 1; i < c.length; i++) {
+      final d = c[i]! - c[i - 1]!;
+      streak[i] = d > 0
+          ? (streak[i - 1] > 0 ? streak[i - 1] + 1 : 1)
+          : d < 0
+          ? (streak[i - 1] < 0 ? streak[i - 1] - 1 : -1)
+          : 0;
+    }
+    final streakRsi = rsi([
+      for (var i = 0; i < c.length; i++) TaPoint(date: points[i].date, close: streak[i]),
+    ], period: streakPeriod);
+    final out = List<double?>.filled(c.length, null);
+    for (var i = rankPeriod + 1; i < c.length; i++) {
+      final change = c[i]! / c[i - 1]! - 1;
+      var below = 0;
+      for (var k = i - rankPeriod; k < i; k++) {
+        if (c[k]! / c[k - 1]! - 1 < change) below++;
+      }
+      if (r[i] == null || streakRsi[i] == null) continue;
+      out[i] = (r[i]! + streakRsi[i]! + 100 * below / rankPeriod) / 3;
+    }
+    return out;
+  }
+
+  /// Relative vigor index: close − open against high − low, smoothed, and
+  /// its signal.
+  static ({List<double?> rvi, List<double?> signal}) rvi(List<TaBar> points, {int period = 10}) {
+    final n = points.length;
+    double sym(List<double?> v, int i) => (v[i]! + 2 * v[i - 1]! + 2 * v[i - 2]! + v[i - 3]!) / 6;
+    final co = [for (final b in points) b.close - (b.open ?? b.close)];
+    final hl = [for (final b in points) (b.high ?? b.close) - (b.low ?? b.close)];
+    final num = <double?>[for (var i = 0; i < n; i++) i < 3 ? null : sym(co, i)];
+    final den = <double?>[for (var i = 0; i < n; i++) i < 3 ? null : sym(hl, i)];
+    final sn = sSum(num, period), sd = sSum(den, period);
+    final line = [
+      for (var i = 0; i < n; i++)
+        if (sn[i] == null || sd[i] == null || sd[i] == 0) null else sn[i]! / sd[i]!,
+    ];
+    final sig = <double?>[for (var i = 0; i < n; i++) i < 3 || line[i - 3] == null ? null : sym(line, i)];
+    return (rvi: line, signal: sig);
+  }
+
+  /// Stochastic momentum index: where the close sits relative to the
+  /// middle of the [period] range, double-smoothed, and its EMA signal.
+  static ({List<double?> smi, List<double?> signal}) smi(
+    List<TaBar> points, {
+    int period = 10,
+    int smooth = 3,
+    int signal = 10,
+  }) {
+    final hi = sHighest(_h(points), period), lo = sLowest(_l(points), period);
+    final rel = [
+      for (var i = 0; i < points.length; i++)
+        if (hi[i] == null) null else points[i].close - (hi[i]! + lo[i]!) / 2,
+    ];
+    final range = [
+      for (var i = 0; i < points.length; i++)
+        if (hi[i] == null) null else hi[i]! - lo[i]!,
+    ];
+    final num = sEma(sEma(rel, smooth), smooth), den = sEma(sEma(range, smooth), smooth);
+    final line = [
+      for (var i = 0; i < points.length; i++)
+        if (num[i] == null || den[i] == null || den[i] == 0) null else 200 * num[i]! / den[i]!,
+    ];
+    return (smi: line, signal: sEma(line, signal));
+  }
+
+  /// Choppiness index: 100·log10(ΣATR(1) / range) / log10(n) — high when
+  /// the market chops sideways, low when it trends.
+  static List<double?> choppiness(List<TaBar> points, {int period = 14}) {
+    final tr = sSum(trueRange(points), period);
+    final hi = sHighest(_h(points), period), lo = sLowest(_l(points), period);
+    return [
+      for (var i = 0; i < points.length; i++)
+        if (tr[i] == null || hi[i] == null || hi[i] == lo[i])
+          null
+        else
+          100 * log(tr[i]! / (hi[i]! - lo[i]!)) / ln10 / (log(period) / ln10),
+    ];
+  }
+
+  /// Vortex indicator: VI+ and VI−.
+  static ({List<double?> plus, List<double?> minus}) vortex(List<TaBar> points, {int period = 14}) {
+    final n = points.length;
+    final vp = <double?>[null], vm = <double?>[null];
+    for (var i = 1; i < n; i++) {
+      final h = points[i].high ?? points[i].close, l = points[i].low ?? points[i].close;
+      final ph = points[i - 1].high ?? points[i - 1].close, pl = points[i - 1].low ?? points[i - 1].close;
+      vp.add((h - pl).abs());
+      vm.add((l - ph).abs());
+    }
+    final tr = sSum([null, ...trueRange(points).skip(1)], period);
+    final sp = sSum(vp, period), sm = sSum(vm, period);
+    return (
+      plus: [for (var i = 0; i < n; i++) tr[i] == null || tr[i] == 0 || sp[i] == null ? null : sp[i]! / tr[i]!],
+      minus: [for (var i = 0; i < n; i++) tr[i] == null || tr[i] == 0 || sm[i] == null ? null : sm[i]! / tr[i]!],
+    );
+  }
+
+  /// Elder ray: bull power (high − EMA) and bear power (low − EMA).
+  static ({List<double?> bull, List<double?> bear}) elderRay(List<TaBar> points, {int period = 13}) {
+    final e = sEma(_c(points), period);
+    return (bull: sMinus(_h(points), e), bear: sMinus(_l(points), e));
+  }
+
+  /// Balance of power: (close − open) / (high − low), smoothed by [period]
+  /// (1: raw).
+  static List<double?> balanceOfPower(List<TaBar> points, {int period = 14}) {
+    final raw = [
+      for (final b in points)
+        () {
+          final r = (b.high ?? b.close) - (b.low ?? b.close);
+          return r == 0 ? 0.0 : (b.close - (b.open ?? b.close)) / r;
+        }(),
+    ];
+    return period <= 1 ? raw : sSma(raw, period);
+  }
+
+  /// Mass index: the sum of EMA(range) / EMA(EMA(range)) over [period] —
+  /// a bulge above 27 then back below 26.5 hints at a reversal.
+  static List<double?> massIndex(List<TaBar> points, {int ema = 9, int period = 25}) {
+    final range = [for (final b in points) (b.high ?? b.close) - (b.low ?? b.close)];
+    final e1 = sEma(range, ema), e2 = sEma(e1, ema);
+    return sSum([
+      for (var i = 0; i < range.length; i++)
+        if (e1[i] == null || e2[i] == null || e2[i] == 0) null else e1[i]! / e2[i]!,
+    ], period);
+  }
+
+  // ── volume ───────────────────────────────────────────────────────────────
+
+  /// Accumulation / distribution line: running Σ money-flow volume.
+  static List<double?> accumulationDistribution(List<TaBar> points) {
+    var ad = 0.0;
+    return [
+      for (final b in points)
+        () {
+          final h = b.high ?? b.close, l = b.low ?? b.close;
+          final mfm = h == l ? 0.0 : ((b.close - l) - (h - b.close)) / (h - l);
+          ad += mfm * (b.volume ?? 0);
+          return ad;
+        }(),
+    ];
+  }
+
+  /// Chaikin oscillator: EMA(3) − EMA(10) of the A/D line.
+  static List<double?> chaikinOscillator(List<TaBar> points, {int fast = 3, int slow = 10}) {
+    final ad = accumulationDistribution(points);
+    return sMinus(sEma(ad, fast), sEma(ad, slow));
+  }
+
+  /// Price volume trend: running Σ volume × % change.
+  static List<double?> priceVolumeTrend(List<TaBar> points) {
+    var pvt = 0.0;
+    return [
+      for (var i = 0; i < points.length; i++)
+        () {
+          if (i > 0 && points[i - 1].close != 0) {
+            pvt += (points[i].volume ?? 0) * (points[i].close - points[i - 1].close) / points[i - 1].close;
+          }
+          return pvt;
+        }(),
+    ];
+  }
+
+  /// Negative and positive volume index (start 1000): moved only on days
+  /// the volume falls (NVI) or rises (PVI).
+  static ({List<double?> nvi, List<double?> pvi}) volumeIndexes(List<TaBar> points) {
+    var nvi = 1000.0, pvi = 1000.0;
+    final n = <double?>[], p = <double?>[];
+    for (var i = 0; i < points.length; i++) {
+      if (i > 0 && points[i - 1].close != 0) {
+        final change = (points[i].close - points[i - 1].close) / points[i - 1].close;
+        final v = points[i].volume ?? 0, pv = points[i - 1].volume ?? 0;
+        if (v < pv) nvi *= 1 + change;
+        if (v > pv) pvi *= 1 + change;
+      }
+      n.add(nvi);
+      p.add(pvi);
+    }
+    return (nvi: n, pvi: p);
+  }
+
+  /// Klinger volume oscillator: EMA(34) − EMA(55) of signed volume force,
+  /// and its 13-bar EMA signal.
+  static ({List<double?> kvo, List<double?> signal}) klinger(
+    List<TaBar> points, {
+    int fast = 34,
+    int slow = 55,
+    int signal = 13,
+  }) {
+    final hlc3 = [for (final b in points) ((b.high ?? b.close) + (b.low ?? b.close) + b.close) / 3];
+    final vf = <double?>[null];
+    for (var i = 1; i < points.length; i++) {
+      final sign = hlc3[i] > hlc3[i - 1] ? 1 : -1;
+      vf.add(sign * (points[i].volume ?? 0));
+    }
+    final k = sMinus(sEma(vf, fast), sEma(vf, slow));
+    return (kvo: k, signal: sEma(k, signal));
+  }
+
+  /// Force index: EMA of (close − previous close) × volume.
+  static List<double?> forceIndex(List<TaBar> points, {int period = 13}) => sEma([
+    null,
+    for (var i = 1; i < points.length; i++) (points[i].close - points[i - 1].close) * (points[i].volume ?? 0),
+  ], period);
+
+  /// Ease of movement: how far the midpoint moved per unit of volume over
+  /// range, smoothed by [period] (volume scaled by [divisor]).
+  static List<double?> easeOfMovement(List<TaBar> points, {int period = 14, double divisor = 10000}) {
+    final raw = <double?>[null];
+    for (var i = 1; i < points.length; i++) {
+      final b = points[i], p = points[i - 1];
+      final h = b.high ?? b.close, l = b.low ?? b.close;
+      final mid = (h + l) / 2 - ((p.high ?? p.close) + (p.low ?? p.close)) / 2;
+      final v = (b.volume ?? 0) / divisor;
+      raw.add(v == 0 || h == l ? 0 : mid * (h - l) / v);
+    }
+    return sSma(raw, period);
+  }
+
+  /// Volume oscillator: % difference between a fast and a slow EMA of
+  /// volume.
+  static List<double?> volumeOscillator(List<TaBar> points, {int fast = 5, int slow = 10}) {
+    final f = sEma(_v(points), fast), s = sEma(_v(points), slow);
+    return [
+      for (var i = 0; i < points.length; i++)
+        if (f[i] == null || s[i] == null || s[i] == 0) null else 100 * (f[i]! - s[i]!) / s[i]!,
+    ];
+  }
+
+  // ── volatility and bands ─────────────────────────────────────────────────
+
+  /// Standard deviation of the closes.
+  static List<double?> standardDeviation(List<TaBar> points, {int period = 20}) => sStdev(_c(points), period);
+
+  /// Historical volatility: the annualised standard deviation of log
+  /// returns, in % ([barsPerYear] 252 for daily bars).
+  static List<double?> historicalVolatility(List<TaBar> points, {int period = 10, int barsPerYear = 252}) {
+    final c = _c(points);
+    final r = <double?>[
+      null,
+      for (var i = 1; i < c.length; i++) c[i - 1]! > 0 && c[i]! > 0 ? log(c[i]! / c[i - 1]!) : null,
+    ];
+    return [for (final s in sStdev(r, period)) s == null ? null : 100 * s * sqrt(barsPerYear)];
+  }
+
+  /// Bollinger %B (where the close sits in the bands, 0 at the lower, 1 at
+  /// the upper) and bandwidth ((upper − lower) / middle).
+  static ({List<double?> percentB, List<double?> width}) bollingerExtras(
+    List<TaBar> points, {
+    int period = 20,
+    double mult = 2,
+  }) {
+    final mid = sSma(_c(points), period), sd = sStdev(_c(points), period);
+    final pb = <double?>[], w = <double?>[];
+    for (var i = 0; i < points.length; i++) {
+      if (mid[i] == null || sd[i] == null) {
+        pb.add(null);
+        w.add(null);
+        continue;
+      }
+      final up = mid[i]! + mult * sd[i]!, lo = mid[i]! - mult * sd[i]!;
+      pb.add(up == lo ? 0.5 : (points[i].close - lo) / (up - lo));
+      w.add(mid[i] == 0 ? null : (up - lo) / mid[i]!);
+    }
+    return (percentB: pb, width: w);
+  }
+
+  /// Ulcer index: the root mean square of the % drawdown from the
+  /// [period]-bar high.
+  static List<double?> ulcerIndex(List<TaBar> points, {int period = 14}) {
+    final c = _c(points), hi = sHighest(c, period);
+    final dd = [
+      for (var i = 0; i < c.length; i++)
+        if (hi[i] == null || hi[i] == 0) null else pow(100 * (c[i]! - hi[i]!) / hi[i]!, 2).toDouble(),
+    ];
+    return [for (final v in sSma(dd, period)) v == null ? null : sqrt(v)];
+  }
+
+  /// Chandelier exit: a trailing stop [mult]·ATR below the [period] high
+  /// (for longs) and above the low (for shorts).
+  static ({List<double?> long, List<double?> short}) chandelierExit(
+    List<TaBar> points, {
+    int period = 22,
+    double mult = 3,
+  }) {
+    final a = sRma(trueRange(points), period);
+    final hi = sHighest(_h(points), period), lo = sLowest(_l(points), period);
+    return (
+      long: [for (var i = 0; i < points.length; i++) hi[i] == null || a[i] == null ? null : hi[i]! - mult * a[i]!],
+      short: [for (var i = 0; i < points.length; i++) lo[i] == null || a[i] == null ? null : lo[i]! + mult * a[i]!],
+    );
+  }
+
+  /// Williams alligator: jaw, teeth and lips — RMAs of the midpoint over
+  /// 13, 8 and 5 bars, shifted 8, 5 and 3 bars ahead (on the bars, so the
+  /// last few are null).
+  static ({List<double?> jaw, List<double?> teeth, List<double?> lips}) alligator(List<TaBar> points) {
+    final hl2 = [for (final b in points) ((b.high ?? b.close) + (b.low ?? b.close)) / 2];
+    return (jaw: sShift(sRma(hl2, 13), 8), teeth: sShift(sRma(hl2, 8), 5), lips: sShift(sRma(hl2, 5), 3));
+  }
+
+  /// Williams fractals: bar indices that are the highest (up) or lowest
+  /// (down) of the [side] bars either side.
+  static ({List<int> up, List<int> down}) fractals(List<TaBar> points, {int side = 2}) {
+    final h = _h(points), l = _l(points);
+    final up = <int>[], down = <int>[];
+    for (var i = side; i < points.length - side; i++) {
+      var isUp = true, isDown = true;
+      for (var k = i - side; k <= i + side; k++) {
+        if (k == i) continue;
+        if (h[k]! >= h[i]!) isUp = false;
+        if (l[k]! <= l[i]!) isDown = false;
+      }
+      if (isUp) up.add(i);
+      if (isDown) down.add(i);
+    }
+    return (up: up, down: down);
+  }
+
+  /// Open of each bar (the close where it has none) — for callers mixing
+  /// the new indicators with their own sources.
+  static List<double?> opens(List<TaBar> points) => _o(points);
 }
 
 /// An automatically drawn trend line through two swing points — [a]/[b]

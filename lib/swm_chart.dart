@@ -16,6 +16,7 @@ export 'src/options.dart';
 export 'src/indicators/attach.dart';
 export 'src/indicators/indicators.dart';
 export 'src/indicators/ta_indicators.dart';
+export 'src/indicators/ta_indicators_more.dart';
 export 'src/plugins/comparison.dart';
 export 'src/plugins/crosshair_sync.dart';
 export 'src/plugins/custom_series.dart';

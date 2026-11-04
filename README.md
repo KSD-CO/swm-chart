@@ -50,7 +50,7 @@ Everything in Lightweight Charts v5.2.1 that applies to Flutter is ported:
 | Hit testing: `hoveredSeries` / `hoveredObjectId`, `hoveredSeriesOnTop` | ✅ |
 | Plugins: primitives API, series markers, up/down markers, text & image watermarks | ✅ |
 | Beyond upstream: **drawing tools** with an editor, band fill, price levels, volume profile, pointer capture, **sparklines**, **donut charts** | ✅ |
-| **Indicators** (26): SMA, EMA, WMA, Bollinger, RSI, MACD, Stochastic, ATR, VWAP, Ichimoku, Williams %R, ADX, OBV, CCI, MFI, CMF, Aroon, ROC, Parabolic SAR, KAMA, Keltner, Donchian, Supertrend, Volume MA, Sine Wave, Even Better Sinewave — one line to add | ✅ |
+| **Indicators** (73): moving averages (SMA, EMA, WMA, Hull, DEMA, TEMA, RMA, VWMA, ALMA, LSMA, ZLEMA, T3, McGinley, KAMA, Envelope, Alligator), bands and stops (Bollinger, %B, bandwidth, Keltner, Donchian, Ichimoku, Supertrend, Parabolic SAR, Chandelier exit), oscillators (RSI, Stoch RSI, MACD, PPO, Stochastic, Williams %R, CCI, ROC, Momentum, CMO, TSI, TRIX, Ultimate, Awesome, Accelerator, DPO, Coppock, KST, Fisher, Connors RSI, RVGI, SMI, Aroon, ADX, Vortex, Elder ray, Balance of power, Choppiness, Mass index, Sine Wave, Even Better Sinewave), volume (VWAP, OBV, MFI, CMF, A/D, Chaikin oscillator, PVT, NVI / PVI, Klinger, Force index, Ease of movement, Volume oscillator, Volume MA) and volatility (ATR, standard deviation, historical volatility, Ulcer index) — one line to add | ✅ |
 | **Technical analysis** (`Ta`): ZigZag, Elliott waves, support / resistance, chart and candlestick patterns, auto trendlines, divergences, Fibonacci, pivot points, regression channel, volume profile | ✅ |
 | **Trading lines**: draggable orders, TP / SL, positions with P&L, price alerts | ✅ |
 | **Legend & tooltip** following the crosshair | ✅ |
@@ -160,7 +160,9 @@ Built in: `Sma`, `Ema`, `Wma`, `Bollinger`, `Rsi`, `Macd`, `Stochastic`,
 `Atr`, `Vwap`, `Ichimoku` (cloud projected ahead) — these only recompute
 the last bar on a tick — and `WilliamsR`, `Adx`, `Obv`, `Cci`, `Mfi`,
 `Cmf`, `Aroon`, `Roc`, `ParabolicSar`, `Kama`, `Keltner`, `Donchian`,
-`Supertrend`, `VolumeSma`, `SineWave`, `EvenBetterSinewave`. Extend
+`Supertrend`, `VolumeSma`, `SineWave`, `EvenBetterSinewave`, and 47 more
+(`Hma`, `StochRsi`, `Tsi`, `Klinger`, `UlcerIndex`… — see the changelog
+for the list). Extend
 `Indicator` (`lines`, `compute(input, from, out)`) or `TaIndicator`
 (`series(bars)`) for your own, or call `computeAll` to use the math
 without a chart.
