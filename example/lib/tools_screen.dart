@@ -254,8 +254,9 @@ class ToolsScreenState extends State<ToolsScreen> {
   void _addSessions(ChartController chart, CandlestickSeriesApi candles) {
     final bars = _taBars;
     final times = [for (final b in _long) b.time];
-    // The last few days only, so each day's profile has room.
-    final from = bars.length - 24 * 4 - _long.last.time.toInt() ~/ 3600 % 24 - 1;
+    // The last three days and today only: each day gets room for its
+    // profile, and for its label on the time axis (about 80 px).
+    final from = bars.length - 24 * 3 - _long.last.time.toInt() ~/ 3600 % 24 - 1;
     final sessions = Ta.sessionVolumeProfiles(bars.sublist(from), buckets: 20);
     candles.attachPrimitive(
       SessionVolumeProfilePrimitive(
