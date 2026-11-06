@@ -14,14 +14,13 @@ model/renderer architecture mirrors upstream. Candles, columns and grid lines
 are drawn in device pixels, the same way upstream draws in bitmap
 coordinates, so they stay sharp.
 
-| | | |
-|:---:|:---:|:---:|
-| <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/trading_light.png" width="220" alt="Candlesticks with volume, SMA, RSI and markers"><br>Candles, volume, RSI, markers | <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/indicators.png" width="220" alt="Bollinger, EMA, RSI and MACD with a legend"><br>Indicators and legend | <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/trend_tooltip.png" width="220" alt="Supertrend, HMA, ADX and Stoch RSI with a tooltip"><br>More indicators, tooltip |
-| <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/analysis.png" width="220" alt="ZigZag, Elliott count, auto trendlines, support and resistance, candle patterns"><br>Technical analysis | <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/drawing_tools.png" width="220" alt="Fibonacci, Elliott wave, trend line, rectangle and text drawings"><br>Drawing tools | <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/orders.png" width="220" alt="Position with P&L, TP, SL, a limit order and an alert"><br>Orders, positions, alerts |
-| <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/session_volume_profile.png" width="220" alt="A volume profile per day with value area and point of control"><br>Session volume profiles | <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/overlays.png" width="220" alt="Bollinger band fill, pivots and a volume profile"><br>Overlays | <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/forecast_fan.png" width="220" alt="Forecast fan with 80% and 95% ranges"><br>Forecast fan |
-| <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/crosshair_sync.png" width="220" alt="1h and 4h charts with synced crosshairs"><br>Crosshair sync, 1h / 4h | <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/compare.png" width="220" alt="BTC compared with ETH and SOL on a percentage scale"><br>Compare symbols | <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/heikin_ashi.png" width="220" alt="Heikin-Ashi candles"><br>Heikin-Ashi |
-| <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/renko.png" width="220" alt="Renko bricks"><br>Renko | <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/trading_dark.png" width="220" alt="Dark theme"><br>Dark theme | <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/area_dark.png" width="220" alt="Area series"><br>Area series |
-| <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/yield_curve.png" width="220" alt="Yield curve"><br>Yield curve | <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/options_chain.png" width="220" alt="Options chain"><br>Options chain | <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/watchlist.png" width="220" alt="Sparklines and a donut"><br>Sparklines and donut |
+<p>
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/trading_light.png" width="220" alt="Candlesticks with volume, SMA, an RSI pane and markers">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/indicators.png" width="220" alt="Bollinger, EMA, RSI and MACD with a legend">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/analysis.png" width="220" alt="ZigZag, Elliott count, auto trendlines, support and resistance">
+</p>
+
+Each feature below has its own screenshot, all taken from the [example app](#example-app).
 
 ## Contents
 
@@ -134,6 +133,12 @@ Beyond upstream:
 
 ## Series, panes and scales
 
+<p>
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/trading_light.png" width="220" alt="Candles with volume, SMA, an RSI pane, markers and the crosshair">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/trading_dark.png" width="220" alt="Dark theme">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/area_dark.png" width="220" alt="Area series">
+</p>
+
 ```dart
 // volume on its own scale at the bottom of the pane
 final volume = chart.addHistogramSeries(const HistogramSeriesOptions(
@@ -171,6 +176,11 @@ chart.timeScale().subscribeVisibleLogicalRangeChange((range) {
 
 Yield curves and options chains:
 
+<p>
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/yield_curve.png" width="240" alt="Yield curve with a months axis">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/options_chain.png" width="240" alt="Options chain on a strike axis">
+</p>
+
 ```dart
 final yields = ChartController.yieldCurve(); // time = months
 yields.addLineSeries().setData([LineData(time: 3, value: 5.4), LineData(time: 120, value: 4.3)]);
@@ -179,6 +189,11 @@ final chain = ChartController.options(precision: 0); // time = strike price
 ```
 
 ## Indicators
+
+<p>
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/indicators.png" width="240" alt="Bollinger, EMA, RSI and MACD panes with a legend">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/trend_tooltip.png" width="240" alt="Supertrend, HMA, ADX and Stoch RSI">
+</p>
 
 ```dart
 chart.addIndicator(Bollinger(), source: candles);          // over the candles
@@ -208,6 +223,10 @@ own with their usual levels:
 without a chart.
 
 ## Technical analysis without a chart
+
+<p>
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/analysis.png" width="240" alt="ZigZag, an automatic Elliott count, auto trendlines, support / resistance levels and candlestick patterns">
+</p>
 
 `Ta` has the same math as plain functions over a list of bars, plus the
 analysis tools — for screeners, alerts and backtests:
@@ -247,8 +266,14 @@ Rows at the top-left of each pane (OHLC and change for candles, one row per
 indicator) follow the crosshair, or show the last bar when it is hidden. In
 tooltip mode a box follows the crosshair instead. Prices are shown as prices
 even on a percentage scale.
+The [Indicators](#indicators) screenshots show both: the legend on the
+left, the tooltip on the right.
 
 ## Drawing tools
+
+<p>
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/drawing_tools.png" width="240" alt="Fibonacci retracement, Elliott wave, trend line, rectangle, horizontal line and text">
+</p>
 
 `DrawingEditor` puts a drawing layer on a pane and edits it with the pointer:
 
@@ -299,6 +324,10 @@ won't scroll. `PaneApi.priceToCoordinate` / `coordinateToPrice` and the
 
 ## Orders, positions and alerts
 
+<p>
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/orders.png" width="240" alt="Position with P&L, take profit, stop loss, a buy limit order and a price alert">
+</p>
+
 ```dart
 final trading = TradingLines(candles,
     onDragEnd: (line) => broker.modify(line.id, line.price),
@@ -316,6 +345,10 @@ Alerts fire when the last price crosses them (`AlertCondition`).
 
 ## Overlays
 
+<p>
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/overlays.png" width="240" alt="Bollinger band fill, pivot levels with axis labels and a volume profile">
+</p>
+
 Primitives attached to a series with `series.attachPrimitive(...)`:
 
 - `BandFillPrimitive`: a filled band between two lines (Bollinger, Keltner,
@@ -327,6 +360,10 @@ Primitives attached to a series with `series.attachPrimitive(...)`:
 - `FanPrimitive`: see [Forecast fan](#forecast-fan).
 
 ## Volume profile
+
+<p>
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/session_volume_profile.png" width="240" alt="A volume profile per day with its value area and point of control">
+</p>
 
 ```dart
 final vp = Ta.volumeProfile(bars, buckets: 32);
@@ -357,6 +394,10 @@ bars on screen, refit the bins in `subscribeVisibleLogicalRangeChange`.
 
 ## Forecast fan
 
+<p>
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/forecast_fan.png" width="240" alt="Forecast fan with 80% and 95% ranges">
+</p>
+
 ```dart
 final fan = FanPrimitive(
   anchorTime: last.time,
@@ -373,6 +414,11 @@ needed; the ranges take part in autoscale.
 
 ## Chart types and timeframes
 
+<p>
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/heikin_ashi.png" width="240" alt="Heikin-Ashi candles">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/renko.png" width="240" alt="Renko bricks">
+</p>
+
 ```dart
 candles.setData(heikinAshi(bars));
 candles.setData(renko(bars, boxSize: 50));   // also lineBreak, rangeBars
@@ -383,6 +429,10 @@ candles.update(live.add(tick));                  // streaming
 
 ## Compare symbols
 
+<p>
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/compare.png" width="240" alt="BTC compared with ETH and SOL on a percentage scale">
+</p>
+
 ```dart
 chart.addComparison(ethBars, title: 'ETH');   // switches the scale to %
 chart.addComparison(solBars, title: 'SOL');
@@ -391,6 +441,10 @@ chart.addComparison(solBars, title: 'SOL');
 Removing the last comparison (`removeComparison`) restores the scale mode.
 
 ## Several charts in step
+
+<p>
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/crosshair_sync.png" width="240" alt="1h and 4h charts with synced crosshairs">
+</p>
 
 ```dart
 final sync = CrosshairSync([(hourlyChart, hourlyCandles), (fourHourChart, fourHourCandles)]);
@@ -404,6 +458,10 @@ the bar holding that hour. `timeScale().timeToLogical` / `logicalToTime`
 convert between times and fractional bar indices, between bars and past them.
 
 ## Sparklines and donut charts
+
+<p>
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/watchlist.png" width="240" alt="Watchlist with sparklines and a portfolio donut">
+</p>
 
 For list rows and cards, `SwmSparkline` draws a small line without a chart
 engine behind it — no axes, scales or gestures:
@@ -502,7 +560,7 @@ flutter drive --profile -d <device> \
 cd example && flutter run
 ```
 
-The screenshots above come from it: `tool/screenshots.sh <simulator-udid>`.
+Every screenshot in this README comes from it: `tool/screenshots.sh <simulator-udid>`.
 
 ## Notes
 
