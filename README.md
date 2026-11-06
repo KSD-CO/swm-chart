@@ -15,7 +15,7 @@ are drawn in device pixels, the same way upstream draws in bitmap
 coordinates, so they stay sharp.
 
 <p>
-  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/trading_light.png" width="220" alt="Candlesticks with volume, SMA, an RSI pane and markers">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/pro_chart.png" width="220" alt="SwmProChart: top bar, drawing toolbar, indicators, a long position and anchored VWAP">
   <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/indicators.png" width="220" alt="Bollinger, EMA, RSI and MACD with a legend">
   <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/analysis.png" width="220" alt="ZigZag, Elliott count, auto trendlines, support and resistance">
 </p>
@@ -28,6 +28,8 @@ Each feature below has its own screenshot, all taken from the [example app](#exa
 - [Quick start](#quick-start)
 - [Features](#features)
 - Guide
+  - [Pro chart: a ready-made trading screen](#pro-chart-a-ready-made-trading-screen)
+  - [Saving and restoring a chart](#saving-and-restoring-a-chart)
   - [Series, panes and scales](#series-panes-and-scales)
   - [Indicators](#indicators)
   - [Technical analysis without a chart](#technical-analysis-without-a-chart)
@@ -52,7 +54,7 @@ Each feature below has its own screenshot, all taken from the [example app](#exa
 
 ```yaml
 dependencies:
-  swm_chart: ^0.13.1
+  swm_chart: ^0.14.0
 ```
 
 ```dart
@@ -120,16 +122,78 @@ Beyond upstream:
 
 | Area | |
 |---|---|
+| **Pro chart**: a ready-made screen — top bar (interval, chart type, indicator picker and settings, undo, scales), drawing toolbar, style bar for the selected drawing | ✅ |
+| **Save / restore the whole chart** as JSON: chart type, scale, indicators with their inputs and styles, drawings, trading lines; indicator templates | ✅ |
 | **73 indicators**, one line each: moving averages, bands and stops, momentum, trend, volume, volatility ([list](#indicators)) | ✅ |
 | **Technical analysis** (`Ta`): every indicator as a plain function, plus ZigZag, Elliott waves, support / resistance, chart and candlestick patterns, auto trendlines, divergences, Williams fractals, Fibonacci, pivot points, regression channel, volume profile | ✅ |
 | **Legend & tooltip** following the crosshair | ✅ |
-| **Drawing tools** with an editor: undo / redo, save / load as JSON | ✅ |
+| **Drawing tools** (30): lines, channels, pitchforks, Fibonacci retracement / extension / time zones, Gann fan, long / short position, anchored VWAP, regression trend, ranges, shapes, callouts; an editor with undo / redo, duplicate, lock, magnet | ✅ |
 | **Trading lines**: draggable orders, TP / SL, positions with P&L, price alerts | ✅ |
 | **Overlays**: band fill, price levels, **volume profile** (value area, per session), **forecast fan** | ✅ |
 | **Chart types & timeframes**: Heikin-Ashi, Renko, line break, range bars; resample to minutes … months | ✅ |
 | **Compare symbols** on a percentage scale | ✅ |
 | **Crosshair sync** across charts, symbols and intervals | ✅ |
 | **Sparklines** and **donut charts** for lists and dashboards | ✅ |
+
+## Pro chart: a ready-made trading screen
+
+<p>
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/pro_chart.png" width="200" alt="SwmProChart with indicators, a long position, anchored VWAP and an alert">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/pro_drawing_tools.png" width="200" alt="The drawing toolbar's forecasting and measuring tools">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/pro_style_bar.png" width="200" alt="The style bar of a selected long position">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/pro_indicators.png" width="200" alt="Indicator picker: on the chart, and the catalog to add from">
+  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/pro_indicator_settings.png" width="200" alt="Indicator settings: inputs and line styles">
+</p>
+
+`SwmProChart` is the whole trading screen in one widget, around a
+`ProChartController`:
+
+- **Top bar**: the symbol, the interval, the chart type (candles, hollow
+  candles, bars, line, area, baseline, Heikin-Ashi), the indicator picker,
+  undo / redo, and log / percent scale and volume.
+- **Drawing toolbar** on the left, tools in groups, plus magnet (snap to
+  OHLC), keep drawing, hide and remove all.
+- **Style bar** over the selected drawing: color, width, line style, text,
+  lock, duplicate, delete — each change can be undone.
+- **Indicator picker**: the indicators on the chart (show / hide, settings,
+  remove) and all 73 to add, searchable. **Settings**: inputs and the color,
+  width and visibility of each line.
+
+```dart
+final pro = ProChartController(symbol: 'BTC/USD', interval: '1h');
+pro.setData(bars, volumes: volumes);
+pro.addIndicator(IndicatorCatalog.byId('ema')!, values: {'period': 50});
+
+SwmProChart(
+  controller: pro,
+  intervals: const ['15m', '1h', '4h', '1D'],
+  onIntervalChanged: (i) async => pro.setData(await api.bars('BTC/USD', i)),
+  actions: [IconButton(icon: const Icon(Icons.save), onPressed: save)],
+)
+
+pro.update(tick); // realtime: price, volume, Heikin-Ashi and indicators
+```
+
+The parts are widgets of their own (`ProChartTopBar`, `DrawingToolbar`,
+`DrawingStyleBar`, `IndicatorPicker`, `showIndicatorSettings`) to lay out
+differently, and `DrawingTools.groups` / `IndicatorCatalog.all` are plain
+lists to build your own.
+
+## Saving and restoring a chart
+
+```dart
+final saved = jsonEncode(pro.saveState());
+// later, after setData:
+pro.restoreState(jsonDecode(saved));
+
+// indicators only, as a template for other symbols
+final template = pro.saveIndicators();
+other.restoreIndicators(template);
+```
+
+The state holds the chart type, price scale mode, volume, symbol, interval,
+each indicator (its catalog id, inputs, line styles, visibility), the
+drawings (anchored by time) and the trading lines — not the bars.
 
 ## Series, panes and scales
 
@@ -288,14 +352,25 @@ editor.tool = (id, anchors) => TrendLineDrawing(id: id, anchors: anchors, extend
 editor.deleteSelected();
 ```
 
-Built in: trend line / ray / extended line / arrow, horizontal line and ray,
-vertical line, cross line, rectangle, ellipse, parallel channel, Fibonacci
-retracement, text, price & date measurement, multi-point paths with labels
-(Elliott waves, XABCD) and freehand.
+Built in:
+
+| Group | Drawings |
+|---|---|
+| Lines | `TrendLineDrawing` (also ray, extended line, arrow), `HorizontalLineDrawing` (line, ray), `VerticalLineDrawing`, `CrossLineDrawing` |
+| Channels | `ParallelChannelDrawing`, `RegressionTrendDrawing`, `PitchforkDrawing` (Andrews, Schiff, modified Schiff) |
+| Fibonacci, Gann | `FibRetracementDrawing`, `FibExtensionDrawing` (trend-based), `FibTimeZoneDrawing`, `GannFanDrawing` |
+| Patterns | `PathDrawing` (Elliott impulse and correction, XABCD, any labels) |
+| Forecasting, measuring | `PositionDrawing` (long / short: target, stop, R:R, amounts), `PriceRangeDrawing`, `DateRangeDrawing`, `MeasureDrawing`, `AnchoredVwapDrawing` (with bands) |
+| Shapes, text | `RectangleDrawing`, `EllipseDrawing`, `FreehandDrawing`, `TextDrawing`, `CalloutDrawing` |
+
+`AnchoredVwapDrawing` and `RegressionTrendDrawing` read the price series
+(`source`); give the codec the same series to load them
+(`DrawingCodec(source: candles, volume: volume)`).
 
 **Undo / redo.** `editor.undo()` / `editor.redo()` step through adding,
-moving, reshaping and deleting (`canUndo`, `canRedo`, `onHistoryChanged`;
-`checkpoint()` before a change you make yourself, e.g. a colour).
+moving, reshaping and deleting (`canUndo`, `canRedo`, `onHistoryChanged`).
+`editor.update(id, (d) => ...)` changes a drawing's style, text or lock as
+one undoable step; `editor.duplicate(id)` copies one.
 
 **Save / load.** `DrawingCodec` saves drawings as JSON with the anchors
 stored by time, so they stay put when older history is paged in:
@@ -545,12 +620,14 @@ flutter drive --profile -d <device> \
 
 ## Example app
 
-`example/` has five tabs:
+`example/` has six tabs:
 
 - **Trading**: switchable series types, volume, SMA, an RSI pane with
   buy/sell markers, a watermark, live updates, an OHLC legend, history
   lazy-loading, log/percentage scales, dark mode.
-- **Yield curve** and **Options**: the two non-time chart types.
+- **Pro**: `SwmProChart` with live ticks, four intervals, and buttons that
+  save the whole chart to JSON and restore it.
+- **Yields** and **Options**: the two non-time chart types.
 - **Pro tools**: drawings, overlays, indicators, orders, trend indicators
   with a tooltip, technical analysis, session volume profiles, a forecast
   fan, Heikin-Ashi, Renko, compare and synced 1h / 4h charts.

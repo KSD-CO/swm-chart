@@ -2,13 +2,17 @@ name: swm_chart
 description: >-
   Stock World Monitor Charts: high-performance financial charts for Flutter,
   a native Dart port of TradingView Lightweight Charts.
-version: 0.13.1
+version: 0.14.0
 homepage: https://stockworldmonitor.com/
 repository: https://github.com/KSD-CO/swm-chart
 issue_tracker: https://github.com/KSD-CO/swm-chart/issues
 screenshots:
-  - description: Candlesticks with volume, SMA, an RSI pane, buy/sell markers and the crosshair.
-    path: screenshots/trading_light.png
+  - description: SwmProChart - a ready-made trading screen with a top bar, drawing toolbar, indicators, a long position and anchored VWAP.
+    path: screenshots/pro_chart.png
+  - description: Indicator picker - the indicators on the chart and all 73 to add, searchable.
+    path: screenshots/pro_indicators.png
+  - description: The drawing toolbar - tools in groups - lines, channels, Fibonacci and Gann, patterns, forecasting, shapes, annotations.
+    path: screenshots/pro_drawing_tools.png
   - description: Built-in indicators - Bollinger, EMA, RSI and MACD panes - with a legend following the crosshair.
     path: screenshots/indicators.png
   - description: Technical analysis - ZigZag, an automatic Elliott count, auto trendlines, support / resistance and candlestick patterns.
@@ -19,12 +23,8 @@ screenshots:
     path: screenshots/orders.png
   - description: A volume profile per session with its value area and point of control.
     path: screenshots/session_volume_profile.png
-  - description: Supertrend, HMA, ADX and Stoch RSI with a tooltip following the crosshair.
-    path: screenshots/trend_tooltip.png
-  - description: Forecast fan with 80% and 95% ranges past the last bar.
-    path: screenshots/forecast_fan.png
-  - description: 1h and 4h charts with synced crosshairs.
-    path: screenshots/crosshair_sync.png
+  - description: Candlesticks with volume, SMA, an RSI pane, buy/sell markers and the crosshair.
+    path: screenshots/trading_light.png
   - description: Watchlist with sparklines and a portfolio donut chart.
     path: screenshots/watchlist.png
 topics:

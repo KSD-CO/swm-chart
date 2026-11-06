@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:swm_chart/swm_chart.dart';
 
 import 'other_charts.dart';
+import 'pro_screen.dart';
 import 'tools_screen.dart';
 import 'watchlist_screen.dart';
 
@@ -42,6 +43,7 @@ class _HomeScreenState extends State<HomeScreen> {
         index: _tab,
         children: [
           const TradingScreen(),
+          const Scaffold(body: SafeArea(child: ProScreen())),
           Scaffold(
             appBar: AppBar(title: const Text('Yield curve')),
             body: const SafeArea(child: YieldCurveScreen()),
@@ -65,7 +67,8 @@ class _HomeScreenState extends State<HomeScreen> {
         onDestinationSelected: (i) => setState(() => _tab = i),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.candlestick_chart), label: 'Trading'),
-          NavigationDestination(icon: Icon(Icons.show_chart), label: 'Yield curve'),
+          NavigationDestination(icon: Icon(Icons.dashboard_customize), label: 'Pro'),
+          NavigationDestination(icon: Icon(Icons.show_chart), label: 'Yields'),
           NavigationDestination(icon: Icon(Icons.stacked_bar_chart), label: 'Options'),
           NavigationDestination(icon: Icon(Icons.draw), label: 'Tools'),
           NavigationDestination(icon: Icon(Icons.donut_large), label: 'Watchlist'),

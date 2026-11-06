@@ -89,7 +89,7 @@ void main() {
     await checkpoint(tester, 'area_percent');
 
     // Yield curve and options chain tabs.
-    await tester.tap(find.widgetWithText(NavigationDestination, 'Yield curve'));
+    await tester.tap(find.widgetWithText(NavigationDestination, 'Yields'));
     await tester.pump(menu);
     await checkpoint(tester, 'yield');
     await tester.tap(find.widgetWithText(NavigationDestination, 'Options'));

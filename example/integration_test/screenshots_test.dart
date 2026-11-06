@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:swm_chart/swm_chart.dart';
 import 'package:swm_chart_example/main.dart';
+import 'package:swm_chart_example/pro_screen.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -42,7 +43,34 @@ void main() {
     await checkpoint(tester, 'area_dark');
 
     await tester.tap(find.byIcon(Icons.light_mode));
-    await tester.tap(find.widgetWithText(NavigationDestination, 'Yield curve'));
+    await tester.tap(find.widgetWithText(NavigationDestination, 'Pro'));
+    await tester.pump(const Duration(milliseconds: 600));
+    final pro = tester.state<ProScreenState>(find.byType(ProScreen)).pro;
+    await checkpoint(tester, 'pro_chart');
+
+    pro.drawings.select('long');
+    await checkpoint(tester, 'pro_style_bar');
+    pro.drawings.select(null);
+
+    await tester.tap(find.byTooltip('Forecasting and measuring'));
+    await tester.pump(const Duration(milliseconds: 600));
+    await checkpoint(tester, 'pro_drawing_tools');
+    await tester.tap(find.text('Long position'));
+    await tester.pump(const Duration(milliseconds: 600));
+    pro.activeTool = null;
+
+    await tester.tap(find.byTooltip('Indicators'));
+    await tester.pump(const Duration(milliseconds: 800));
+    await checkpoint(tester, 'pro_indicators');
+    await tester.tap(find.byTooltip('Settings').last);
+    await tester.pump(const Duration(milliseconds: 600));
+    await checkpoint(tester, 'pro_indicator_settings');
+    await tester.tap(find.text('Cancel'));
+    await tester.pump(const Duration(milliseconds: 600));
+    Navigator.of(tester.element(find.byType(IndicatorPicker))).pop();
+    await tester.pump(const Duration(milliseconds: 600));
+
+    await tester.tap(find.widgetWithText(NavigationDestination, 'Yields'));
     await checkpoint(tester, 'yield_curve');
 
     await tester.tap(find.widgetWithText(NavigationDestination, 'Options'));

@@ -9,9 +9,13 @@ import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart' show SystemMouseCursors;
 
 import '../api/chart_controller.dart';
+import '../data.dart';
 import '../options.dart';
 import '../renderers/draw_utils.dart';
+import 'drawing_codec.dart';
 import 'primitive.dart';
+
+part 'drawings_more.dart';
 
 /// A point of a drawing: a fractional logical index (so it can sit between
 /// bars or past the last one) and a price on the pane's default scale.
@@ -81,7 +85,7 @@ class DrawingStyle {
 /// What a drawing gets to paint or hit-test itself: its anchors in pane
 /// coordinates and the conversions behind them.
 class DrawingContext {
-  DrawingContext(this.chart, this.points, this.formatPrice);
+  DrawingContext(this.chart, this.points, this.formatPrice, [this.timeOf]);
 
   final PrimitiveContext chart;
 
@@ -89,6 +93,10 @@ class DrawingContext {
   final List<Offset> points;
 
   final String Function(double price) formatPrice;
+
+  /// The time at a logical index (between bars and past the last one too),
+  /// when the layer knows it ([DrawingsPrimitive.timeOf]).
+  final num? Function(double logical)? timeOf;
 
   Size get size => chart.paneSize;
 
@@ -135,6 +143,16 @@ abstract class Drawing {
 
   /// Prices labelled on the price axis while unselected.
   List<double> get axisPrices => const [];
+
+  /// Prices labelled on the price axis while selected; by default the
+  /// anchors' prices. Override it when an anchor's price isn't what the
+  /// drawing shows (a position's mirrored target, a regression's ends).
+  List<double> get selectedAxisPrices => [for (final a in anchors) a.price];
+
+  /// Called by [DrawingEditor] once the pointer has placed every anchor,
+  /// before the drawing is added: fill in anchors derived from the placed
+  /// ones (a position's stop), or fix up a degenerate shape.
+  void completed() {}
 
   /// The prices of the drawing's lines at bar [logical] — a trend line's
   /// price there, a channel's two rails — for alerts such as "price
@@ -194,6 +212,7 @@ class DrawingsPrimitive extends ChartPrimitive {
     this.hitTolerance = 6,
     this.handleRadius = 5,
     this.formatPrice = _defaultFormat,
+    this.timeOf,
   }) : _drawings = List.of(drawings);
 
   static String _defaultFormat(double price) => price.toStringAsFixed(2);
@@ -205,6 +224,10 @@ class DrawingsPrimitive extends ChartPrimitive {
   final double hitTolerance;
   final double handleRadius;
   final String Function(double price) formatPrice;
+
+  /// The time at a logical index, for drawings that show durations
+  /// ([DateRangeDrawing]); [DrawingEditor] sets it to the chart's.
+  num? Function(double logical)? timeOf;
 
   List<Drawing> get drawings => List.unmodifiable(_drawings);
 
@@ -263,7 +286,7 @@ class DrawingsPrimitive extends ChartPrimitive {
       if (y == null || !y.isFinite) return null;
       points.add(Offset(ctx.logicalToCoordinate(a.logical), y));
     }
-    return DrawingContext(ctx, points, formatPrice);
+    return DrawingContext(ctx, points, formatPrice, timeOf);
   }
 
   bool _isSelected(Drawing d) => d == _draft || d.id == _selectedId;
@@ -297,7 +320,7 @@ class DrawingsPrimitive extends ChartPrimitive {
     final labels = <AxisLabel>[];
     for (final d in _all) {
       if (!d.visible) continue;
-      final prices = _isSelected(d) ? [for (final a in d.anchors) a.price] : d.axisPrices;
+      final prices = _isSelected(d) ? d.selectedAxisPrices : d.axisPrices;
       for (final p in prices) {
         final y = ctx.priceToCoordinate(p);
         if (y == null) continue;
@@ -377,6 +400,7 @@ class DrawingEditor {
     Object Function()? newId,
   }) : layer = layer ?? DrawingsPrimitive(),
        _newId = newId {
+    this.layer.timeOf ??= chart.timeScale().logicalToTime;
     chart.panes()[paneIndex].attachPrimitive(this.layer);
     chart.subscribePointer(_onPointer);
     chart.subscribeClick(_onClick);
@@ -531,6 +555,35 @@ class DrawingEditor {
     select(null);
   }
 
+  /// Changes drawing [id] with [change] — its style, text, flags — as one
+  /// step [undo] can take back, then repaints and reports it through
+  /// [onChanged].
+  void update(Object id, void Function(Drawing drawing) change) {
+    final d = layer.byId(id);
+    if (d == null) return;
+    checkpoint();
+    change(d);
+    layer.requestUpdate();
+    onChanged?.call(d);
+  }
+
+  /// A copy of drawing [id], [offsetBars] to the right, added and selected.
+  /// [codec] copies it (a codec that knows its kind, with the series data
+  /// drawings read); `null` when it can't.
+  Drawing? duplicate(Object id, {DrawingCodec? codec, double offsetBars = 5}) {
+    final d = layer.byId(id);
+    if (d == null) return null;
+    final json = (codec ?? DrawingCodec()).encode(d, (logical) => logical);
+    if (json == null) return null;
+    final copy = (codec ?? DrawingCodec()).decode({...json, 'id': _nextId()}, (time) => time.toDouble());
+    if (copy == null) return null;
+    copy.anchors = [for (final a in copy.anchors) a.shift(offsetBars, 0)];
+    copy.locked = false;
+    add(copy);
+    select(copy.id);
+    return copy;
+  }
+
   /// Drops a half-placed drawing.
   void cancel() => tool = keepTool ? _tool : null;
 
@@ -553,6 +606,7 @@ class DrawingEditor {
 
   void _finish() {
     final d = layer.draft!;
+    d.completed();
     layer.draft = null;
     _placed = 0;
     _dragAnchor = null;

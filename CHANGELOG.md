@@ -1,3 +1,31 @@
+## 0.14.0
+
+* `SwmProChart`: a ready-made trading screen around a `ProChartController`
+  — a top bar (symbol, interval, chart type, indicator picker, undo /
+  redo, log / percent scale, volume), a drawing toolbar with the tools in
+  groups (magnet, keep drawing, hide / remove all) and a style bar for the
+  selected drawing (color, width, line style, text, lock, duplicate,
+  delete). The parts are public widgets: `ProChartTopBar`,
+  `DrawingToolbar`, `DrawingStyleBar`, `IndicatorPicker` /
+  `showIndicatorSheet`, `showIndicatorSettings`.
+* `ProChartController`: the price series in seven styles (candles, hollow
+  candles, bars, line, area, baseline, Heikin-Ashi), volume, indicators,
+  drawings, trading lines and a legend; `saveState` / `restoreState` the
+  whole chart as JSON, `saveIndicators` / `restoreIndicators` templates.
+* `IndicatorCatalog`: all 73 indicators by id, with their inputs
+  (`IndicatorSpec`, `IndicatorParam`) and groups — for pickers, settings
+  and saved charts.
+* New drawings: `PositionDrawing` (long / short with target, stop, R:R and
+  amounts), `FibExtensionDrawing`, `FibTimeZoneDrawing`,
+  `PitchforkDrawing` (Andrews, Schiff, modified Schiff), `GannFanDrawing`,
+  `AnchoredVwapDrawing` (with bands), `RegressionTrendDrawing`,
+  `CalloutDrawing`, `DateRangeDrawing`, `PriceRangeDrawing`; all saved by
+  `DrawingCodec` (`source` / `volume` for those that read the data).
+* `DrawingEditor.update` (a change as one undo step) and `duplicate`;
+  `Drawing.completed` and `selectedAxisPrices`; `DrawingContext.timeOf`.
+* Example: a Pro tab with `SwmProChart`, live ticks, intervals and save /
+  restore; screenshots of it.
+
 ## 0.13.1
 
 * `CrosshairSync` across intervals: a time between the other chart's bars

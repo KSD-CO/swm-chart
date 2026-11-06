@@ -4,6 +4,7 @@
 
 import 'dart:ui';
 
+import '../api/chart_controller.dart';
 import '../options.dart';
 import 'drawings.dart';
 
@@ -29,6 +30,9 @@ class DrawingKind<T extends Drawing> {
 /// Saves drawings as JSON-ready maps and reads them back. The built-in
 /// drawings are known; give a [DrawingKind] for each custom one.
 ///
+/// Drawings that read the chart's data ([AnchoredVwapDrawing],
+/// [RegressionTrendDrawing]) are loaded over [source] (and [volume]).
+///
 /// ```dart
 /// final codec = DrawingCodec();
 /// final saved = jsonEncode(codec.encodeAll(editor.drawings, chart.timeScale().logicalToTime));
@@ -36,7 +40,12 @@ class DrawingKind<T extends Drawing> {
 /// editor.layer.drawings = codec.decodeAll(jsonDecode(saved), chart.timeScale().timeToLogical);
 /// ```
 class DrawingCodec {
-  DrawingCodec({List<DrawingKind> custom = const []}) : _kinds = [...custom, ...builtIns];
+  DrawingCodec({List<DrawingKind> custom = const [], this.source, this.volume})
+    : _kinds = [...custom, ...builtIns, ..._dataKinds(source, volume)];
+
+  /// The series loaded data drawings read.
+  final SeriesApi? source;
+  final SeriesApi? volume;
 
   // Custom kinds first, so a subclass of a built-in drawing is saved as
   // itself.
@@ -96,22 +105,14 @@ class DrawingCodec {
         id: id,
         anchors: a,
         style: s,
-        levels: switch (p['levels']) {
-          final List<Object?> levels => [
-            for (final l in levels.cast<Map<String, Object?>>())
-              FibLevel((l['ratio'] as num).toDouble(), Color(l['color'] as int), visible: l['visible'] != false),
-          ],
-          _ => FibRetracementDrawing.defaultLevels,
-        },
+        levels: _readLevels(p['levels']) ?? FibRetracementDrawing.defaultLevels,
         extendLeft: p['extendLeft'] == true,
         extendRight: p['extendRight'] == true,
         fillOpacity: (p['fillOpacity'] as num?)?.toDouble() ?? 0.12,
         showPrices: p['showPrices'] != false,
       ),
       props: (d) => {
-        'levels': [
-          for (final l in d.levels) {'ratio': l.ratio, 'color': l.color.toARGB32(), 'visible': l.visible},
-        ],
+        'levels': _levels(d.levels),
         'extendLeft': d.extendLeft,
         'extendRight': d.extendRight,
         'fillOpacity': d.fillOpacity,
@@ -157,7 +158,131 @@ class DrawingCodec {
       name: 'freehand',
       create: (id, a, s, p) => FreehandDrawing(id: id, anchors: a, style: s),
     ),
+    DrawingKind<PositionDrawing>(
+      name: 'position',
+      create: (id, a, s, p) => PositionDrawing(
+        id: id,
+        anchors: a,
+        style: s,
+        short: p['short'] == true,
+        quantity: (p['quantity'] as num?)?.toDouble(),
+        profitColor: _color(p['profitColor']) ?? const Color(0xFF089981),
+        lossColor: _color(p['lossColor']) ?? const Color(0xFFF23645),
+      ),
+      props: (d) => {
+        'short': d.short,
+        'quantity': d.quantity,
+        'profitColor': d.profitColor.toARGB32(),
+        'lossColor': d.lossColor.toARGB32(),
+      },
+    ),
+    DrawingKind<FibExtensionDrawing>(
+      name: 'fibExtension',
+      create: (id, a, s, p) => FibExtensionDrawing(
+        id: id,
+        anchors: a,
+        style: s,
+        levels: _readLevels(p['levels']) ?? FibExtensionDrawing.defaultLevels,
+        extendRight: p['extendRight'] == true,
+        fillOpacity: (p['fillOpacity'] as num?)?.toDouble() ?? 0.1,
+        showPrices: p['showPrices'] != false,
+      ),
+      props: (d) => {
+        'levels': _levels(d.levels),
+        'extendRight': d.extendRight,
+        'fillOpacity': d.fillOpacity,
+        'showPrices': d.showPrices,
+      },
+    ),
+    DrawingKind<FibTimeZoneDrawing>(
+      name: 'fibTimeZone',
+      create: (id, a, s, p) => FibTimeZoneDrawing(
+        id: id,
+        anchors: a,
+        style: s,
+        zones: switch (p['zones']) {
+          final List<Object?> z => [for (final v in z) (v as num).toInt()],
+          _ => FibTimeZoneDrawing.defaultZones,
+        },
+      ),
+      props: (d) => {'zones': d.zones},
+    ),
+    DrawingKind<PitchforkDrawing>(
+      name: 'pitchfork',
+      create: (id, a, s, p) => PitchforkDrawing(
+        id: id,
+        anchors: a,
+        style: s,
+        variant: PitchforkVariant.values.where((v) => v.name == p['variant']).firstOrNull ?? PitchforkVariant.andrews,
+      ),
+      props: (d) => {'variant': d.variant.name},
+    ),
+    DrawingKind<GannFanDrawing>(
+      name: 'gannFan',
+      create: (id, a, s, p) => GannFanDrawing(id: id, anchors: a, style: s),
+    ),
+    DrawingKind<CalloutDrawing>(
+      name: 'callout',
+      create: (id, a, s, p) => CalloutDrawing(id: id, anchors: a, style: s, text: p['text'] as String? ?? ''),
+      props: (d) => {'text': d.text},
+    ),
+    DrawingKind<DateRangeDrawing>(
+      name: 'dateRange',
+      create: (id, a, s, p) =>
+          DateRangeDrawing(id: id, anchors: a, style: s, barsLabel: p['barsLabel'] as String? ?? 'bars'),
+      props: (d) => {'barsLabel': d.barsLabel},
+    ),
+    DrawingKind<PriceRangeDrawing>(
+      name: 'priceRange',
+      create: (id, a, s, p) => PriceRangeDrawing(
+        id: id,
+        anchors: a,
+        style: s,
+        upColor: _color(p['upColor']) ?? const Color(0xFF2962FF),
+        downColor: _color(p['downColor']) ?? const Color(0xFFF23645),
+      ),
+      props: (d) => {'upColor': d.upColor.toARGB32(), 'downColor': d.downColor.toARGB32()},
+    ),
   ];
+
+  static List<DrawingKind> _dataKinds(SeriesApi? source, SeriesApi? volume) => [
+    DrawingKind<AnchoredVwapDrawing>(
+      name: 'anchoredVwap',
+      create: (id, a, s, p) => AnchoredVwapDrawing(
+        id: id,
+        anchors: a,
+        style: s,
+        source: source,
+        volume: volume,
+        bandMultipliers: [for (final v in (p['bands'] as List<Object?>? ?? const [])) (v as num).toDouble()],
+      ),
+      props: (d) => {'bands': d.bandMultipliers},
+    ),
+    DrawingKind<RegressionTrendDrawing>(
+      name: 'regressionTrend',
+      create: (id, a, s, p) => RegressionTrendDrawing(
+        id: id,
+        anchors: a,
+        style: s,
+        source: source,
+        deviations: (p['deviations'] as num?)?.toDouble() ?? 2,
+        extendRight: p['extendRight'] == true,
+      ),
+      props: (d) => {'deviations': d.deviations, 'extendRight': d.extendRight},
+    ),
+  ];
+
+  static List<Map<String, Object?>> _levels(List<FibLevel> levels) => [
+    for (final l in levels) {'ratio': l.ratio, 'color': l.color.toARGB32(), 'visible': l.visible},
+  ];
+
+  static List<FibLevel>? _readLevels(Object? json) => switch (json) {
+    final List<Object?> levels => [
+      for (final l in levels.cast<Map<String, Object?>>())
+        FibLevel((l['ratio'] as num).toDouble(), Color(l['color'] as int), visible: l['visible'] != false),
+    ],
+    _ => null,
+  };
 
   /// [d] as a JSON-ready map, its anchors at the times [timeOf] gives
   /// (e.g. `chart.timeScale().logicalToTime`). `null` for a drawing of a
