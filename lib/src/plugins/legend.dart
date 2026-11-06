@@ -300,6 +300,8 @@ class _LegendPrimitive extends ChartPrimitive {
     // Right of the crosshair, or left of it near the right edge.
     var left = at.dx + gap;
     if (left + width + pad * 2 > ctx.paneSize.width) left = at.dx - gap - width - pad * 2;
+    // Never past the left edge when it fits on neither side.
+    if (left < 2) left = 2;
     final top = (at.dy - height / 2 - pad).clamp(
       2.0,
       (ctx.paneSize.height - height - pad * 2 - 2).clamp(2.0, double.infinity),

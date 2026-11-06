@@ -34,11 +34,11 @@ class CrosshairSync {
       final time = p.time;
       for (final (chart, series) in _charts) {
         if (identical(chart, source)) continue;
-        final value = time == null ? null : _valueAt(chart, series, time);
-        if (time == null || value == null) {
+        final bar = time == null ? null : _barAt(chart, series, time);
+        if (bar == null) {
           chart.clearCrosshairPosition();
         } else {
-          chart.setCrosshairPosition(value, time, series);
+          chart.setCrosshairPosition(bar.$2, bar.$1, series);
         }
       }
     } finally {
@@ -46,12 +46,14 @@ class CrosshairSync {
     }
   }
 
-  static double? _valueAt(ChartController chart, SeriesApi series, num time) {
+  /// Time and value of the bar of [series] holding [time]: the last one at
+  /// or before it, so a 1h moment lands on its 4h bar.
+  static (num, double)? _barAt(ChartController chart, SeriesApi series, num time) {
     final logical = chart.timeScale().timeToLogical(time);
     if (logical == null) return null;
-    return switch (series.dataByIndex(logical.round())) {
-      final OhlcData d => d.close,
-      final SingleValueData d => d.value,
+    return switch (series.dataByIndex((logical + 1e-6).floor(), MismatchDirection.nearestLeft)) {
+      final OhlcData d => (d.time, d.close),
+      final SingleValueData d => (d.time, d.value),
       _ => null,
     };
   }

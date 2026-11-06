@@ -2,7 +2,7 @@ name: swm_chart
 description: >-
   Stock World Monitor Charts: high-performance financial charts for Flutter,
   a native Dart port of TradingView Lightweight Charts.
-version: 0.13.0
+version: 0.13.1
 homepage: https://stockworldmonitor.com/
 repository: https://github.com/KSD-CO/swm-chart
 issue_tracker: https://github.com/KSD-CO/swm-chart/issues
@@ -11,20 +11,20 @@ screenshots:
     path: screenshots/trading_light.png
   - description: Built-in indicators - Bollinger, EMA, RSI and MACD panes - with a legend following the crosshair.
     path: screenshots/indicators.png
-  - description: Trading lines - position with P&L, take profit, stop loss, a buy limit order and a price alert.
-    path: screenshots/orders.png
+  - description: Technical analysis - ZigZag, an automatic Elliott count, auto trendlines, support / resistance and candlestick patterns.
+    path: screenshots/analysis.png
   - description: Drawing tools - Fibonacci retracement, Elliott wave, trend line, rectangle, resistance and text.
     path: screenshots/drawing_tools.png
-  - description: Overlays - Bollinger band fill, pivot levels with axis labels and a volume profile.
-    path: screenshots/overlays.png
-  - description: Compare symbols on a percentage scale.
-    path: screenshots/compare.png
-  - description: Renko bricks built from hourly bars.
-    path: screenshots/renko.png
-  - description: Dark theme with the crosshair, price line and last value labels.
-    path: screenshots/trading_dark.png
-  - description: Yield curve chart with a months axis and two curves.
-    path: screenshots/yield_curve.png
+  - description: Trading lines - position with P&L, take profit, stop loss, a buy limit order and a price alert.
+    path: screenshots/orders.png
+  - description: A volume profile per session with its value area and point of control.
+    path: screenshots/session_volume_profile.png
+  - description: Supertrend, HMA, ADX and Stoch RSI with a tooltip following the crosshair.
+    path: screenshots/trend_tooltip.png
+  - description: Forecast fan with 80% and 95% ranges past the last bar.
+    path: screenshots/forecast_fan.png
+  - description: 1h and 4h charts with synced crosshairs.
+    path: screenshots/crosshair_sync.png
   - description: Watchlist with sparklines and a portfolio donut chart.
     path: screenshots/watchlist.png
 topics:

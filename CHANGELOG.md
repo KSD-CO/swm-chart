@@ -1,3 +1,17 @@
+## 0.13.1
+
+* `CrosshairSync` across intervals: a time between the other chart's bars
+  (02:00 on a 4h chart) now lands on the bar holding it; before, that
+  chart's crosshair didn't move.
+* Tooltip legend: the box stays inside the pane when it fits on neither
+  side of the crosshair.
+* Example: Pro tools adds Trend (Supertrend, HMA, ADX, Stoch RSI with a
+  tooltip), Analysis (ZigZag, Elliott count, auto trendlines, support /
+  resistance, candlestick patterns), Sessions (session volume profiles),
+  Forecast (fan) and Sync (1h / 4h charts) — with screenshots.
+* README: reorganized — captioned gallery, contents, installation, quick
+  start, then the guide by topic.
+
 ## 0.13.0
 
 * 47 more chart indicators — 73 built in — each one line to add, each

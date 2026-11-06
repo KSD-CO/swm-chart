@@ -57,9 +57,14 @@ void main() {
     for (final (chip, name) in [
       ('Indicators', 'indicators'),
       ('Orders', 'orders'),
+      ('Trend', 'trend_tooltip'),
+      ('Analysis', 'analysis'),
+      ('Sessions', 'session_volume_profile'),
+      ('Forecast', 'forecast_fan'),
       ('Heikin-Ashi', 'heikin_ashi'),
       ('Renko', 'renko'),
       ('Compare', 'compare'),
+      ('Sync', 'crosshair_sync'),
     ]) {
       await tester.ensureVisible(find.text(chip));
       await tester.pump(const Duration(milliseconds: 300));

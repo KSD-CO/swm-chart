@@ -237,6 +237,45 @@ void main() {
     expect(onB?.time, isNull);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('CrosshairSync across intervals lands on the bar holding the time', (tester) async {
+    const hour = 3600;
+    final hourly = [
+      for (var i = 0; i < 96; i++)
+        CandlestickData(time: _t0 + i * hour, open: 100, high: 101, low: 99, close: 100.0 + i),
+    ];
+    final a = ChartController(), b = ChartController();
+    final sa = a.addCandlestickSeries()..setData(hourly);
+    final sb = b.addCandlestickSeries()..setData(resample(hourly, const Timeframe.hours(4)));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              SizedBox(width: 400, height: 200, child: SwmChart(controller: a)),
+              SizedBox(width: 400, height: 200, child: SwmChart(controller: b)),
+            ],
+          ),
+        ),
+      ),
+    );
+    final sync = CrosshairSync([(a, sa), (b, sb)]);
+    addTearDown(() {
+      sync.dispose();
+      a.dispose();
+      b.dispose();
+    });
+    ChartEventParams? onB;
+    b.subscribeCrosshairMove((p) => onB = p);
+
+    // 02:00 and 03:00 are inside the 00:00 4h bar (bars near the end are on
+    // screen).
+    for (final h in [80 + 2, 80 + 3, 80]) {
+      a.setCrosshairPosition(100.0 + h, _t0 + h * hour, sa);
+      await tester.pump();
+      expect(onB?.time, _t0 + 80 * hour, reason: 'hour $h');
+    }
+  });
 }
 
 class _Marker extends Drawing {

@@ -10,9 +10,14 @@ enum ToolsMode {
   overlays('Overlays', Icons.layers),
   indicators('Indicators', Icons.insights),
   orders('Orders', Icons.swap_vert),
+  trend('Trend', Icons.trending_up),
+  analysis('Analysis', Icons.auto_graph),
+  sessions('Sessions', Icons.align_horizontal_left),
+  forecast('Forecast', Icons.query_stats),
   heikinAshi('Heikin-Ashi', Icons.candlestick_chart),
   renko('Renko', Icons.view_week),
-  compare('Compare', Icons.compare_arrows);
+  compare('Compare', Icons.compare_arrows),
+  sync('Sync', Icons.link);
 
   const ToolsMode(this.label, this.icon);
 
@@ -20,8 +25,9 @@ enum ToolsMode {
   final IconData icon;
 }
 
-/// Drawing tools, overlays, indicators, trading lines, derived chart types
-/// and symbol comparison on an hourly chart.
+/// Drawing tools, overlays, indicators, technical analysis, trading lines,
+/// derived chart types, symbol comparison and synced charts on an hourly
+/// chart.
 class ToolsScreen extends StatefulWidget {
   const ToolsScreen({super.key, this.mode = ToolsMode.drawings});
 
@@ -43,6 +49,10 @@ class ToolsScreenState extends State<ToolsScreen> {
 
   ChartController? _chart;
 
+  /// The second chart of [ToolsMode.sync].
+  ChartController? _chart2;
+  CrosshairSync? _sync;
+
   @override
   void initState() {
     super.initState();
@@ -63,7 +73,11 @@ class ToolsScreenState extends State<ToolsScreen> {
   }
 
   void _build() {
+    _sync?.dispose();
+    _sync = null;
     _chart?.dispose();
+    _chart2?.dispose();
+    _chart2 = null;
     final chart = ChartController(
       options: const ChartOptions(
         timeScale: TimeScaleOptions(timeVisible: true, secondsVisible: false, rightOffset: 4),
@@ -93,7 +107,219 @@ class ToolsScreenState extends State<ToolsScreen> {
         createLegend(chart, const LegendOptions(title: 'BTC/USD · Renko 50', showChange: false));
       case ToolsMode.compare:
         _addComparisons(chart);
+      case ToolsMode.trend:
+        _addTrend(chart, candles);
+      case ToolsMode.analysis:
+        _addAnalysis(chart, candles);
+      case ToolsMode.sessions:
+        _addSessions(chart, candles);
+      case ToolsMode.forecast:
+        _addForecast(chart, candles);
+      case ToolsMode.sync:
+        _addSync(chart, candles);
     }
+  }
+
+  /// Crosshair on the bar [back] bars before the last, once laid out.
+  void _pointAt(ChartController chart, SeriesApi series, int back) {
+    final bar = _long[_long.length - back];
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_chart == chart) chart.setCrosshairPosition(bar.close, bar.time, series);
+    });
+  }
+
+  /// [_long] as `Ta` bars, with a made-up volume.
+  List<TaPoint> get _taBars {
+    final r = math.Random(11);
+    return [
+      for (final b in _long)
+        TaPoint(
+          date: DateTime.fromMillisecondsSinceEpoch(b.time.toInt() * 1000, isUtc: true),
+          open: b.open,
+          high: b.high,
+          low: b.low,
+          close: b.close,
+          volume: 200 + r.nextDouble() * 800 + (b.high - b.low) * 4,
+        ),
+    ];
+  }
+
+  // ---- more indicators, tooltip ----
+
+  void _addTrend(ChartController chart, CandlestickSeriesApi candles) {
+    chart.addIndicator(Supertrend(), source: candles);
+    chart.addIndicator(Hma(21), source: candles);
+    chart.addIndicator(Adx(), source: candles);
+    chart.addIndicator(StochRsi(), source: candles);
+    chart.panes()[0].setStretchFactor(2.2);
+    createLegend(chart, const LegendOptions(mode: LegendMode.tooltip));
+    _pointAt(chart, candles, 120);
+  }
+
+  // ---- technical analysis ----
+
+  void _addAnalysis(ChartController chart, CandlestickSeriesApi candles) {
+    final bars = _taBars;
+    final times = [for (final b in _long) b.time];
+
+    // ZigZag swings of 1% or more.
+    final zigzag = Ta.zigzag(bars, deviation: 1);
+    chart
+        .addLineSeries(
+          const LineSeriesOptions(
+            title: 'ZigZag 1%',
+            color: Color(0x99787B86),
+            lineWidth: 1,
+            lastValueVisible: false,
+            priceLineVisible: false,
+            crosshairMarkerVisible: false,
+          ),
+        )
+        .setData([
+          for (final (i, v) in zigzag.line.indexed)
+            if (v != null) LineData(time: times[i], value: v),
+        ]);
+
+    final editor = DrawingEditor(chart);
+    // An automatic Elliott count on the same swings.
+    final count = Ta.elliottWaves(bars, deviation: 1);
+    if (count != null) {
+      final points = [count.start, ...count.waves];
+      editor.add(
+        PathDrawing(
+          id: 'elliott',
+          anchors: [for (final p in points) DrawingAnchor(p.index.toDouble(), p.price)],
+          labels: [for (final p in points) p.label],
+          style: const DrawingStyle(color: Color(0xFF7E57C2)),
+        ),
+      );
+    }
+    // Trend lines price has respected, extended to the right.
+    for (final line in Ta.autoTrendlines(bars)) {
+      editor.add(
+        TrendLineDrawing(
+          id: line.support ? 'support' : 'resistance',
+          anchors: [DrawingAnchor(line.a.toDouble(), line.pa), DrawingAnchor(line.b.toDouble(), line.pb)],
+          extendRight: true,
+          style: DrawingStyle(color: line.support ? const Color(0xFF089981) : const Color(0xFFF23645), lineWidth: 2),
+        ),
+      );
+    }
+
+    // Support / resistance zones from clustered swing points.
+    final last = _long.last.close;
+    candles.attachPrimitive(
+      PriceLevelsPrimitive(
+        levels: [
+          for (final l in Ta.supportResistance(bars, maxLevels: 3) ?? const <SupportResistanceLevel>[])
+            PriceLevel(
+              price: l.price,
+              label: '${l.price < last ? 'S' : 'R'} ×${l.strength}',
+              color: l.price < last ? const Color(0xFF089981) : const Color(0xFFF23645),
+              lineStyle: LineStyle.dotted,
+              axisLabel: true,
+            ),
+        ],
+      ),
+    );
+
+    // The latest candlestick patterns as markers, a few bars apart.
+    final patterns = <CandlePatternMatch>[];
+    for (final p in Ta.candlePatterns(bars).reversed) {
+      if (p.bullish == null || patterns.length == 3) continue;
+      if (patterns.isEmpty || patterns.last.index - p.index >= 6) patterns.add(p);
+    }
+    createSeriesMarkers(candles, [
+      for (final p in patterns.reversed)
+        SeriesMarker(
+          time: times[p.index],
+          position: p.bullish! ? SeriesMarkerPosition.belowBar : SeriesMarkerPosition.aboveBar,
+          shape: p.bullish! ? SeriesMarkerShape.arrowUp : SeriesMarkerShape.arrowDown,
+          color: p.bullish! ? const Color(0xFF089981) : const Color(0xFFF23645),
+          text: _patternName(p.type),
+        ),
+    ]);
+    createLegend(chart, const LegendOptions(title: 'BTC/USD · 1h · Ta', showOhlc: false));
+  }
+
+  /// `bearishEngulfing` -> `Engulfing`: the arrow already shows the side.
+  static String _patternName(CandlePatternType type) {
+    final name = type.name.replaceFirst(RegExp('^(bullish|bearish)'), '');
+    return name[0].toUpperCase() +
+        name.substring(1).replaceAllMapped(RegExp('[A-Z]'), (m) => ' ${m[0]!.toLowerCase()}');
+  }
+
+  // ---- session volume profiles ----
+
+  void _addSessions(ChartController chart, CandlestickSeriesApi candles) {
+    final bars = _taBars;
+    final times = [for (final b in _long) b.time];
+    // The last few days only, so each day's profile has room.
+    final from = bars.length - 24 * 4 - _long.last.time.toInt() ~/ 3600 % 24 - 1;
+    final sessions = Ta.sessionVolumeProfiles(bars.sublist(from), buckets: 20);
+    candles.attachPrimitive(
+      SessionVolumeProfilePrimitive(
+        sessions: [
+          for (final s in sessions)
+            SessionProfile(
+              from: times[from + s.from],
+              to: times[from + s.to],
+              bins: [
+                for (final b in s.profile.buckets)
+                  VolumeProfileBin(low: b.priceLow, high: b.priceHigh, volume: b.volume, upVolume: b.upVolume),
+              ],
+            ),
+        ],
+      ),
+    );
+    chart.timeScale().setVisibleLogicalRange(LogicalRange((from - 1).toDouble(), (_long.length + 2).toDouble()));
+    createLegend(chart, const LegendOptions(title: 'BTC/USD · 1h · Session volume profile, value area 70%'));
+  }
+
+  // ---- forecast fan ----
+
+  void _addForecast(ChartController chart, CandlestickSeriesApi candles) {
+    final last = _long.last;
+    // A random-walk forecast: the 80% and 95% ranges widen with √steps.
+    final vol = Ta.standardDeviation(_taBars, period: 50).last! / last.close * 0.6;
+    const steps = 30;
+    candles.attachPrimitive(
+      FanPrimitive(
+        anchorTime: last.time,
+        anchorValue: last.close,
+        steps: [
+          for (var k = 1; k <= steps; k++)
+            () {
+              final mid = last.close * (1 + 0.0004 * k);
+              final w = last.close * vol * math.sqrt(k.toDouble());
+              return FanStep(mid: mid, ranges: [(mid - 1.28 * w, mid + 1.28 * w), (mid - 1.96 * w, mid + 1.96 * w)]);
+            }(),
+        ],
+      ),
+    );
+    chart.timeScale().applyOptions(chart.timeScale().options.copyWith(rightOffset: steps + 2));
+    chart.timeScale().setVisibleLogicalRange(
+      LogicalRange((_long.length - 90).toDouble(), (_long.length + steps + 2).toDouble()),
+    );
+    createLegend(chart, const LegendOptions(title: 'BTC/USD · 1h · 30h forecast, 80% / 95%'));
+  }
+
+  // ---- synced charts ----
+
+  void _addSync(ChartController chart, CandlestickSeriesApi candles) {
+    final other = ChartController(
+      options: const ChartOptions(
+        timeScale: TimeScaleOptions(timeVisible: true, secondsVisible: false, rightOffset: 4),
+      ),
+    );
+    final h4 = other.addCandlestickSeries(const CandlestickSeriesOptions(borderVisible: false))
+      ..setData(resample(_long, const Timeframe.hours(4)));
+    other.timeScale().fitContent();
+    _chart2 = other;
+    createLegend(chart, const LegendOptions(title: 'BTC/USD · 1h'));
+    createLegend(other, const LegendOptions(title: 'BTC/USD · 4h (resampled)'));
+    _sync = CrosshairSync([(chart, candles), (other, h4)]);
+    _pointAt(chart, candles, 50);
   }
 
   // ---- indicators ----
@@ -106,10 +332,7 @@ class ToolsScreenState extends State<ToolsScreen> {
     chart.panes()[0].setStretchFactor(2.2);
     createLegend(chart, const LegendOptions(title: 'BTC/USD · 1h'));
     // Show the legend following the crosshair.
-    final bar = _long[_long.length - 30];
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_chart == chart) chart.setCrosshairPosition(bar.close, bar.time, candles);
-    });
+    _pointAt(chart, candles, 30);
   }
 
   // ---- trading lines ----
@@ -316,6 +539,8 @@ class ToolsScreenState extends State<ToolsScreen> {
 
   @override
   void dispose() {
+    _sync?.dispose();
+    _chart2?.dispose();
     _chart?.dispose();
     super.dispose();
   }
@@ -348,6 +573,12 @@ class ToolsScreenState extends State<ToolsScreen> {
         Expanded(
           child: SwmChart(key: ValueKey(_mode), controller: _chart!),
         ),
+        if (_chart2 != null) ...[
+          const Divider(height: 1),
+          Expanded(
+            child: SwmChart(key: ValueKey('$_mode 2'), controller: _chart2!),
+          ),
+        ],
       ],
     );
   }

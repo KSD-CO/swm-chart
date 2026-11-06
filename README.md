@@ -1,37 +1,95 @@
 # Stock World Monitor Charts
 
 [![pub package](https://img.shields.io/pub/v/swm_chart.svg)](https://pub.dev/packages/swm_chart)
+[![CI](https://github.com/KSD-CO/swm-chart/actions/workflows/ci.yml/badge.svg)](https://github.com/KSD-CO/swm-chart/actions/workflows/ci.yml)
 
 **Stock World Monitor Charts** (`swm_chart`), by
 [Stock World Monitor](https://stockworldmonitor.com/), are high-performance financial
 charts for Flutter. The package is a native Dart port of
-[TradingView Lightweight Charts™](https://github.com/tradingview/lightweight-charts) (based on v5.2.1).
-
-<p>
-  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/trading_light.png" width="200" alt="Candlesticks with volume, SMA, RSI and markers">
-  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/indicators.png" width="200" alt="Indicators with a legend">
-  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/orders.png" width="200" alt="Orders, TP/SL and alerts">
-  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/drawing_tools.png" width="200" alt="Drawing tools">
-  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/overlays.png" width="200" alt="Bollinger, pivots and volume profile">
-  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/compare.png" width="200" alt="Compare symbols">
-  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/renko.png" width="200" alt="Renko">
-  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/heikin_ashi.png" width="200" alt="Heikin-Ashi">
-  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/trading_dark.png" width="200" alt="Dark theme">
-  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/area_dark.png" width="200" alt="Area series">
-  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/yield_curve.png" width="200" alt="Yield curve">
-  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/options_chain.png" width="200" alt="Options chain">
-  <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/watchlist.png" width="200" alt="Sparklines and a donut">
-</p>
-
-```yaml
-dependencies:
-  swm_chart: ^0.9.0
-```
+[TradingView Lightweight Charts™](https://github.com/tradingview/lightweight-charts) (based on v5.2.1),
+with indicators, technical analysis, drawing tools and trading lines on top.
 
 There is no WebView. Everything is drawn with `CustomPainter`, and the
 model/renderer architecture mirrors upstream. Candles, columns and grid lines
 are drawn in device pixels, the same way upstream draws in bitmap
 coordinates, so they stay sharp.
+
+| | | |
+|:---:|:---:|:---:|
+| <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/trading_light.png" width="220" alt="Candlesticks with volume, SMA, RSI and markers"><br>Candles, volume, RSI, markers | <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/indicators.png" width="220" alt="Bollinger, EMA, RSI and MACD with a legend"><br>Indicators and legend | <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/trend_tooltip.png" width="220" alt="Supertrend, HMA, ADX and Stoch RSI with a tooltip"><br>More indicators, tooltip |
+| <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/analysis.png" width="220" alt="ZigZag, Elliott count, auto trendlines, support and resistance, candle patterns"><br>Technical analysis | <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/drawing_tools.png" width="220" alt="Fibonacci, Elliott wave, trend line, rectangle and text drawings"><br>Drawing tools | <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/orders.png" width="220" alt="Position with P&L, TP, SL, a limit order and an alert"><br>Orders, positions, alerts |
+| <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/session_volume_profile.png" width="220" alt="A volume profile per day with value area and point of control"><br>Session volume profiles | <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/overlays.png" width="220" alt="Bollinger band fill, pivots and a volume profile"><br>Overlays | <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/forecast_fan.png" width="220" alt="Forecast fan with 80% and 95% ranges"><br>Forecast fan |
+| <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/crosshair_sync.png" width="220" alt="1h and 4h charts with synced crosshairs"><br>Crosshair sync, 1h / 4h | <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/compare.png" width="220" alt="BTC compared with ETH and SOL on a percentage scale"><br>Compare symbols | <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/heikin_ashi.png" width="220" alt="Heikin-Ashi candles"><br>Heikin-Ashi |
+| <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/renko.png" width="220" alt="Renko bricks"><br>Renko | <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/trading_dark.png" width="220" alt="Dark theme"><br>Dark theme | <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/area_dark.png" width="220" alt="Area series"><br>Area series |
+| <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/yield_curve.png" width="220" alt="Yield curve"><br>Yield curve | <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/options_chain.png" width="220" alt="Options chain"><br>Options chain | <img src="https://raw.githubusercontent.com/KSD-CO/swm-chart/main/screenshots/watchlist.png" width="220" alt="Sparklines and a donut"><br>Sparklines and donut |
+
+## Contents
+
+- [Installation](#installation)
+- [Quick start](#quick-start)
+- [Features](#features)
+- Guide
+  - [Series, panes and scales](#series-panes-and-scales)
+  - [Indicators](#indicators)
+  - [Technical analysis without a chart](#technical-analysis-without-a-chart)
+  - [Legend and tooltip](#legend-and-tooltip)
+  - [Drawing tools](#drawing-tools)
+  - [Orders, positions and alerts](#orders-positions-and-alerts)
+  - [Overlays](#overlays)
+  - [Volume profile](#volume-profile)
+  - [Forecast fan](#forecast-fan)
+  - [Chart types and timeframes](#chart-types-and-timeframes)
+  - [Compare symbols](#compare-symbols)
+  - [Several charts in step](#several-charts-in-step)
+  - [Sparklines and donut charts](#sparklines-and-donut-charts)
+  - [Custom series and primitives](#custom-series-and-primitives)
+- [Interaction](#interaction)
+- [Performance](#performance)
+- [Example app](#example-app)
+- [Notes](#notes)
+- [License & attribution](#license--attribution)
+
+## Installation
+
+```yaml
+dependencies:
+  swm_chart: ^0.13.1
+```
+
+```dart
+import 'package:swm_chart/swm_chart.dart';
+```
+
+Requires Flutter 3.32 or newer. Runs on iOS, Android, macOS, Windows, Linux
+and the web.
+
+## Quick start
+
+```dart
+final chart = ChartController(
+  options: const ChartOptions(timeScale: TimeScaleOptions(timeVisible: true)),
+);
+
+final candles = chart.addCandlestickSeries();
+candles.setData([
+  CandlestickData(time: 1704067200, open: 100, high: 105, low: 98, close: 103),
+  WhitespaceData(time: 1704153600), // a gap
+  // ... time is a UTC timestamp in seconds, strictly ascending
+]);
+
+// realtime
+candles.update(CandlestickData(time: 1704153600, open: 103, high: 104, low: 101, close: 102));
+
+// widget, needs bounded constraints
+Expanded(child: SwmChart(controller: chart));
+
+// later
+chart.dispose();
+```
+
+The API names follow upstream (`addCandlestickSeries`, `setData`, `update`,
+`timeScale().fitContent()`, `scrollToRealTime()`, `subscribeCrosshairMove`, …),
+so the [upstream docs](https://tradingview.github.io/lightweight-charts/) still apply.
 
 ## Features
 
@@ -49,13 +107,6 @@ Everything in Lightweight Charts v5.2.1 that applies to Flutter is ported:
 | Last value labels, price line source, custom price lines, base line, last price animation | ✅ |
 | Hit testing: `hoveredSeries` / `hoveredObjectId`, `hoveredSeriesOnTop` | ✅ |
 | Plugins: primitives API, series markers, up/down markers, text & image watermarks | ✅ |
-| Beyond upstream: **drawing tools** with an editor (undo / redo, save / load as JSON), band fill, price levels, **volume profile** (value area, per session), **forecast fan**, **crosshair sync** across charts, pointer capture, **sparklines**, **donut charts** | ✅ |
-| **Indicators** (73): moving averages (SMA, EMA, WMA, Hull, DEMA, TEMA, RMA, VWMA, ALMA, LSMA, ZLEMA, T3, McGinley, KAMA, Envelope, Alligator), bands and stops (Bollinger, %B, bandwidth, Keltner, Donchian, Ichimoku, Supertrend, Parabolic SAR, Chandelier exit), oscillators (RSI, Stoch RSI, MACD, PPO, Stochastic, Williams %R, CCI, ROC, Momentum, CMO, TSI, TRIX, Ultimate, Awesome, Accelerator, DPO, Coppock, KST, Fisher, Connors RSI, RVGI, SMI, Aroon, ADX, Vortex, Elder ray, Balance of power, Choppiness, Mass index, Sine Wave, Even Better Sinewave), volume (VWAP, OBV, MFI, CMF, A/D, Chaikin oscillator, PVT, NVI / PVI, Klinger, Force index, Ease of movement, Volume oscillator, Volume MA) and volatility (ATR, standard deviation, historical volatility, Ulcer index) — one line to add | ✅ |
-| **Technical analysis** (`Ta`): every indicator as a plain function, plus ZigZag, Elliott waves, support / resistance, chart and candlestick patterns, auto trendlines, divergences, Williams fractals, Fibonacci, pivot points, regression channel, volume profile with value area and per-session profiles | ✅ |
-| **Trading lines**: draggable orders, TP / SL, positions with P&L, price alerts | ✅ |
-| **Legend & tooltip** following the crosshair | ✅ |
-| **Chart types & timeframes**: Heikin-Ashi, Renko, line break, range bars; resample to minutes … months | ✅ |
-| **Compare symbols** on a percentage scale | ✅ |
 | Localization: locale, date format, month names, price/percentage/tick mark formatters | ✅ |
 | Events: crosshair move, click, double click, visible logical/time range, size, data changed | ✅ |
 | Gestures: pan + kinetic, pinch, long-press crosshair, axis drag, double-tap reset, mouse wheel — each switchable like `handleScroll` / `handleScale` | ✅ |
@@ -66,20 +117,25 @@ Everything in Lightweight Charts v5.2.1 that applies to Flutter is ported:
 Not applicable in Flutter: `autoSize`/`resize`/`width`/`height` (the widget
 takes its parent's size), `chartElement`, `colorSpace`, `colorParsers`.
 
-## Usage
+Beyond upstream:
+
+| Area | |
+|---|---|
+| **73 indicators**, one line each: moving averages, bands and stops, momentum, trend, volume, volatility ([list](#indicators)) | ✅ |
+| **Technical analysis** (`Ta`): every indicator as a plain function, plus ZigZag, Elliott waves, support / resistance, chart and candlestick patterns, auto trendlines, divergences, Williams fractals, Fibonacci, pivot points, regression channel, volume profile | ✅ |
+| **Legend & tooltip** following the crosshair | ✅ |
+| **Drawing tools** with an editor: undo / redo, save / load as JSON | ✅ |
+| **Trading lines**: draggable orders, TP / SL, positions with P&L, price alerts | ✅ |
+| **Overlays**: band fill, price levels, **volume profile** (value area, per session), **forecast fan** | ✅ |
+| **Chart types & timeframes**: Heikin-Ashi, Renko, line break, range bars; resample to minutes … months | ✅ |
+| **Compare symbols** on a percentage scale | ✅ |
+| **Crosshair sync** across charts, symbols and intervals | ✅ |
+| **Sparklines** and **donut charts** for lists and dashboards | ✅ |
+
+## Series, panes and scales
 
 ```dart
-final chart = ChartController(
-  options: const ChartOptions(timeScale: TimeScaleOptions(timeVisible: true)),
-);
-
-final candles = chart.addCandlestickSeries();
-candles.setData([
-  CandlestickData(time: 1704067200, open: 100, high: 105, low: 98, close: 103),
-  WhitespaceData(time: 1704153600), // a gap
-  // ... time is a UTC timestamp in seconds, strictly ascending
-]);
-
+// volume on its own scale at the bottom of the pane
 final volume = chart.addHistogramSeries(const HistogramSeriesOptions(
   priceScaleId: 'volume',
   priceFormat: PriceFormat.volume(),
@@ -88,21 +144,6 @@ chart.priceScale('volume').applyOptions(
   const PriceScaleOptions(scaleMargins: ScaleMargins(top: 0.8, bottom: 0)),
 );
 
-// realtime
-candles.update(CandlestickData(time: 1704153600, open: 103, high: 104, low: 101, close: 102));
-
-// load more history when the user scrolls near the first bar
-chart.timeScale().subscribeVisibleLogicalRangeChange((range) {
-  if (range != null && range.from < 20) { /* fetch older bars, then setData */ }
-});
-
-// widget, needs bounded constraints
-Expanded(child: SwmChart(controller: chart));
-```
-
-### Panes, indicators and plugins
-
-```dart
 // RSI in a second pane with 70/30 lines
 final rsi = chart.addLineSeries(const LineSeriesOptions(color: Colors.purple), 1);
 rsi.createPriceLine(const PriceLineOptions(price: 70, lineStyle: LineStyle.dashed));
@@ -121,6 +162,11 @@ createTextWatermark(chart.panes()[0],
 
 // log / percentage scale
 chart.priceScale().applyOptions(const PriceScaleOptions(mode: PriceScaleMode.logarithmic));
+
+// load more history when the user scrolls near the first bar
+chart.timeScale().subscribeVisibleLogicalRangeChange((range) {
+  if (range != null && range.from < 20) { /* fetch older bars, then setData */ }
+});
 ```
 
 Yield curves and options chains:
@@ -132,78 +178,7 @@ yields.addLineSeries().setData([LineData(time: 3, value: 5.4), LineData(time: 12
 final chain = ChartController.options(precision: 0); // time = strike price
 ```
 
-Custom series: implement `CustomSeriesView<T>` (`priceValues`, `draw`) and
-add it with `chart.addCustomSeries(view)`.
-
-Custom drawings: extend `ChartPrimitive` (override `paint`, `priceAxisLabels`,
-`timeAxisLabels`, `autoscaleInfo`) and attach it with
-`series.attachPrimitive(...)` or `pane.attachPrimitive(...)`.
-
-Overlays beyond upstream: `BandFillPrimitive` (Bollinger, Keltner, an
-Ichimoku cloud with a second colour where the lines cross),
-`PriceLevelsPrimitive` (pivots, support / resistance, Fibonacci zones, with
-optional axis labels and hit ids), `VolumeProfilePrimitive` and
-`SessionVolumeProfilePrimitive` (see below) and `FanPrimitive` (a forecast
-cone).
-
-### Volume profile
-
-```dart
-final vp = Ta.volumeProfile(bars, buckets: 32);
-print('POC ${vp.pocPrice}, value area ${vp.valueAreaLow}–${vp.valueAreaHigh}');
-
-candles.attachPrimitive(VolumeProfilePrimitive(
-  bins: [for (final b in vp.buckets)
-    VolumeProfileBin(low: b.priceLow, high: b.priceHigh, volume: b.volume, upVolume: b.upVolume)],
-  options: const VolumeProfileOptions(valueArea: 0.7), // VAH / VAL dashed, the rest dimmed
-));
-
-// one profile per trading day, each over its own bars (intraday data)
-final sessions = Ta.sessionVolumeProfiles(bars, buckets: 24);
-candles.attachPrimitive(SessionVolumeProfilePrimitive(sessions: [
-  for (final s in sessions)
-    SessionProfile(from: times[s.from], to: times[s.to], bins: [
-      for (final b in s.profile.buckets)
-        VolumeProfileBin(low: b.priceLow, high: b.priceHigh, volume: b.volume, upVolume: b.upVolume),
-    ]),
-]));
-```
-
-The value area is the range around the point of control holding 70% of the
-volume (`Ta.valueAreaShare`), grown toward the busier side one row at a
-time; `Ta.valueArea(volumes, poc)` computes it for any profile. Sessions are
-calendar days by default — pass `sessionOf` for anything else. To follow the
-bars on screen, refit the bins in `subscribeVisibleLogicalRangeChange`.
-
-### Forecast fan
-
-```dart
-final fan = FanPrimitive(
-  anchorTime: last.time,
-  anchorValue: last.close,
-  steps: [for (final s in forecast)
-    FanStep(mid: s.mid, ranges: [(s.lo80, s.hi80), (s.lo95, s.hi95)])],
-);
-candles.attachPrimitive(fan);
-chart.timeScale().applyOptions(const TimeScaleOptions(rightOffset: 20)); // room ahead
-```
-
-Steps sit on the logical index past the last bar, so no whitespace data is
-needed; the ranges take part in autoscale.
-
-### Several charts in step
-
-```dart
-final sync = CrosshairSync([(priceChart, candles), (otherChart, otherCandles)]);
-// …
-sync.dispose();
-```
-
-Pointing at a moment on one chart moves every other chart's crosshair to the
-same time — across symbols, and across intervals (`timeScale().timeToLogical`
-places it between bars).
-
-### Indicators
+## Indicators
 
 ```dart
 chart.addIndicator(Bollinger(), source: candles);          // over the candles
@@ -232,7 +207,7 @@ own with their usual levels:
 (`series(bars)`) for your own, or call `computeAll` to use the math
 without a chart.
 
-### Technical analysis without a chart
+## Technical analysis without a chart
 
 `Ta` has the same math as plain functions over a list of bars, plus the
 analysis tools — for screeners, alerts and backtests:
@@ -240,21 +215,28 @@ analysis tools — for screeners, alerts and backtests:
 ```dart
 final bars = [for (final c in candles) TaPoint(date: c.date, open: c.o, high: c.h, low: c.l, close: c.c, volume: c.v)];
 final rsi = Ta.rsi(bars);                        // List<double?>
+final zigzag = Ta.zigzag(bars, deviation: 1);    // swings of 1% or more
+final waves = Ta.elliottWaves(bars);             // automatic Elliott count
+final lines = Ta.autoTrendlines(bars);           // support / resistance trend lines
 final levels = Ta.supportResistance(bars);       // support / resistance levels
 final patterns = Ta.detectPatterns(bars);        // head & shoulders, triangles, flags…
-final waves = Ta.elliottWaves(bars);             // automatic Elliott count
+final candlesticks = Ta.candlePatterns(bars);    // engulfing, doji, hammer…
 final bullish = Ta.rsiBullishDivergence(bars);
 final hull = Ta.hma(bars, 21);                   // any indicator, as a series
 final s = Ta.stochRsi(bars);                     // several lines come as a record: s.k, s.d
 final f = Ta.fractals(bars);                     // Williams fractals: f.up, f.down (bar indices)
 ```
 
-Every result lines up with the bars, `null` through the warm-up.
+Every result lines up with the bars, `null` through the warm-up. The
+Analysis demo in the example app draws them on a chart: the ZigZag as a line
+series, the Elliott count as a `PathDrawing`, trend lines as
+`TrendLineDrawing`s, levels with `PriceLevelsPrimitive` and candlestick
+patterns as markers.
 
 Implement `TaBar` on your own bar class to pass it in directly. Import
 `package:swm_chart/ta.dart` for just this part.
 
-### Legend and tooltip
+## Legend and tooltip
 
 ```dart
 createLegend(chart, const LegendOptions(title: 'BTC/USD · 1h'));
@@ -262,43 +244,11 @@ createLegend(chart, const LegendOptions(mode: LegendMode.tooltip));
 ```
 
 Rows at the top-left of each pane (OHLC and change for candles, one row per
-indicator) follow the crosshair, or show the last bar when it is hidden.
+indicator) follow the crosshair, or show the last bar when it is hidden. In
+tooltip mode a box follows the crosshair instead. Prices are shown as prices
+even on a percentage scale.
 
-### Orders, positions and alerts
-
-```dart
-final trading = TradingLines(candles,
-    onDragEnd: (line) => broker.modify(line.id, line.price),
-    onAlert: (alert, price) => notify('${alert.id} at $price'));
-trading
-  ..add(TradingLine(id: 'pos', kind: TradingLineKind.position, price: 29730, quantity: 0.5))
-  ..add(TradingLine(id: 'tp', kind: TradingLineKind.takeProfit, price: 30480, quantity: 0.5))
-  ..add(TradingLine(id: 'sl', kind: TradingLineKind.stopLoss, price: 29340, quantity: 0.5))
-  ..add(TradingLine(id: 'a1', kind: TradingLineKind.alert, price: 30240));
-```
-
-Orders, TP / SL and alerts can be dragged (rounded to the price step);
-labels show the quantity and P&L against the position or the last price.
-Alerts fire when the last price crosses them (`AlertCondition`).
-
-### Chart types and timeframes
-
-```dart
-candles.setData(heikinAshi(bars));
-candles.setData(renko(bars, boxSize: 50));   // also lineBreak, rangeBars
-final hourly = resample(minuteBars, const Timeframe.hours(1));   // .weeks(), .months()
-final live = Resampler(const Timeframe.minutes(15));
-candles.update(live.add(tick));                  // streaming
-```
-
-### Compare symbols
-
-```dart
-chart.addComparison(ethBars, title: 'ETH');   // switches the scale to %
-chart.addComparison(solBars, title: 'SOL');
-```
-
-### Drawing tools
+## Drawing tools
 
 `DrawingEditor` puts a drawing layer on a pane and edits it with the pointer:
 
@@ -318,11 +268,12 @@ vertical line, cross line, rectangle, ellipse, parallel channel, Fibonacci
 retracement, text, price & date measurement, multi-point paths with labels
 (Elliott waves, XABCD) and freehand.
 
-`editor.undo()` / `editor.redo()` step through adding, moving, reshaping and
-deleting (`canUndo`, `canRedo`, `onHistoryChanged`; `checkpoint()` before a
-change you make yourself, e.g. a colour). `DrawingCodec` saves drawings as
-JSON with the anchors stored by time, so they stay put when older history
-is paged in:
+**Undo / redo.** `editor.undo()` / `editor.redo()` step through adding,
+moving, reshaping and deleting (`canUndo`, `canRedo`, `onHistoryChanged`;
+`checkpoint()` before a change you make yourself, e.g. a colour).
+
+**Save / load.** `DrawingCodec` saves drawings as JSON with the anchors
+stored by time, so they stay put when older history is paged in:
 
 ```dart
 final codec = DrawingCodec();
@@ -331,33 +282,128 @@ final saved = jsonEncode(codec.encodeAll(editor.drawings, chart.timeScale().logi
 editor.layer.drawings = codec.decodeAll(jsonDecode(saved), chart.timeScale().timeToLogical);
 ```
 
-`Drawing.pricesAt(logical)` / `editor.pricesAt(time)` give a drawing's
-price(s) at a bar — e.g. to alert when the price crosses a trend line. Anchors are a fractional logical index
-and a price, so drawings can extend past the last bar. For anything else,
-extend `Drawing` (`anchorCount`, `paint`, `hitDistance`). Set `snap` for a
-magnet, `keepTool` to draw several in a row, and
-`TrackingModeOptions(longPressCrosshair: false)` to edit with long presses.
+**Alerts on drawings.** `Drawing.pricesAt(logical)` / `editor.pricesAt(time)`
+give a drawing's price(s) at a bar — e.g. to alert when the price crosses a
+trend line.
+
+Anchors are a fractional logical index and a price, so drawings can extend
+past the last bar. For anything else, extend `Drawing` (`anchorCount`,
+`paint`, `hitDistance`). Set `snap` for a magnet, `keepTool` to draw several
+in a row, and `TrackingModeOptions(longPressCrosshair: false)` to edit with
+long presses.
 
 Lower level: `chart.subscribePointer` offers each drag (and long press) in a
 pane to your handler; return `true` on `down` to take it, and the chart
 won't scroll. `PaneApi.priceToCoordinate` / `coordinateToPrice` and the
 `price` on click events convert between pixels and prices.
 
-The API names follow upstream (`addCandlestickSeries`, `setData`, `update`,
-`timeScale().fitContent()`, `scrollToRealTime()`, `subscribeCrosshairMove`, …),
-so the upstream docs still apply.
+## Orders, positions and alerts
 
-The `example/` app has five tabs: a trading screen (switchable series types,
-volume, SMA, an RSI pane with buy/sell markers, a watermark, live updates, an
-OHLC legend, history lazy-loading, log/percentage scales, dark mode), a yield
-curve, an options chain, pro tools (drawings, overlays, indicators, orders,
-Heikin-Ashi, Renko, compare) and a watchlist with sparklines and a donut:
-
-```sh
-cd example && flutter run
+```dart
+final trading = TradingLines(candles,
+    onDragEnd: (line) => broker.modify(line.id, line.price),
+    onAlert: (alert, price) => notify('${alert.id} at $price'));
+trading
+  ..add(TradingLine(id: 'pos', kind: TradingLineKind.position, price: 29730, quantity: 0.5))
+  ..add(TradingLine(id: 'tp', kind: TradingLineKind.takeProfit, price: 30480, quantity: 0.5))
+  ..add(TradingLine(id: 'sl', kind: TradingLineKind.stopLoss, price: 29340, quantity: 0.5))
+  ..add(TradingLine(id: 'a1', kind: TradingLineKind.alert, price: 30240));
 ```
 
-### Sparklines
+Orders, TP / SL and alerts can be dragged (rounded to the price step);
+labels show the quantity and P&L against the position or the last price.
+Alerts fire when the last price crosses them (`AlertCondition`).
+
+## Overlays
+
+Primitives attached to a series with `series.attachPrimitive(...)`:
+
+- `BandFillPrimitive`: a filled band between two lines (Bollinger, Keltner,
+  an Ichimoku cloud with a second colour where the lines cross).
+- `PriceLevelsPrimitive`: pivots, support / resistance, Fibonacci zones,
+  with optional axis labels and hit ids.
+- `VolumeProfilePrimitive` and `SessionVolumeProfilePrimitive`: see
+  [Volume profile](#volume-profile).
+- `FanPrimitive`: see [Forecast fan](#forecast-fan).
+
+## Volume profile
+
+```dart
+final vp = Ta.volumeProfile(bars, buckets: 32);
+print('POC ${vp.pocPrice}, value area ${vp.valueAreaLow}–${vp.valueAreaHigh}');
+
+candles.attachPrimitive(VolumeProfilePrimitive(
+  bins: [for (final b in vp.buckets)
+    VolumeProfileBin(low: b.priceLow, high: b.priceHigh, volume: b.volume, upVolume: b.upVolume)],
+  options: const VolumeProfileOptions(valueArea: 0.7), // VAH / VAL dashed, the rest dimmed
+));
+
+// one profile per trading day, each over its own bars (intraday data)
+final sessions = Ta.sessionVolumeProfiles(bars, buckets: 24);
+candles.attachPrimitive(SessionVolumeProfilePrimitive(sessions: [
+  for (final s in sessions)
+    SessionProfile(from: times[s.from], to: times[s.to], bins: [
+      for (final b in s.profile.buckets)
+        VolumeProfileBin(low: b.priceLow, high: b.priceHigh, volume: b.volume, upVolume: b.upVolume),
+    ]),
+]));
+```
+
+The value area is the range around the point of control holding 70% of the
+volume (`Ta.valueAreaShare`), grown toward the busier side one row at a
+time; `Ta.valueArea(volumes, poc)` computes it for any profile. Sessions are
+calendar days by default — pass `sessionOf` for anything else. To follow the
+bars on screen, refit the bins in `subscribeVisibleLogicalRangeChange`.
+
+## Forecast fan
+
+```dart
+final fan = FanPrimitive(
+  anchorTime: last.time,
+  anchorValue: last.close,
+  steps: [for (final s in forecast)
+    FanStep(mid: s.mid, ranges: [(s.lo80, s.hi80), (s.lo95, s.hi95)])],
+);
+candles.attachPrimitive(fan);
+chart.timeScale().applyOptions(const TimeScaleOptions(rightOffset: 20)); // room ahead
+```
+
+Steps sit on the logical index past the last bar, so no whitespace data is
+needed; the ranges take part in autoscale.
+
+## Chart types and timeframes
+
+```dart
+candles.setData(heikinAshi(bars));
+candles.setData(renko(bars, boxSize: 50));   // also lineBreak, rangeBars
+final hourly = resample(minuteBars, const Timeframe.hours(1));   // .weeks(), .months()
+final live = Resampler(const Timeframe.minutes(15));
+candles.update(live.add(tick));                  // streaming
+```
+
+## Compare symbols
+
+```dart
+chart.addComparison(ethBars, title: 'ETH');   // switches the scale to %
+chart.addComparison(solBars, title: 'SOL');
+```
+
+Removing the last comparison (`removeComparison`) restores the scale mode.
+
+## Several charts in step
+
+```dart
+final sync = CrosshairSync([(hourlyChart, hourlyCandles), (fourHourChart, fourHourCandles)]);
+// …
+sync.dispose();
+```
+
+Pointing at a moment on one chart moves every other chart's crosshair to the
+same time — across symbols, and across intervals: on a 4h chart it lands on
+the bar holding that hour. `timeScale().timeToLogical` / `logicalToTime`
+convert between times and fractional bar indices, between bars and past them.
+
+## Sparklines and donut charts
 
 For list rows and cards, `SwmSparkline` draws a small line without a chart
 engine behind it — no axes, scales or gestures:
@@ -375,8 +421,6 @@ SwmSparkline(
 `SwmSparklinePainter` paints the same line onto any `Canvas`, e.g. into an
 image with a `PictureRecorder`.
 
-### Donut charts
-
 `SwmDonut` shows shares of a whole, e.g. a portfolio's allocation:
 
 ```dart
@@ -393,6 +437,25 @@ SwmDonut(
 )
 ```
 
+## Custom series and primitives
+
+Custom series: implement `CustomSeriesView<T>` (`priceValues`, `draw`) and
+add it with `chart.addCustomSeries(view)`.
+
+Custom drawings: extend `ChartPrimitive` (override `paint`, `priceAxisLabels`,
+`timeAxisLabels`, `autoscaleInfo`, `hitTest`) and attach it with
+`series.attachPrimitive(...)` or `pane.attachPrimitive(...)`. The paint
+context gives the crosshair's bar (`crosshairIndex`) and position.
+
+## Interaction
+
+| | Touch | Mouse |
+|---|---|---|
+| Crosshair | tap to show / hide, then drag to move it; or long-press and move | follows the pointer |
+| Scroll / zoom | drag (locked to its main direction), pinch | drag, wheel |
+| Scale an axis | drag it; double-tap resets | drag it; double-click resets |
+| Resize panes | drag the separator | drag the separator (`resizeRow` cursor) |
+
 ## Performance
 
 Frame times in profile mode with 100k candles plus 100k volume columns
@@ -406,6 +469,10 @@ Frame times in profile mode with 100k candles plus 100k volume columns
 | All 100k visible, conflation on | 2.4 / 2.1 | 1.1 / 1.2 |
 | All 100k visible, conflation off | 28.7 / 16.9 | 16 / 8 |
 
+The chart paints in two layers: a crosshair move or the last price pulse
+repaints only the overlay (crosshair, legend, trading lines, drawings), not
+the series.
+
 When users can zoom out over tens of thousands of bars, turn on
 `TimeScaleOptions(enableConflation: true)` (optionally with
 `precomputeConflationOnInit`), as upstream recommends.
@@ -418,29 +485,39 @@ flutter drive --profile -d <device> \
   --driver=test_driver/perf_driver.dart --target=integration_test/perf_test.dart
 ```
 
-## Interaction
+## Example app
 
-| | Touch | Mouse |
-|---|---|---|
-| Crosshair | tap to show / hide, then drag to move it; or long-press and move | follows the pointer |
-| Scroll / zoom | drag (locked to its main direction), pinch | drag, wheel |
-| Scale an axis | drag it; double-tap resets | drag it; double-click resets |
-| Resize panes | drag the separator | drag the separator (`resizeRow` cursor) |
+`example/` has five tabs:
+
+- **Trading**: switchable series types, volume, SMA, an RSI pane with
+  buy/sell markers, a watermark, live updates, an OHLC legend, history
+  lazy-loading, log/percentage scales, dark mode.
+- **Yield curve** and **Options**: the two non-time chart types.
+- **Pro tools**: drawings, overlays, indicators, orders, trend indicators
+  with a tooltip, technical analysis, session volume profiles, a forecast
+  fan, Heikin-Ashi, Renko, compare and synced 1h / 4h charts.
+- **Watchlist**: sparklines and a donut.
+
+```sh
+cd example && flutter run
+```
+
+The screenshots above come from it: `tool/screenshots.sh <simulator-udid>`.
 
 ## Notes
 
-- `SwmChart(semanticsLabel: ...)` names the chart for screen readers; its
-  value lists each series' last value.
-- Inside a vertical `ListView`, vertical drags go to the list; set
-  `handleScroll: HandleScrollOptions(vertTouchDrag: false)` so the chart never
-  claims them.
 - `time` is a `num`: UTC seconds on time charts, months on yield curves,
   prices on options charts. `series.data()` returns values and whitespace.
-- `SeriesOptions` are generated by `tool/gen_series_options.py`; edit the
-  script, not `lib/src/series_options.dart`.
 - Labels use the UTC components of `time`. To show exchange-local time, shift
   the timestamps or pass `LocalizationOptions.timeFormatter` /
   `TimeScaleOptions.tickMarkFormatter`.
+- Inside a vertical `ListView`, vertical drags go to the list; set
+  `handleScroll: HandleScrollOptions(vertTouchDrag: false)` so the chart never
+  claims them.
+- `SwmChart(semanticsLabel: ...)` names the chart for screen readers; its
+  value lists each series' last value.
+- `SeriesOptions` are generated by `tool/gen_series_options.py`; edit the
+  script, not `lib/src/series_options.dart`.
 
 ## License & attribution
 
