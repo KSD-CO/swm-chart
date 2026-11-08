@@ -13,6 +13,7 @@ import '../plugins/drawing_codec.dart';
 import '../plugins/drawings.dart';
 import '../plugins/legend.dart';
 import '../plugins/trading_lines.dart';
+import '../plugins/watermark.dart';
 import '../series_options.dart';
 import '../transforms/transforms.dart';
 import 'drawing_tools.dart';
@@ -107,6 +108,7 @@ class ProChartController extends ChangeNotifier {
     String? symbol,
     String? interval,
     LegendOptions legend = const LegendOptions(),
+    this.drawingKinds = const [],
     this.onTradingLineDragEnd,
     this.onAlert,
   }) : chart = ChartController(options: options),
@@ -131,6 +133,11 @@ class ProChartController extends ChangeNotifier {
   }
 
   final ChartController chart;
+
+  /// Your own drawings ([DrawingKind]s), so [saveState] / [restoreState],
+  /// [codec] and duplicating handle them; pair them with your tools in
+  /// `DrawingToolbar.groups`.
+  final List<DrawingKind> drawingKinds;
 
   /// After a trading line was dragged to a new price.
   final void Function(TradingLine line)? onTradingLineDragEnd;
@@ -169,14 +176,129 @@ class ProChartController extends ChangeNotifier {
   List<ProIndicator> get indicators => List.unmodifiable(_indicators);
 
   /// Saves and loads drawings, including those that read the price series.
-  DrawingCodec get codec => DrawingCodec(source: _main, volume: _volume);
+  DrawingCodec get codec =>
+      DrawingCodec(custom: drawingKinds, source: _main, volume: _volume, icons: DrawingTools.icons);
 
   String? get symbol => _symbol;
 
   set symbol(String? value) {
     _symbol = value;
     legend.options = _legend();
+    _applyWatermark(rebuild: true);
     notifyListeners();
+  }
+
+  // ---- display ----
+
+  /// The library's default crosshair grey.
+  static const defaultCrosshairColor = Color(0xFF9598A1);
+
+  LineStyle _crosshairStyle = LineStyle.largeDashed;
+  Color _crosshairColor = defaultCrosshairColor;
+  double _crosshairWidth = 1;
+  bool _showGrid = true;
+  bool _showWatermark = false;
+  WatermarkPlugin<TextWatermarkPrimitive>? _watermark;
+
+  /// The crosshair's lines.
+  LineStyle get crosshairStyle => _crosshairStyle;
+
+  set crosshairStyle(LineStyle value) => _display(() => _crosshairStyle = value);
+
+  Color get crosshairColor => _crosshairColor;
+
+  set crosshairColor(Color value) => _display(() => _crosshairColor = value);
+
+  double get crosshairWidth => _crosshairWidth;
+
+  set crosshairWidth(double value) => _display(() => _crosshairWidth = value);
+
+  /// The grid behind the bars.
+  bool get showGrid => _showGrid;
+
+  set showGrid(bool value) => _display(() => _showGrid = value);
+
+  /// The [symbol] written large and faint across the price pane.
+  bool get showWatermark => _showWatermark;
+
+  set showWatermark(bool value) => _display(() => _showWatermark = value);
+
+  /// Back to the default crosshair, grid on, no watermark.
+  void resetDisplay() => _display(() {
+    _crosshairStyle = LineStyle.largeDashed;
+    _crosshairColor = defaultCrosshairColor;
+    _crosshairWidth = 1;
+    _showGrid = true;
+    _showWatermark = false;
+  });
+
+  void _display(void Function() change) {
+    change();
+    _applyDisplay();
+    notifyListeners();
+  }
+
+  void _applyDisplay() {
+    final o = chart.options;
+    chart.applyOptions(
+      o.copyWith(
+        crosshair: o.crosshair.copyWith(
+          vertLine: o.crosshair.vertLine.copyWith(
+            color: _crosshairColor,
+            width: _crosshairWidth,
+            style: _crosshairStyle,
+          ),
+          horzLine: o.crosshair.horzLine.copyWith(
+            color: _crosshairColor,
+            width: _crosshairWidth,
+            style: _crosshairStyle,
+          ),
+        ),
+        grid: o.grid.copyWith(
+          vertLines: o.grid.vertLines.copyWith(visible: _showGrid),
+          horzLines: o.grid.horzLines.copyWith(visible: _showGrid),
+        ),
+        // Chart-wide options replace the price scale's; keep its mode.
+        rightPriceScale: chart.priceScale().options,
+      ),
+    );
+    _applyWatermark();
+  }
+
+  void _applyWatermark({bool rebuild = false}) {
+    final text = _symbol;
+    if (rebuild || !_showWatermark || text == null || text.isEmpty) {
+      _watermark?.detach();
+      _watermark = null;
+    }
+    if (!_showWatermark || text == null || text.isEmpty) return;
+    _watermark ??= createTextWatermark(
+      chart.panes().first,
+      TextWatermarkOptions(
+        lines: [
+          TextWatermarkLine(text: text, color: const Color(0x1F808080), fontSize: 44, fontWeight: FontWeight.w700),
+        ],
+      ),
+    );
+  }
+
+  Map<String, Object?> _displayToJson() => {
+    'crosshairStyle': _crosshairStyle.name,
+    'crosshairColor': _crosshairColor.toARGB32(),
+    'crosshairWidth': _crosshairWidth,
+    'showGrid': _showGrid,
+    'showWatermark': _showWatermark,
+  };
+
+  void _displayFromJson(Map<Object?, Object?> json) {
+    if (json['crosshairStyle'] case final String name) {
+      _crosshairStyle = LineStyle.values.where((v) => v.name == name).firstOrNull ?? _crosshairStyle;
+    }
+    if (json['crosshairColor'] case final int c) _crosshairColor = Color(c);
+    if (json['crosshairWidth'] case final num w) _crosshairWidth = w.toDouble();
+    if (json['showGrid'] case final bool v) _showGrid = v;
+    if (json['showWatermark'] case final bool v) _showWatermark = v;
+    _applyDisplay();
   }
 
   /// A label for the bars' interval (`1h`, `1D`…); shown and saved, the data
@@ -334,6 +456,7 @@ class ProChartController extends ChangeNotifier {
     for (final d in drawings.drawings) {
       if (d is AnchoredVwapDrawing) d.source = _main;
       if (d is RegressionTrendDrawing) d.source = _main;
+      if (d is RangeVolumeProfileDrawing) d.source = _main;
     }
     drawings.layer.requestUpdate();
     notifyListeners();
@@ -574,6 +697,7 @@ class ProChartController extends ChangeNotifier {
     'indicators': saveIndicators(),
     'drawings': codec.encodeAll(drawings.drawings, chart.timeScale().logicalToTime),
     'tradingLines': [for (final l in _trading.lines) _lineToJson(l)],
+    'display': _displayToJson(),
   };
 
   /// Puts back what [saveState] saved. Call it after [setData], so drawings
@@ -589,6 +713,11 @@ class ProChartController extends ChangeNotifier {
     if (state['symbol'] case final String s) _symbol = s;
     if (state['interval'] case final String i) _interval = i;
     legend.options = _legend();
+    if (state['display'] case final Map<Object?, Object?> display) {
+      _displayFromJson(display);
+    } else {
+      _applyWatermark(rebuild: true);
+    }
     if (state['indicators'] case final List<Object?> list) restoreIndicators(list);
     if (state['drawings'] case final List<Object?> list) {
       drawings.select(null);
@@ -635,6 +764,7 @@ class ProChartController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _watermark?.detach();
     legend.dispose();
     _trading.dispose();
     drawings.dispose();

@@ -6,17 +6,31 @@ import 'package:flutter/material.dart';
 import '../options.dart';
 import '../plugins/drawings.dart';
 import '../widget/swm_chart.dart';
+import 'display_sheet.dart';
 import 'drawing_tools.dart';
 import 'indicator_sheet.dart';
 import 'pro_chart_controller.dart';
+import 'pro_chart_strings.dart';
+
+/// Where [SwmProChart]'s drawing toolbar goes.
+enum DrawingToolbarMode {
+  /// A column down the left of the chart, always shown.
+  docked,
+
+  /// Behind a pencil button at the chart's bottom left: tap it to show the
+  /// toolbar over the chart, again to put it away. The chart keeps the
+  /// full width.
+  floating,
+}
 
 /// The chart of [controller] with toolbars, like TradingView's:
 ///
 /// * a top bar: the symbol ([onSymbolTap]), the interval ([intervals],
 ///   [onIntervalChanged] — load the bars there), the chart type,
 ///   indicators, undo / redo and scale options, then your [actions];
-/// * a drawing toolbar on the left, tools in groups, with magnet, keep
-///   drawing, hide and remove all;
+/// * a drawing toolbar, tools in groups, with magnet, keep drawing, hide
+///   and remove all: a column down the left, or behind a pencil button
+///   over the chart ([toolbarMode]);
 /// * over the chart, a style bar for the selected drawing: color, width,
 ///   line style, text, lock, duplicate, delete.
 ///
@@ -37,10 +51,22 @@ class SwmProChart extends StatefulWidget {
     this.actions = const [],
     this.showTopBar = true,
     this.showDrawingToolbar = true,
+    this.toolbarMode = DrawingToolbarMode.docked,
+    this.strings,
+    this.toolGroups,
   });
 
   final ProChartController controller;
   final List<String> intervals;
+
+  /// The words on the screen and its sheets; `null` for the nearest
+  /// [ProChartStringsScope], else English.
+  final ProChartStrings? strings;
+
+  /// The drawing toolbar's tools; `null` for [DrawingTools.groups]. Add
+  /// your own with `[...DrawingTools.groups, myGroup]` (and their kinds to
+  /// `ProChartController.drawingKinds` so they're saved).
+  final List<DrawingToolGroup>? toolGroups;
 
   /// The user picked an interval ([ProChartController.interval] is set
   /// already); load its bars.
@@ -52,12 +78,19 @@ class SwmProChart extends StatefulWidget {
   final bool showTopBar;
   final bool showDrawingToolbar;
 
+  /// The drawing toolbar docked down the left, or floating behind a
+  /// pencil button.
+  final DrawingToolbarMode toolbarMode;
+
   @override
   State<SwmProChart> createState() => _SwmProChartState();
 }
 
 class _SwmProChartState extends State<SwmProChart> {
   ProChartController get _pro => widget.controller;
+
+  /// The floating toolbar is out.
+  bool _toolsOpen = false;
 
   @override
   void initState() {
@@ -93,7 +126,15 @@ class _SwmProChartState extends State<SwmProChart> {
 
   @override
   Widget build(BuildContext context) {
+    final strings = widget.strings;
+    final chart = _build(context);
+    return strings == null ? chart : ProChartStringsScope(strings: strings, child: chart);
+  }
+
+  Widget _build(BuildContext context) {
     final selected = _pro.drawings.selected;
+    final docked = widget.showDrawingToolbar && widget.toolbarMode == DrawingToolbarMode.docked;
+    final floating = widget.showDrawingToolbar && widget.toolbarMode == DrawingToolbarMode.floating;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -111,11 +152,15 @@ class _SwmProChartState extends State<SwmProChart> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (widget.showDrawingToolbar) ...[DrawingToolbar(controller: _pro), const VerticalDivider(width: 1)],
+              if (docked) ...[
+                DrawingToolbar(controller: _pro, groups: widget.toolGroups),
+                const VerticalDivider(width: 1),
+              ],
               Expanded(
                 child: Stack(
                   children: [
                     Positioned.fill(child: SwmChart(controller: _pro.chart)),
+                    if (floating) ..._floatingToolbar(context),
                     if (selected != null)
                       Positioned(
                         top: 6,
@@ -133,6 +178,54 @@ class _SwmProChartState extends State<SwmProChart> {
         ),
       ],
     );
+  }
+
+  /// The pencil at the bottom left and, while it's open, the toolbar above
+  /// it in a card. The pencil shows the tool in hand while one is picked.
+  List<Widget> _floatingToolbar(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final strings = ProChartStrings.of(context);
+    final active = _pro.activeTool;
+    return [
+      // Keyed: without them the pencil's round card would be reused for
+      // the toolbar's when it opens, and morph into it.
+      if (_toolsOpen)
+        Positioned(
+          key: const ValueKey('drawingToolbar'),
+          left: 8,
+          top: 8,
+          bottom: 60,
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(10),
+            color: scheme.surfaceContainerHigh,
+            clipBehavior: Clip.antiAlias,
+            child: DrawingToolbar(controller: _pro, groups: widget.toolGroups),
+          ),
+        ),
+      Positioned(
+        key: const ValueKey('drawingToolsPencil'),
+        left: 8,
+        bottom: 8,
+        child: Material(
+          elevation: 3,
+          shape: const CircleBorder(),
+          color: _toolsOpen || active != null ? scheme.primary : scheme.surfaceContainerHigh,
+          child: IconButton(
+            tooltip: strings.drawingTools,
+            icon: Icon(
+              _toolsOpen ? Icons.close : (active?.icon ?? Icons.edit_outlined),
+              color: _toolsOpen || active != null ? scheme.onPrimary : null,
+            ),
+            onPressed: () {
+              // Closing it puts the tool down too, like a cursor pick.
+              if (_toolsOpen) _pro.activeTool = null;
+              setState(() => _toolsOpen = !_toolsOpen);
+            },
+          ),
+        ),
+      ),
+    ];
   }
 }
 
@@ -169,6 +262,7 @@ class ProChartTopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final pro = controller;
     final theme = Theme.of(context);
+    final strings = ProChartStrings.of(context);
     final symbol = pro.symbol;
     // On a phone the indicators button goes icon-only, so undo and the
     // settings stay on screen.
@@ -187,7 +281,7 @@ class ProChartTopBar extends StatelessWidget {
               ),
             if (intervals.isNotEmpty)
               PopupMenuButton<String>(
-                tooltip: 'Interval',
+                tooltip: strings.interval,
                 initialValue: pro.interval,
                 onSelected: (i) {
                   pro.interval = i;
@@ -197,14 +291,20 @@ class ProChartTopBar extends StatelessWidget {
                 child: _BarLabel(pro.interval ?? intervals.first, trailing: Icons.arrow_drop_down),
               ),
             PopupMenuButton<ProChartType>(
-              tooltip: 'Chart type',
+              tooltip: strings.chartType,
               initialValue: pro.type,
               onSelected: (t) => pro.type = t,
               itemBuilder: (_) => [
                 for (final t in ProChartType.values)
                   PopupMenuItem(
                     value: t,
-                    child: Row(children: [Icon(typeIcon(t), size: 20), const SizedBox(width: 12), Text(t.label)]),
+                    child: Row(
+                      children: [
+                        Icon(typeIcon(t), size: 20),
+                        const SizedBox(width: 12),
+                        Text(strings.chartTypeLabel(t)),
+                      ],
+                    ),
                   ),
               ],
               child: Padding(
@@ -214,7 +314,7 @@ class ProChartTopBar extends StatelessWidget {
             ),
             if (compact)
               IconButton(
-                tooltip: 'Indicators',
+                tooltip: strings.indicators,
                 icon: const Icon(Icons.functions),
                 onPressed: () => showIndicatorSheet(context, pro),
               )
@@ -222,21 +322,21 @@ class ProChartTopBar extends StatelessWidget {
               TextButton.icon(
                 onPressed: () => showIndicatorSheet(context, pro),
                 icon: const Icon(Icons.functions, size: 20),
-                label: const Text('Indicators'),
+                label: Text(strings.indicators),
               ),
             const SizedBox(height: 24, child: VerticalDivider(width: 8)),
             IconButton(
-              tooltip: 'Undo',
+              tooltip: strings.undo,
               icon: const Icon(Icons.undo),
               onPressed: pro.drawings.canUndo ? pro.drawings.undo : null,
             ),
             IconButton(
-              tooltip: 'Redo',
+              tooltip: strings.redo,
               icon: const Icon(Icons.redo),
               onPressed: pro.drawings.canRedo ? pro.drawings.redo : null,
             ),
             PopupMenuButton<String>(
-              tooltip: 'Chart settings',
+              tooltip: strings.chartSettings,
               icon: const Icon(Icons.tune),
               onSelected: (v) {
                 switch (v) {
@@ -250,20 +350,24 @@ class ProChartTopBar extends StatelessWidget {
                         : PriceScaleMode.percentage;
                   case 'volume':
                     pro.showVolume = !pro.showVolume;
+                  case 'display':
+                    showChartDisplaySheet(context, pro);
                 }
               },
               itemBuilder: (_) => [
                 CheckedPopupMenuItem(
                   value: 'log',
                   checked: pro.scaleMode == PriceScaleMode.logarithmic,
-                  child: const Text('Log scale'),
+                  child: Text(strings.logScale),
                 ),
                 CheckedPopupMenuItem(
                   value: 'percent',
                   checked: pro.scaleMode == PriceScaleMode.percentage,
-                  child: const Text('Percent scale'),
+                  child: Text(strings.percentScale),
                 ),
-                CheckedPopupMenuItem(value: 'volume', checked: pro.showVolume, child: const Text('Volume')),
+                CheckedPopupMenuItem(value: 'volume', checked: pro.showVolume, child: Text(strings.volume)),
+                const PopupMenuDivider(),
+                PopupMenuItem(value: 'display', child: Text('${strings.chartDisplay}…')),
               ],
             ),
             ...actions,
@@ -317,6 +421,7 @@ class _DrawingToolbarState extends State<DrawingToolbar> {
 
   Future<void> _pick(BuildContext buttonContext, int index) async {
     final group = _groups[index];
+    final strings = ProChartStrings.of(buttonContext);
     final box = buttonContext.findRenderObject()! as RenderBox;
     final overlay = Overlay.of(buttonContext).context.findRenderObject()! as RenderBox;
     final at = box.localToGlobal(Offset(box.size.width, 0), ancestor: overlay);
@@ -325,7 +430,7 @@ class _DrawingToolbarState extends State<DrawingToolbar> {
       context: buttonContext,
       position: RelativeRect.fromLTRB(at.dx, at.dy, overlay.size.width - at.dx, 0),
       items: [
-        PopupMenuItem(enabled: false, height: 32, child: Text(group.label)),
+        PopupMenuItem(enabled: false, height: 32, child: Text(strings.toolGroupLabelOf(group))),
         for (final t in group.tools)
           PopupMenuItem(
             value: t,
@@ -333,7 +438,7 @@ class _DrawingToolbarState extends State<DrawingToolbar> {
               children: [
                 Icon(t.icon, size: 20, color: pro.activeTool == t ? Theme.of(buttonContext).colorScheme.primary : null),
                 const SizedBox(width: 12),
-                Text(t.label),
+                Text(strings.toolLabelOf(t)),
               ],
             ),
           ),
@@ -349,6 +454,7 @@ class _DrawingToolbarState extends State<DrawingToolbar> {
     final pro = widget.controller;
     final active = pro.activeTool;
     final scheme = Theme.of(context).colorScheme;
+    final strings = ProChartStrings.of(context);
     Widget button(IconData icon, String tooltip, VoidCallback? onPressed, {bool selected = false}) => IconButton(
       tooltip: tooltip,
       isSelected: selected,
@@ -367,32 +473,37 @@ class _DrawingToolbarState extends State<DrawingToolbar> {
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Column(
           children: [
-            button(Icons.near_me_outlined, 'Cursor', () => pro.activeTool = null, selected: active == null),
+            button(Icons.near_me_outlined, strings.cursor, () => pro.activeTool = null, selected: active == null),
             for (var i = 0; i < _groups.length; i++)
               Builder(
                 builder: (buttonContext) {
                   final group = _groups[i];
                   final inGroup = active != null && group.tools.contains(active);
                   final shown = inGroup ? active : (_shown[i] ?? group.tools.first);
-                  return button(shown.icon, group.label, () => _pick(buttonContext, i), selected: inGroup);
+                  return button(
+                    shown.icon,
+                    strings.toolGroupLabelOf(group),
+                    () => _pick(buttonContext, i),
+                    selected: inGroup,
+                  );
                 },
               ),
             const Divider(indent: 8, endIndent: 8),
-            button(Icons.adjust, 'Magnet', () => pro.magnet = !pro.magnet, selected: pro.magnet),
+            button(Icons.adjust, strings.magnet, () => pro.magnet = !pro.magnet, selected: pro.magnet),
             button(
               Icons.push_pin_outlined,
-              'Keep drawing',
+              strings.keepDrawing,
               () => pro.keepDrawing = !pro.keepDrawing,
               selected: pro.keepDrawing,
             ),
             button(
               pro.drawingsHidden ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-              pro.drawingsHidden ? 'Show drawings' : 'Hide drawings',
+              pro.drawingsHidden ? strings.showDrawings : strings.hideDrawings,
               pro.drawings.drawings.isEmpty ? null : () => pro.drawingsHidden = !pro.drawingsHidden,
             ),
             button(
               Icons.delete_sweep_outlined,
-              'Remove drawings',
+              strings.removeDrawings,
               pro.drawings.drawings.isEmpty ? null : pro.drawings.clear,
             ),
           ],
@@ -419,6 +530,7 @@ class DrawingStyleBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final d = drawing;
     final hasText = d is TextDrawing || d is CalloutDrawing;
+    final strings = ProChartStrings.of(context);
     return Material(
       elevation: 3,
       borderRadius: BorderRadius.circular(8),
@@ -430,11 +542,11 @@ class DrawingStyleBar extends StatelessWidget {
           children: [
             ColorMenuButton(
               color: d.style.color,
-              tooltip: 'Color',
+              tooltip: strings.color,
               onSelected: (c) => _style((s) => s.copyWith(color: c, fillColor: _fillFor(s.fillColor, c))),
             ),
             PopupMenuButton<double>(
-              tooltip: 'Width',
+              tooltip: strings.width,
               icon: const Icon(Icons.line_weight, size: 20),
               initialValue: d.style.lineWidth,
               onSelected: (w) => _style((s) => s.copyWith(lineWidth: w)),
@@ -453,33 +565,33 @@ class DrawingStyleBar extends StatelessWidget {
               ],
             ),
             PopupMenuButton<LineStyle>(
-              tooltip: 'Line style',
+              tooltip: strings.lineStyle,
               icon: const Icon(Icons.more_horiz, size: 20),
               initialValue: d.style.lineStyle,
               onSelected: (v) => _style((s) => s.copyWith(lineStyle: v)),
               itemBuilder: (_) => [
                 for (final v in DrawingTools.lineStyles)
-                  PopupMenuItem(value: v, child: Text(v.name[0].toUpperCase() + v.name.substring(1))),
+                  PopupMenuItem(value: v, child: Text(strings.lineStyleLabel(v))),
               ],
             ),
             if (hasText)
               IconButton(
-                tooltip: 'Text',
+                tooltip: strings.text,
                 icon: const Icon(Icons.edit_outlined, size: 20),
                 onPressed: () => editDrawingText(context, controller, d),
               ),
             IconButton(
-              tooltip: d.locked ? 'Unlock' : 'Lock',
+              tooltip: d.locked ? strings.unlock : strings.lock,
               icon: Icon(d.locked ? Icons.lock : Icons.lock_open, size: 20),
               onPressed: () => controller.drawings.update(d.id, (x) => x.locked = !x.locked),
             ),
             IconButton(
-              tooltip: 'Duplicate',
+              tooltip: strings.duplicate,
               icon: const Icon(Icons.copy, size: 20),
               onPressed: () => controller.drawings.duplicate(d.id, codec: controller.codec),
             ),
             IconButton(
-              tooltip: 'Delete',
+              tooltip: strings.delete,
               icon: const Icon(Icons.delete_outline, size: 20),
               onPressed: () => controller.drawings.remove(d.id),
             ),
@@ -550,7 +662,11 @@ Future<void> editDrawingText(BuildContext context, ProChartController pro, Drawi
     _ => null,
   };
   if (current == null) return;
-  final text = await showDialog<String>(context: context, builder: (_) => _TextDialog(current));
+  final strings = ProChartStrings.of(context);
+  final text = await showDialog<String>(
+    context: context,
+    builder: (_) => ProChartStringsScope(strings: strings, child: _TextDialog(current)),
+  );
   if (text == null || text == current) return;
   pro.drawings.update(drawing.id, (d) {
     if (d is TextDrawing) d.text = text;
@@ -578,17 +694,20 @@ class _TextDialogState extends State<_TextDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Text'),
-    content: TextField(
-      controller: _field,
-      autofocus: true,
-      maxLines: null,
-      onSubmitted: (v) => Navigator.pop(context, v),
-    ),
-    actions: [
-      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-      FilledButton(onPressed: () => Navigator.pop(context, _field.text), child: const Text('OK')),
-    ],
-  );
+  Widget build(BuildContext context) {
+    final strings = ProChartStrings.of(context);
+    return AlertDialog(
+      title: Text(strings.text),
+      content: TextField(
+        controller: _field,
+        autofocus: true,
+        maxLines: null,
+        onSubmitted: (v) => Navigator.pop(context, v),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(strings.cancel)),
+        FilledButton(onPressed: () => Navigator.pop(context, _field.text), child: Text(strings.ok)),
+      ],
+    );
+  }
 }

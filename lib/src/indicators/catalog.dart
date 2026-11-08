@@ -10,7 +10,10 @@ enum IndicatorGroup {
   momentum('Momentum'),
   trend('Trend'),
   volume('Volume'),
-  volatility('Volatility');
+  volatility('Volatility'),
+
+  /// Indicators an app adds with [IndicatorCatalog.register].
+  custom('Custom');
 
   const IndicatorGroup(this.label);
 
@@ -83,15 +86,47 @@ class IndicatorSpec {
 /// chart.addIndicator(spec.build({'period': 21}), source: candles);
 /// ```
 abstract final class IndicatorCatalog {
-  static IndicatorSpec? byId(String id) => _byId[id];
+  /// The built-in or registered indicator [id].
+  static IndicatorSpec? byId(String id) => _custom[id] ?? _byId[id];
 
-  /// Specs whose id, title or keywords contain [query].
+  /// Specs whose id, title or keywords contain [query], registered ones
+  /// included.
   static List<IndicatorSpec> search(String query) => [
-    for (final s in all)
+    for (final s in available)
       if (s.matches(query)) s,
   ];
 
   static final Map<String, IndicatorSpec> _byId = {for (final s in all) s.id: s};
+
+  static final Map<String, IndicatorSpec> _custom = {};
+
+  /// The built-in indicators and the registered ones.
+  static List<IndicatorSpec> get available => [
+    for (final s in all)
+      if (!_custom.containsKey(s.id)) s,
+    ..._custom.values,
+  ];
+
+  /// The indicators added with [register].
+  static List<IndicatorSpec> get registered => List.unmodifiable(_custom.values);
+
+  /// Adds an app's own indicator: pickers list it (under its group, e.g.
+  /// [IndicatorGroup.custom]) and saved charts bring it back by its id.
+  /// A spec with a built-in id replaces the built-in.
+  ///
+  /// ```dart
+  /// IndicatorCatalog.register(IndicatorSpec(
+  ///   id: 'myTrend',
+  ///   title: 'My Trend',
+  ///   group: IndicatorGroup.custom,
+  ///   params: const [IndicatorParam('period', 'Length', 60)],
+  ///   create: (v) => MyTrend(v['period']!.round()),
+  /// ));
+  /// ```
+  static void register(IndicatorSpec spec) => _custom[spec.id] = spec;
+
+  /// Removes an indicator added with [register].
+  static void unregister(String id) => _custom.remove(id);
 
   static const _period = 'period';
 

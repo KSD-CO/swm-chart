@@ -29,6 +29,7 @@ Each feature below has its own screenshot, all taken from the [example app](#exa
 - [Features](#features)
 - Guide
   - [Pro chart: a ready-made trading screen](#pro-chart-a-ready-made-trading-screen)
+  - [Making the pro chart your own](#making-the-pro-chart-your-own)
   - [Saving and restoring a chart](#saving-and-restoring-a-chart)
   - [Series, panes and scales](#series-panes-and-scales)
   - [Indicators](#indicators)
@@ -54,7 +55,7 @@ Each feature below has its own screenshot, all taken from the [example app](#exa
 
 ```yaml
 dependencies:
-  swm_chart: ^0.14.0
+  swm_chart: ^0.15.0
 ```
 
 ```dart
@@ -127,7 +128,7 @@ Beyond upstream:
 | **73 indicators**, one line each: moving averages, bands and stops, momentum, trend, volume, volatility ([list](#indicators)) | ✅ |
 | **Technical analysis** (`Ta`): every indicator as a plain function, plus ZigZag, Elliott waves, support / resistance, chart and candlestick patterns, auto trendlines, divergences, Williams fractals, Fibonacci, pivot points, regression channel, volume profile | ✅ |
 | **Legend & tooltip** following the crosshair | ✅ |
-| **Drawing tools** (30): lines, channels, pitchforks, Fibonacci retracement / extension / time zones, Gann fan, long / short position, anchored VWAP, regression trend, ranges, shapes, callouts; an editor with undo / redo, duplicate, lock, magnet | ✅ |
+| **Drawing tools** (51): lines, trend angle, info line, channels, pitchforks, Fibonacci retracement / extension / fan / arcs / time zones, Gann fan, harmonic, head and shoulders and Elliott patterns, sine and cyclic lines, time cycles, long / short position, anchored VWAP, fixed-range and anchored volume profiles, regression trend, ranges, shapes, highlighter, callouts, price labels, flags and emoji; an editor with undo / redo, duplicate, lock, magnet | ✅ |
 | **Trading lines**: draggable orders, TP / SL, positions with P&L, price alerts | ✅ |
 | **Overlays**: band fill, price levels, **volume profile** (value area, per session), **forecast fan** | ✅ |
 | **Chart types & timeframes**: Heikin-Ashi, Renko, line break, range bars; resample to minutes … months | ✅ |
@@ -152,12 +153,17 @@ Beyond upstream:
   candles, bars, line, area, baseline, Heikin-Ashi), the indicator picker,
   undo / redo, and log / percent scale and volume.
 - **Drawing toolbar** on the left, tools in groups, plus magnet (snap to
-  OHLC), keep drawing, hide and remove all.
+  OHLC), keep drawing, hide and remove all — or, with
+  `toolbarMode: DrawingToolbarMode.floating`, behind a pencil button over
+  the chart, which then keeps the full width.
 - **Style bar** over the selected drawing: color, width, line style, text,
   lock, duplicate, delete — each change can be undone.
 - **Indicator picker**: the indicators on the chart (show / hide, settings,
-  remove) and all 73 to add, searchable. **Settings**: inputs and the color,
-  width and visibility of each line.
+  remove) and all 73 to add, searchable — the same one as often as you
+  like (RSI 9 next to RSI 14, a stack of moving averages). **Settings**:
+  inputs and the color, width and visibility of each line.
+- **Chart display** (in the settings menu): grid lines, the symbol in the
+  background, and the crosshair's line style, color and width.
 
 ```dart
 final pro = ProChartController(symbol: 'BTC/USD', interval: '1h');
@@ -179,6 +185,73 @@ The parts are widgets of their own (`ProChartTopBar`, `DrawingToolbar`,
 differently, and `DrawingTools.groups` / `IndicatorCatalog.all` are plain
 lists to build your own.
 
+## Making the pro chart your own
+
+**Your language.** Every label, tooltip and message is in
+`ProChartStrings` (English by default). Fill it from your app's
+localizations; the function fields name the catalog's indicators, groups
+and inputs, the drawing tools and the chart types. The sheets and dialogs
+the screen opens use the same words, and the indicator search matches the
+translated names.
+
+```dart
+SwmProChart(
+  controller: pro,
+  strings: ProChartStrings(
+    indicators: l10n.indicators,
+    undo: l10n.undo,
+    searchIndicators: l10n.searchIndicators,
+    indicatorTitle: (spec) => l10n.indicatorName(spec.id) ?? spec.title,
+    groupName: (group) => l10n.indicatorGroup(group.name),
+    toolLabel: (tool) => l10n.drawingTool(tool.id),
+  ),
+)
+```
+
+Using the parts on their own (`ProChartTopBar`, `DrawingToolbar`…), put a
+`ProChartStringsScope` above them.
+
+**Your indicators.** Register an `IndicatorSpec`: the picker lists it
+(under `IndicatorGroup.custom`, or any group), it can be added, set and
+removed like the built-in ones, and saved charts bring it back by its id.
+
+```dart
+IndicatorCatalog.register(IndicatorSpec(
+  id: 'myTrend',
+  title: 'My Trend',
+  group: IndicatorGroup.custom,
+  params: const [IndicatorParam('period', 'Length', 60)],
+  create: (v) => MyTrend(v['period']!.round()), // any Indicator
+));
+```
+
+**Your drawing tools.** Add a `DrawingToolGroup` to the toolbar and the
+drawing's `DrawingKind` to the controller, so saving, restoring and
+duplicating know it.
+
+```dart
+final pro = ProChartController(drawingKinds: [zoneKind]);
+
+SwmProChart(
+  controller: pro,
+  toolGroups: [
+    ...DrawingTools.groups,
+    DrawingToolGroup('Zones', [
+      DrawingToolSpec(
+        id: 'zone',
+        label: 'Zone',
+        icon: Icons.crop_square,
+        create: (_, id, anchors) => ZoneDrawing(id: id, anchors: anchors),
+      ),
+    ]),
+  ],
+)
+```
+
+**Its look.** `crosshairStyle`, `crosshairColor`, `crosshairWidth`,
+`showGrid` and `showWatermark` on the controller (or the Chart display
+sheet, `showChartDisplaySheet`); they're part of `saveState`.
+
 ## Saving and restoring a chart
 
 ```dart
@@ -193,7 +266,8 @@ other.restoreIndicators(template);
 
 The state holds the chart type, price scale mode, volume, symbol, interval,
 each indicator (its catalog id, inputs, line styles, visibility), the
-drawings (anchored by time) and the trading lines — not the bars.
+drawings (anchored by time), the trading lines and the display settings
+(crosshair, grid, watermark) — not the bars.
 
 ## Series, panes and scales
 

@@ -26,7 +26,8 @@ class DrawingToolGroup {
   final List<DrawingToolSpec> tools;
 }
 
-/// The built-in tools, grouped like TradingView's toolbar.
+/// The built-in tools, grouped like TradingView's toolbar — the same set
+/// and groups as Stock World Monitor's chart.
 abstract final class DrawingTools {
   static final List<DrawingToolGroup> groups = [
     DrawingToolGroup('Lines', [
@@ -53,6 +54,18 @@ abstract final class DrawingTools {
         label: 'Arrow',
         icon: Icons.arrow_right_alt,
         create: (_, id, a) => TrendLineDrawing(id: id, anchors: a, arrow: true),
+      ),
+      DrawingToolSpec(
+        id: 'trendAngle',
+        label: 'Trend angle',
+        icon: Icons.architecture,
+        create: (_, id, a) => TrendAngleDrawing(id: id, anchors: a),
+      ),
+      DrawingToolSpec(
+        id: 'infoLine',
+        label: 'Info line',
+        icon: Icons.info_outline,
+        create: (_, id, a) => InfoLineDrawing(id: id, anchors: a),
       ),
       DrawingToolSpec(
         id: 'horizontalLine',
@@ -123,10 +136,22 @@ abstract final class DrawingTools {
         create: (_, id, a) => FibExtensionDrawing(id: id, anchors: a),
       ),
       DrawingToolSpec(
+        id: 'fibFan',
+        label: 'Fib speed fan',
+        icon: Icons.change_history,
+        create: (_, id, a) => FibFanDrawing(id: id, anchors: a),
+      ),
+      DrawingToolSpec(
         id: 'fibTimeZone',
         label: 'Fib time zone',
         icon: Icons.view_week_outlined,
         create: (_, id, a) => FibTimeZoneDrawing(id: id, anchors: a),
+      ),
+      DrawingToolSpec(
+        id: 'fibArc',
+        label: 'Fib arcs',
+        icon: Icons.blur_circular,
+        create: (_, id, a) => FibArcDrawing(id: id, anchors: a),
       ),
       DrawingToolSpec(
         id: 'gannFan',
@@ -139,8 +164,43 @@ abstract final class DrawingTools {
       DrawingToolSpec(
         id: 'xabcd',
         label: 'XABCD pattern',
-        icon: Icons.timeline,
-        create: (_, id, a) => PathDrawing.xabcd(id: id, anchors: a),
+        icon: Icons.hub,
+        create: (_, id, a) => HarmonicDrawing(id: id, anchors: a, style: _pattern),
+      ),
+      DrawingToolSpec(
+        id: 'cypher',
+        label: 'Cypher pattern',
+        icon: Icons.auto_graph,
+        create: (_, id, a) => HarmonicDrawing(id: id, anchors: a, style: _pattern),
+      ),
+      DrawingToolSpec(
+        id: 'abcd',
+        label: 'ABCD pattern',
+        icon: Icons.polyline,
+        create: (_, id, a) => PathDrawing(id: id, anchors: a, labels: const ['A', 'B', 'C', 'D']),
+      ),
+      DrawingToolSpec(
+        id: 'headAndShoulders',
+        label: 'Head and shoulders',
+        icon: Icons.landscape,
+        create: (_, id, a) => HeadAndShouldersDrawing(id: id, anchors: a, style: _pattern),
+      ),
+      DrawingToolSpec(
+        id: 'trianglePattern',
+        label: 'Triangle pattern',
+        icon: Icons.change_history,
+        create: (_, id, a) => PathDrawing(
+          id: id,
+          anchors: a,
+          labels: const ['A', 'B', 'C', 'D'],
+          style: const DrawingStyle(fillColor: Color(0x1A2962FF)),
+        ),
+      ),
+      DrawingToolSpec(
+        id: 'threeDrives',
+        label: 'Three drives pattern',
+        icon: Icons.moving,
+        create: (_, id, a) => PathDrawing(id: id, anchors: a, labels: const ['0', '1', 'A', '2', 'B', '3']),
       ),
       DrawingToolSpec(
         id: 'elliottImpulse',
@@ -153,6 +213,42 @@ abstract final class DrawingTools {
         label: 'Elliott correction wave',
         icon: Icons.water,
         create: (_, id, a) => PathDrawing.elliottCorrection(id: id, anchors: a),
+      ),
+      DrawingToolSpec(
+        id: 'elliottTriangle',
+        label: 'Elliott triangle wave',
+        icon: Icons.insights,
+        create: (_, id, a) => PathDrawing(id: id, anchors: a, labels: const ['0', 'A', 'B', 'C', 'D', 'E']),
+      ),
+      DrawingToolSpec(
+        id: 'elliottDoubleCombo',
+        label: 'Elliott double combo wave',
+        icon: Icons.stacked_line_chart,
+        create: (_, id, a) => PathDrawing(id: id, anchors: a, labels: const ['0', 'W', 'X', 'Y']),
+      ),
+      DrawingToolSpec(
+        id: 'elliottTripleCombo',
+        label: 'Elliott triple combo wave',
+        icon: Icons.graphic_eq,
+        create: (_, id, a) => PathDrawing(id: id, anchors: a, labels: const ['0', 'W', 'X', 'Y', 'X', 'Z']),
+      ),
+      DrawingToolSpec(
+        id: 'sineLine',
+        label: 'Sine line',
+        icon: Icons.ssid_chart,
+        create: (_, id, a) => SineLineDrawing(id: id, anchors: a),
+      ),
+      DrawingToolSpec(
+        id: 'cyclicLines',
+        label: 'Cyclic lines',
+        icon: Icons.repeat,
+        create: (_, id, a) => CyclicLinesDrawing(id: id, anchors: a),
+      ),
+      DrawingToolSpec(
+        id: 'timeCycles',
+        label: 'Time cycles',
+        icon: Icons.track_changes,
+        create: (_, id, a) => TimeCyclesDrawing(id: id, anchors: a),
       ),
     ]),
     DrawingToolGroup('Forecasting and measuring', [
@@ -193,6 +289,25 @@ abstract final class DrawingTools {
         create: (pro, id, a) =>
             AnchoredVwapDrawing(id: id, anchors: a, source: pro.mainSeries, volume: pro.volumeSeries),
       ),
+      DrawingToolSpec(
+        id: 'fixedRangeVolumeProfile',
+        label: 'Fixed range volume profile',
+        icon: Icons.bar_chart,
+        create: (pro, id, a) =>
+            RangeVolumeProfileDrawing(id: id, anchors: a, source: pro.mainSeries, volume: pro.volumeSeries),
+      ),
+      DrawingToolSpec(
+        id: 'anchoredVolumeProfile',
+        label: 'Anchored volume profile',
+        icon: Icons.equalizer,
+        create: (pro, id, a) => RangeVolumeProfileDrawing(
+          id: id,
+          anchors: a,
+          source: pro.mainSeries,
+          volume: pro.volumeSeries,
+          anchored: true,
+        ),
+      ),
     ]),
     DrawingToolGroup('Shapes', [
       DrawingToolSpec(
@@ -221,6 +336,16 @@ abstract final class DrawingTools {
         icon: Icons.brush,
         create: (_, id, a) => FreehandDrawing(id: id, anchors: a, style: const DrawingStyle(lineWidth: 2)),
       ),
+      DrawingToolSpec(
+        id: 'highlighter',
+        label: 'Highlighter',
+        icon: Icons.border_color,
+        create: (_, id, a) => FreehandDrawing(
+          id: id,
+          anchors: a,
+          style: const DrawingStyle(color: Color(0x66FFEB3B), lineWidth: 12),
+        ),
+      ),
     ]),
     DrawingToolGroup('Annotations', [
       DrawingToolSpec(
@@ -235,8 +360,46 @@ abstract final class DrawingTools {
         icon: Icons.chat_bubble_outline,
         create: (_, id, a) => CalloutDrawing(id: id, anchors: a, text: 'Note'),
       ),
+      DrawingToolSpec(
+        id: 'priceLabel',
+        label: 'Price label',
+        icon: Icons.sell_outlined,
+        create: (_, id, a) => PriceLabelDrawing(id: id, anchors: a),
+      ),
+      DrawingToolSpec(
+        id: 'flag',
+        label: 'Flag mark',
+        icon: Icons.outlined_flag,
+        create: (_, id, a) => IconMarkDrawing(
+          id: id,
+          anchors: a,
+          style: const DrawingStyle(color: Color(0xFFF23645), fontSize: 22),
+          icon: Icons.flag_rounded,
+          iconKey: 'flag',
+          anchorAtBase: true,
+        ),
+      ),
+      DrawingToolSpec(
+        id: 'emoji',
+        label: 'Emoji',
+        icon: Icons.emoji_emotions_outlined,
+        create: (_, id, a) => IconMarkDrawing(
+          id: id,
+          anchors: a,
+          style: const DrawingStyle(color: Color(0xFFFFB300), fontSize: 24),
+          icon: Icons.sentiment_satisfied_alt,
+          iconKey: 'smile',
+        ),
+      ),
     ]),
   ];
+
+  /// The patterns' teal outline and fill.
+  static const _pattern = DrawingStyle(color: Color(0xFF26A69A), fillColor: Color(0x2226A69A));
+
+  /// The icons the icon-mark tools place, by the key they're saved under
+  /// (pass them to [DrawingCodec.icons]).
+  static const icons = <String, IconData>{'flag': Icons.flag_rounded, 'smile': Icons.sentiment_satisfied_alt};
 
   static DrawingToolSpec? byId(String id) {
     for (final g in groups) {

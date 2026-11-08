@@ -4,6 +4,8 @@
 
 import 'dart:ui';
 
+import 'package:flutter/widgets.dart' show IconData;
+
 import '../api/chart_controller.dart';
 import '../options.dart';
 import 'drawings.dart';
@@ -40,12 +42,18 @@ class DrawingKind<T extends Drawing> {
 /// editor.layer.drawings = codec.decodeAll(jsonDecode(saved), chart.timeScale().timeToLogical);
 /// ```
 class DrawingCodec {
-  DrawingCodec({List<DrawingKind> custom = const [], this.source, this.volume})
-    : _kinds = [...custom, ...builtIns, ..._dataKinds(source, volume)];
+  DrawingCodec({List<DrawingKind> custom = const [], this.source, this.volume, this.icons = const {}})
+    : _kinds = [...custom, ...builtIns, ..._dataKinds(source, volume), _iconKind(icons)];
 
   /// The series loaded data drawings read.
   final SeriesApi? source;
   final SeriesApi? volume;
+
+  /// The icons [IconMarkDrawing]s are saved by, under their keys; one whose
+  /// key isn't here loads as [IconMarkDrawing.fallbackIcon]. (Icons are
+  /// saved by key, not code point: icon fonts are tree-shaken down to the
+  /// constant icons an app uses.)
+  final Map<String, IconData> icons;
 
   // Custom kinds first, so a subclass of a built-in drawing is saved as
   // itself.
@@ -53,6 +61,25 @@ class DrawingCodec {
 
   /// The built-in drawings.
   static final List<DrawingKind> builtIns = [
+    // Subclasses before their base, so each is saved as itself.
+    DrawingKind<TrendAngleDrawing>(
+      name: 'trendAngle',
+      create: (id, a, s, p) => TrendAngleDrawing(id: id, anchors: a, style: s),
+    ),
+    DrawingKind<InfoLineDrawing>(
+      name: 'infoLine',
+      create: (id, a, s, p) =>
+          InfoLineDrawing(id: id, anchors: a, style: s, barsLabel: p['barsLabel'] as String? ?? 'bars'),
+      props: (d) => {'barsLabel': d.barsLabel},
+    ),
+    DrawingKind<HarmonicDrawing>(
+      name: 'harmonic',
+      create: (id, a, s, p) => HarmonicDrawing(id: id, anchors: a, style: s),
+    ),
+    DrawingKind<HeadAndShouldersDrawing>(
+      name: 'headAndShoulders',
+      create: (id, a, s, p) => HeadAndShouldersDrawing(id: id, anchors: a, style: s),
+    ),
     DrawingKind<TrendLineDrawing>(
       name: 'trendLine',
       create: (id, a, s, p) => TrendLineDrawing(
@@ -232,6 +259,34 @@ class DrawingCodec {
           DateRangeDrawing(id: id, anchors: a, style: s, barsLabel: p['barsLabel'] as String? ?? 'bars'),
       props: (d) => {'barsLabel': d.barsLabel},
     ),
+    DrawingKind<SineLineDrawing>(
+      name: 'sineLine',
+      create: (id, a, s, p) => SineLineDrawing(id: id, anchors: a, style: s),
+    ),
+    DrawingKind<CyclicLinesDrawing>(
+      name: 'cyclicLines',
+      create: (id, a, s, p) => CyclicLinesDrawing(id: id, anchors: a, style: s),
+    ),
+    DrawingKind<TimeCyclesDrawing>(
+      name: 'timeCycles',
+      create: (id, a, s, p) => TimeCyclesDrawing(id: id, anchors: a, style: s),
+    ),
+    DrawingKind<FibFanDrawing>(
+      name: 'fibFan',
+      create: (id, a, s, p) =>
+          FibFanDrawing(id: id, anchors: a, style: s, levels: _ratios(p['levels']) ?? FibFanDrawing.defaultLevels),
+      props: (d) => {'levels': d.levels},
+    ),
+    DrawingKind<FibArcDrawing>(
+      name: 'fibArc',
+      create: (id, a, s, p) =>
+          FibArcDrawing(id: id, anchors: a, style: s, levels: _ratios(p['levels']) ?? FibArcDrawing.defaultLevels),
+      props: (d) => {'levels': d.levels},
+    ),
+    DrawingKind<PriceLabelDrawing>(
+      name: 'priceLabel',
+      create: (id, a, s, p) => PriceLabelDrawing(id: id, anchors: a, style: s),
+    ),
     DrawingKind<PriceRangeDrawing>(
       name: 'priceRange',
       create: (id, a, s, p) => PriceRangeDrawing(
@@ -270,7 +325,41 @@ class DrawingCodec {
       ),
       props: (d) => {'deviations': d.deviations, 'extendRight': d.extendRight},
     ),
+    DrawingKind<RangeVolumeProfileDrawing>(
+      name: 'rangeVolumeProfile',
+      create: (id, a, s, p) => RangeVolumeProfileDrawing(
+        id: id,
+        anchors: a,
+        style: s,
+        source: source,
+        volume: volume,
+        anchored: p['anchored'] == true,
+        rows: (p['rows'] as num?)?.toInt() ?? 24,
+      ),
+      props: (d) => {'anchored': d.anchored, 'rows': d.rows},
+    ),
   ];
+
+  static DrawingKind<IconMarkDrawing> _iconKind(Map<String, IconData> icons) => DrawingKind<IconMarkDrawing>(
+    name: 'iconMark',
+    create: (id, a, s, p) {
+      final key = p['icon'] as String?;
+      return IconMarkDrawing(
+        id: id,
+        anchors: a,
+        style: s,
+        icon: icons[key] ?? IconMarkDrawing.fallbackIcon,
+        iconKey: key,
+        anchorAtBase: p['anchorAtBase'] == true,
+      );
+    },
+    props: (d) => {'icon': d.iconKey, 'anchorAtBase': d.anchorAtBase},
+  );
+
+  static List<double>? _ratios(Object? json) => switch (json) {
+    final List<Object?> l => [for (final v in l) (v as num).toDouble()],
+    _ => null,
+  };
 
   static List<Map<String, Object?>> _levels(List<FibLevel> levels) => [
     for (final l in levels) {'ratio': l.ratio, 'color': l.color.toARGB32(), 'visible': l.visible},

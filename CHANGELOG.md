@@ -1,3 +1,37 @@
+## 0.15.0
+
+* `ProChartStrings`: every label, tooltip and message of `SwmProChart`,
+  its sheets and dialogs, English by default — pass your app's words to
+  `SwmProChart.strings` or a `ProChartStringsScope`. Function fields name
+  the catalog's indicators, groups and inputs, the drawing tools, line
+  styles and chart types; the indicator search matches translated names.
+* `IndicatorCatalog.register` / `unregister`: an app's own indicators in
+  the picker (new `IndicatorGroup.custom`), added, set and saved like the
+  built-in ones; `IndicatorCatalog.available` and `registered`.
+* `ProChartController.drawingKinds` and `SwmProChart.toolGroups`: your own
+  drawing tools on the toolbar, saved, restored and duplicated.
+* Display settings: `crosshairStyle`, `crosshairColor`, `crosshairWidth`,
+  `showGrid`, `showWatermark` and `resetDisplay` on the controller, a
+  Chart display sheet (`showChartDisplaySheet`, `ChartDisplaySettings`)
+  in the settings menu, and a `display` part in `saveState`. Changing them
+  keeps the price scale's mode.
+* Fourteen more drawing tools, saved and restored by `DrawingCodec`:
+  `TrendAngleDrawing`, `InfoLineDrawing`, `RangeVolumeProfileDrawing`
+  (fixed range or anchored), `HarmonicDrawing` (XABCD, Cypher),
+  `HeadAndShouldersDrawing`, `SineLineDrawing`, `CyclicLinesDrawing`,
+  `TimeCyclesDrawing`, `FibFanDrawing`, `FibArcDrawing`, `IconMarkDrawing`
+  (flags and emoji, saved by key through `DrawingCodec.icons`) and
+  `PriceLabelDrawing`.
+* `DrawingTools.groups`: 51 tools in seven groups — lines, channels and
+  pitchforks, Fibonacci and Gann, patterns and cycles (ABCD, triangle,
+  three drives and the Elliott waves too), forecasting and measuring
+  (volume profiles too), shapes (highlighter too) and annotations (price
+  label, flag, emoji too).
+* `SwmProChart.toolbarMode`: the drawing toolbar docked down the left (as
+  before), or `DrawingToolbarMode.floating` — behind a pencil button over
+  the chart, which keeps the full width. New string
+  `ProChartStrings.drawingTools`.
+
 ## 0.14.0
 
 * `SwmProChart`: a ready-made trading screen around a `ProChartController`

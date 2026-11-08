@@ -6,6 +6,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/painting.dart';
+import 'package:flutter/widgets.dart' show IconData;
 import 'package:flutter/services.dart' show SystemMouseCursors;
 
 import '../api/chart_controller.dart';
@@ -15,6 +16,7 @@ import '../renderers/draw_utils.dart';
 import 'drawing_codec.dart';
 import 'primitive.dart';
 
+part 'drawings_extra.dart';
 part 'drawings_more.dart';
 
 /// A point of a drawing: a fractional logical index (so it can sit between
