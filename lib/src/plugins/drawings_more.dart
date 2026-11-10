@@ -135,17 +135,19 @@ class PositionDrawing extends Drawing {
     }
 
     final above = yt < ye;
+    final words = DrawingLabels.current;
     final targetText =
-        'Target: ${c.formatPrice(target)} (${_percent((target - entry) / entry)}${amount(_targetDistance)})';
-    final stopText = 'Stop: ${c.formatPrice(stop)} (${_percent((stop - entry) / entry)}${amount(_stopDistance)})';
+        '${words.target}: ${c.formatPrice(target)} (${_percent((target - entry) / entry)}${amount(_targetDistance)})';
+    final stopText =
+        '${words.stop}: ${c.formatPrice(stop)} (${_percent((stop - entry) / entry)}${amount(_stopDistance)})';
     _labelBox(canvas, targetText, style, Offset(cx, yt + (above ? -12 : 12)), profitColor);
     _labelBox(canvas, stopText, style, Offset(cx, ys + (above ? 12 : -12)), lossColor);
     final rr = riskReward;
     final q = quantity;
     final entryText = [
-      short ? 'Short' : 'Long',
-      if (q != null) 'Qty ${q == q.roundToDouble() ? q.toStringAsFixed(0) : q}',
-      if (rr != null) 'R:R ${rr.toStringAsFixed(2)}',
+      short ? words.short : words.long,
+      if (q != null) '${words.quantity} ${q == q.roundToDouble() ? q.toStringAsFixed(0) : q}',
+      if (rr != null) '${words.riskReward} ${rr.toStringAsFixed(2)}',
     ].join(' · ');
     _labelBox(canvas, entryText, style, Offset(cx, ye), short ? lossColor : profitColor);
   }
@@ -842,14 +844,16 @@ class CalloutDrawing extends Drawing {
   }
 }
 
-/// How long [seconds] is, as `3d 4h`, `2h 15m` or `45m`.
+/// How long [seconds] is, as `3d 4h`, `2h 15m` or `45m` (in
+/// [DrawingLabels.current]'s units).
 String formatDuration(num seconds) {
+  final u = DrawingLabels.current;
   final s = seconds.abs().round();
   final d = s ~/ 86400, h = s % 86400 ~/ 3600, m = s % 3600 ~/ 60;
-  if (d > 0) return h > 0 ? '${d}d ${h}h' : '${d}d';
-  if (h > 0) return m > 0 ? '${h}h ${m}m' : '${h}h';
-  if (m > 0) return '${m}m';
-  return '${s}s';
+  if (d > 0) return h > 0 ? '$d${u.days} $h${u.hours}' : '$d${u.days}';
+  if (h > 0) return m > 0 ? '$h${u.hours} $m${u.minutes}' : '$h${u.hours}';
+  if (m > 0) return '$m${u.minutes}';
+  return '$s${u.seconds}';
 }
 
 /// A date range: the bars between two anchors and the time they span.
@@ -858,10 +862,11 @@ class DateRangeDrawing extends Drawing {
     required super.id,
     required super.anchors,
     super.style = const DrawingStyle(color: Color(0xFF2962FF), fillColor: Color(0x262962FF)),
-    this.barsLabel = 'bars',
+    this.barsLabel,
   });
 
-  String barsLabel;
+  /// Word after the bar count; `null` for [DrawingLabels.current]'s.
+  String? barsLabel;
 
   @override
   int get anchorCount => 2;
@@ -881,7 +886,7 @@ class DateRangeDrawing extends Drawing {
     _arrowHead(canvas, style, Offset(a.dx, r.center.dy), Offset(b.dx, r.center.dy));
     final t0 = c.timeOf?.call(anchors[0].logical), t1 = c.timeOf?.call(anchors[1].logical);
     final text = [
-      '$bars $barsLabel',
+      '$bars ${barsLabel ?? DrawingLabels.current.bars}',
       if (t0 != null && t1 != null) '${t1 < t0 ? '−' : ''}${formatDuration(t1 - t0)}',
     ].join(', ');
     _labelBox(canvas, text, style, Offset(r.center.dx, r.bottom + 14), style.color);

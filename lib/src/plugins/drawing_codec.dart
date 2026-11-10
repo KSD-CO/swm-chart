@@ -68,9 +68,8 @@ class DrawingCodec {
     ),
     DrawingKind<InfoLineDrawing>(
       name: 'infoLine',
-      create: (id, a, s, p) =>
-          InfoLineDrawing(id: id, anchors: a, style: s, barsLabel: p['barsLabel'] as String? ?? 'bars'),
-      props: (d) => {'barsLabel': d.barsLabel},
+      create: (id, a, s, p) => InfoLineDrawing(id: id, anchors: a, style: s, barsLabel: _barsLabel(p)),
+      props: (d) => {'barsLabel': ?d.barsLabel},
     ),
     DrawingKind<HarmonicDrawing>(
       name: 'harmonic',
@@ -165,9 +164,9 @@ class DrawingCodec {
         style: s,
         upColor: _color(p['upColor']) ?? const Color(0xFF2962FF),
         downColor: _color(p['downColor']) ?? const Color(0xFFF23645),
-        barsLabel: p['barsLabel'] as String? ?? 'bars',
+        barsLabel: _barsLabel(p),
       ),
-      props: (d) => {'upColor': d.upColor.toARGB32(), 'downColor': d.downColor.toARGB32(), 'barsLabel': d.barsLabel},
+      props: (d) => {'upColor': d.upColor.toARGB32(), 'downColor': d.downColor.toARGB32(), 'barsLabel': ?d.barsLabel},
     ),
     DrawingKind<PathDrawing>(
       name: 'path',
@@ -255,9 +254,8 @@ class DrawingCodec {
     ),
     DrawingKind<DateRangeDrawing>(
       name: 'dateRange',
-      create: (id, a, s, p) =>
-          DateRangeDrawing(id: id, anchors: a, style: s, barsLabel: p['barsLabel'] as String? ?? 'bars'),
-      props: (d) => {'barsLabel': d.barsLabel},
+      create: (id, a, s, p) => DateRangeDrawing(id: id, anchors: a, style: s, barsLabel: _barsLabel(p)),
+      props: (d) => {'barsLabel': ?d.barsLabel},
     ),
     DrawingKind<SineLineDrawing>(
       name: 'sineLine',
@@ -355,6 +353,14 @@ class DrawingCodec {
     },
     props: (d) => {'icon': d.iconKey, 'anchorAtBase': d.anchorAtBase},
   );
+
+  /// A drawing's own word after its bar count. 0.15.0 saved the default,
+  /// "bars", with every drawing: read back as none, so those follow
+  /// [DrawingLabels.current] like new ones.
+  static String? _barsLabel(Map<String, Object?> p) => switch (p['barsLabel']) {
+    final String l when l != 'bars' => l,
+    _ => null,
+  };
 
   static List<double>? _ratios(Object? json) => switch (json) {
     final List<Object?> l => [for (final v in l) (v as num).toDouble()],

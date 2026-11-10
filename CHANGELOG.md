@@ -1,3 +1,14 @@
+## 0.16.0
+
+* `DrawingLabels`: the words drawings write on the chart — a position's
+  target, stop, long / short, quantity and risk / reward, "bars" after a
+  bar count and the units of a duration. Set `DrawingLabels.current` to
+  your app's language.
+* Breaking: `barsLabel` of `DateRangeDrawing`, `MeasureDrawing` and
+  `InfoLineDrawing` is now `String?` (`null` follows
+  `DrawingLabels.current`). `DrawingCodec` saves it only when set, and
+  reads the "bars" 0.15.0 saved with every drawing back as `null`.
+
 ## 0.15.0
 
 * `ProChartStrings`: every label, tooltip and message of `SwmProChart`,

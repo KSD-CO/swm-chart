@@ -107,6 +107,49 @@ class DrawingContext {
   double? y(double price) => chart.priceToCoordinate(price);
 }
 
+/// The words drawings write on the chart. Set [current] to your app's
+/// language (and again when it changes); a drawing's own label (such as
+/// [DateRangeDrawing.barsLabel]) wins over it.
+///
+/// ```dart
+/// DrawingLabels.current = const DrawingLabels(target: 'Mục tiêu', stop: 'Cắt lỗ', bars: 'nến');
+/// ```
+class DrawingLabels {
+  const DrawingLabels({
+    this.target = 'Target',
+    this.stop = 'Stop',
+    this.long = 'Long',
+    this.short = 'Short',
+    this.quantity = 'Qty',
+    this.riskReward = 'R:R',
+    this.bars = 'bars',
+    this.days = 'd',
+    this.hours = 'h',
+    this.minutes = 'm',
+    this.seconds = 's',
+  });
+
+  /// Used by every drawing that writes a label.
+  static DrawingLabels current = const DrawingLabels();
+
+  /// A position's target and stop, its side, size and risk / reward.
+  final String target;
+  final String stop;
+  final String long;
+  final String short;
+  final String quantity;
+  final String riskReward;
+
+  /// After a bar count: "20 bars".
+  final String bars;
+
+  /// The units of a duration ([formatDuration]): "3d 4h".
+  final String days;
+  final String hours;
+  final String minutes;
+  final String seconds;
+}
+
 /// Base class of every drawing. Subclass it for a tool the built-ins don't
 /// cover: give the number of anchors it takes, paint it and say how far a
 /// point is from it.
@@ -1293,14 +1336,14 @@ class MeasureDrawing extends Drawing {
     super.style = const DrawingStyle(),
     this.upColor = const Color(0xFF2962FF),
     this.downColor = const Color(0xFFF23645),
-    this.barsLabel = 'bars',
+    this.barsLabel,
   });
 
   Color upColor;
   Color downColor;
 
-  /// Word after the bar count.
-  String barsLabel;
+  /// Word after the bar count; `null` for [DrawingLabels.current]'s.
+  String? barsLabel;
 
   @override
   int get anchorCount => 2;
@@ -1336,7 +1379,7 @@ class MeasureDrawing extends Drawing {
     final sign = change >= 0 ? '+' : '';
     final lines = [
       '$sign${c.formatPrice(change)}${pct == null ? '' : ' ($sign${(pct * 100).toStringAsFixed(2)}%)'}',
-      '$bars $barsLabel',
+      '$bars ${barsLabel ?? DrawingLabels.current.bars}',
     ];
     final tp = _text(lines.join('\n'), style, color: const Color(0xFFFFFFFF), weight: FontWeight.w600);
     final box = Rect.fromCenter(

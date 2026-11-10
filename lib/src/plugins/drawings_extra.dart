@@ -42,9 +42,10 @@ class TrendAngleDrawing extends TrendLineDrawing {
 
 /// A trend line labelled with its price change, bars and angle.
 class InfoLineDrawing extends TrendLineDrawing {
-  InfoLineDrawing({required super.id, required super.anchors, super.style, this.barsLabel = 'bars'});
+  InfoLineDrawing({required super.id, required super.anchors, super.style, this.barsLabel});
 
-  String barsLabel;
+  /// Word after the bar count; `null` for [DrawingLabels.current]'s.
+  String? barsLabel;
 
   @override
   void paint(Canvas canvas, DrawingContext c) {
@@ -56,7 +57,7 @@ class InfoLineDrawing extends TrendLineDrawing {
     final change = b.price - a.price;
     final text = [
       '${change >= 0 ? '+' : ''}${c.formatPrice(change)}${a.price == 0 ? '' : ' (${_percent(change / a.price)})'}',
-      '${(b.logical - a.logical).round()} $barsLabel',
+      '${(b.logical - a.logical).round()} ${barsLabel ?? DrawingLabels.current.bars}',
       '${deg.toStringAsFixed(1)}°',
     ].join('  ');
     _labelBox(

@@ -170,4 +170,45 @@ void main() {
     expect(find.byType(DrawingToolbar), findsNothing);
     expect(pro.activeTool, isNull);
   });
+
+  group('labels', () {
+    tearDown(() => DrawingLabels.current = const DrawingLabels());
+
+    test('durations use the current units', () {
+      expect(formatDuration(3 * 86400 + 4 * 3600), '3d 4h');
+      DrawingLabels.current = const DrawingLabels(days: ' ngày', hours: ' giờ');
+      expect(formatDuration(3 * 86400 + 4 * 3600), '3 ngày 4 giờ');
+    });
+
+    testWidgets('bar counts follow the current word unless a drawing has its own', (tester) async {
+      final chart = ChartController();
+      final candles = chart.addCandlestickSeries()..setData(_bars(50));
+      addTearDown(chart.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(width: 400, height: 300, child: SwmChart(controller: chart)),
+        ),
+      );
+      final codec = DrawingCodec(source: candles);
+      final range = DateRangeDrawing(id: 'r', anchors: const [DrawingAnchor(10, 100), DrawingAnchor(20, 100)]);
+      final json = codec.encode(range, chart.timeScale().logicalToTime)!;
+      expect((json['props']! as Map).containsKey('barsLabel'), isFalse);
+
+      // A drawing saved by 0.15.0, with the default word: it follows the
+      // current one once loaded.
+      final old = {
+        ...json,
+        'props': {'barsLabel': 'bars'},
+      };
+      final back = codec.decode(old, chart.timeScale().timeToLogical)! as DateRangeDrawing;
+      expect(back.barsLabel, isNull);
+      final own =
+          codec.decode({
+                ...json,
+                'props': {'barsLabel': 'nến'},
+              }, chart.timeScale().timeToLogical)!
+              as DateRangeDrawing;
+      expect(own.barsLabel, 'nến');
+    });
+  });
 }
