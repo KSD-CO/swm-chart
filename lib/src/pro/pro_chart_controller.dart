@@ -1,6 +1,8 @@
 // A ready-made trading chart: the price series in a chosen style, volume,
 // indicators from the catalog, drawings, trading lines and a legend — and
 // its whole state saved and restored as JSON.
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
@@ -26,11 +28,24 @@ enum ProChartType {
   line('Line'),
   area('Area'),
   baseline('Baseline'),
-  heikinAshi('Heikin-Ashi');
+  heikinAshi('Heikin-Ashi'),
+  renko('Renko'),
+  lineBreak('Line break'),
+  rangeBars('Range bars'),
+  pointAndFigure('Point & figure'),
+  kagi('Kagi');
 
   const ProChartType(this.label);
 
   final String label;
+
+  /// Drawn from bricks, lines or columns built from the bars rather than
+  /// the bars themselves — off the bars' own time grid, so without the
+  /// volume histogram.
+  bool get isBuilt => switch (this) {
+    renko || lineBreak || rangeBars || pointAndFigure || kagi => true,
+    _ => false,
+  };
 }
 
 /// Color, width and visibility of one line of an indicator.
@@ -160,6 +175,23 @@ class ProChartController extends ChangeNotifier {
   List<CandlestickData> _bars = const [];
   List<double>? _volumes;
   HeikinAshi? _heikinAshi;
+
+  double? _brickSize;
+
+  /// The box (brick, range, reversal) size of Renko, range bars, Point &
+  /// figure and Kagi; null for one from the bars' average true range
+  /// ([autoBoxSize]).
+  double? get brickSize => _brickSize;
+
+  set brickSize(double? value) {
+    if (value == _brickSize) return;
+    _brickSize = value;
+    if (_type.isBuilt) _setMainData();
+    notifyListeners();
+  }
+
+  /// The box size in use: [brickSize] or the automatic one.
+  double get effectiveBrickSize => _brickSize ?? autoBoxSize(_bars);
   final List<ProIndicator> _indicators = [];
 
   /// The price series, in the current [type].
@@ -336,14 +368,48 @@ class ProChartController extends ChangeNotifier {
   /// histogram is shown.
   void setData(List<CandlestickData> bars, {List<double>? volumes}) {
     assert(volumes == null || volumes.length == bars.length, 'one volume per bar');
+    if (_replayBars != null) {
+      // Replaying: the new bars wait behind the replay point.
+      _replayBars = List.of(bars);
+      _replayVolumes = volumes == null ? null : List.of(volumes);
+      _replayAt = _replayAt.clamp(1, bars.isEmpty ? 1 : bars.length);
+      _load(bars.take(_replayAt).toList(), volumes?.take(_replayAt).toList());
+      notifyListeners();
+      return;
+    }
+    _load(bars, volumes);
+  }
+
+  void _load(List<CandlestickData> bars, List<double>? volumes) {
     _bars = List.of(bars);
     _volumes = volumes == null ? null : List.of(volumes);
-    _volume?.setData(_volumeData());
+    _volume?.setData(_type.isBuilt ? const [] : _volumeData());
     _setMainData();
   }
 
   /// Adds a bar, or replaces the last one when it has the same time.
+  /// While replaying, it waits behind the replay point.
   void update(CandlestickData bar, {double? volume}) {
+    final held = _replayBars;
+    if (held != null) {
+      final replace = held.isNotEmpty && held.last.time == bar.time;
+      if (replace) {
+        held[held.length - 1] = bar;
+      } else {
+        held.add(bar);
+      }
+      final vols = _replayVolumes;
+      if (vols != null) {
+        final v = volume ?? (replace ? vols.last : 0);
+        replace ? vols[vols.length - 1] = v : vols.add(v);
+      }
+      notifyListeners();
+      return;
+    }
+    _apply(bar, volume: volume);
+  }
+
+  void _apply(CandlestickData bar, {double? volume}) {
     final replace = _bars.isNotEmpty && _bars.last.time == bar.time;
     if (replace) {
       _bars[_bars.length - 1] = bar;
@@ -358,9 +424,14 @@ class ProChartController extends ChangeNotifier {
       } else {
         vols.add(v);
       }
-      _volume?.update(_volumeBar(bar, v));
+      if (!_type.isBuilt) _volume?.update(_volumeBar(bar, v));
     }
-    _main.update(_mainPoint(bar));
+    if (_type.isBuilt) {
+      // A tick can add, extend or turn a brick: rebuilt from the bars.
+      _setMainData();
+    } else {
+      _main.update(_mainPoint(bar));
+    }
   }
 
   static const _upVolume = Color(0x8026A69A);
@@ -376,6 +447,19 @@ class ProChartController extends ChangeNotifier {
   }
 
   void _setMainData() {
+    if (_type.isBuilt) {
+      _heikinAshi = null;
+      final size = effectiveBrickSize;
+      _main.setData(switch (_type) {
+        ProChartType.renko => renko(_bars, boxSize: size),
+        ProChartType.lineBreak => lineBreak(_bars),
+        ProChartType.rangeBars => rangeBars(_bars, range: size),
+        ProChartType.pointAndFigure => pointAndFigure(_bars, boxSize: size),
+        ProChartType.kagi => kagi(_bars, reversal: size * 3),
+        _ => const <SeriesData>[],
+      });
+      return;
+    }
     if (_type == ProChartType.heikinAshi) {
       final converter = _heikinAshi = HeikinAshi();
       _main.setData([for (final b in _bars) converter.add(b)]);
@@ -392,6 +476,12 @@ class ProChartController extends ChangeNotifier {
     ProChartType.line => LineData(time: b.time, value: b.close),
     ProChartType.area => AreaData(time: b.time, value: b.close),
     ProChartType.baseline => BaselineData(time: b.time, value: b.close),
+    // Built types are rebuilt whole (see update).
+    ProChartType.renko ||
+    ProChartType.lineBreak ||
+    ProChartType.rangeBars ||
+    ProChartType.pointAndFigure ||
+    ProChartType.kagi => b,
   };
 
   void _addVolume() {
@@ -410,9 +500,15 @@ class ProChartController extends ChangeNotifier {
   SeriesApi _addMain(ProChartType type) {
     final title = _symbol ?? '';
     return switch (type) {
-      ProChartType.candles || ProChartType.heikinAshi => chart.addCandlestickSeries(
+      ProChartType.candles ||
+      ProChartType.heikinAshi ||
+      ProChartType.renko ||
+      ProChartType.lineBreak ||
+      ProChartType.rangeBars ||
+      ProChartType.pointAndFigure => chart.addCandlestickSeries(
         CandlestickSeriesOptions(title: title, borderVisible: false),
       ),
+      ProChartType.kagi => chart.addLineSeries(LineSeriesOptions(title: title, lineWidth: 2)),
       ProChartType.hollowCandles => chart.addCandlestickSeries(
         CandlestickSeriesOptions(title: title, upColor: const Color(0x00000000)),
       ),
@@ -442,12 +538,16 @@ class ProChartController extends ChangeNotifier {
     final lines = _trading.lines;
     _trading.dispose();
 
+    final wasBuilt = _type.isBuilt;
     _type = value;
     // The new series first: pane 0 never goes empty (and away).
     final old = _main;
     _main = _addMain(value);
     chart.removeSeries(old);
     _setMainData();
+    if (wasBuilt != value.isBuilt) {
+      _volume?.setData(value.isBuilt ? const [] : _volumeData());
+    }
 
     for (final c in configs) {
       _restoreIndicator(c);
@@ -471,7 +571,7 @@ class ProChartController extends ChangeNotifier {
     _showVolume = value;
     if (_volume == null) {
       _addVolume();
-      _volume!.setData(_volumeData());
+      _volume!.setData(_type.isBuilt ? const [] : _volumeData());
     }
     _volume!.applyOptions(_volume!.options.copyWith(visible: value));
     notifyListeners();
@@ -497,7 +597,54 @@ class ProChartController extends ChangeNotifier {
 
   set activeTool(DrawingToolSpec? spec) {
     _tool = spec;
-    drawings.tool = spec == null ? null : (id, anchors) => spec.create(this, id, anchors);
+    drawings.tool = spec == null ? null : (id, anchors) => _styled(spec.create(this, id, anchors));
+    notifyListeners();
+  }
+
+  // ---- default styles ----
+
+  // By drawing kind (its codec name), so they still match after a reload.
+  final _defaultStyles = <String, DrawingStyle>{};
+
+  Drawing _styled(Drawing d) {
+    final style = defaultStyleOf(d);
+    if (style != null) d.style = style;
+    return d;
+  }
+
+  /// The style new drawings like [d] get, if one was saved with
+  /// [saveDefaultStyle].
+  DrawingStyle? defaultStyleOf(Drawing d) => _defaultStyles[codec.kindOf(d)];
+
+  /// New drawings of [d]'s kind take its style from now on, like a
+  /// favorite template. It's kept in [saveState]; to share it across
+  /// charts, keep [saveDefaultStyles] on its own and give it back with
+  /// [restoreDefaultStyles].
+  void saveDefaultStyle(Drawing d) {
+    final kind = codec.kindOf(d);
+    if (kind == null) return;
+    _defaultStyles[kind] = d.style;
+    notifyListeners();
+  }
+
+  /// New drawings of [d]'s kind get the tool's own style again.
+  void resetDefaultStyle(Drawing d) {
+    if (_defaultStyles.remove(codec.kindOf(d)) != null) notifyListeners();
+  }
+
+  /// The saved default styles, JSON-ready, by drawing kind.
+  Map<String, Object?> saveDefaultStyles() => {
+    for (final MapEntry(:key, :value) in _defaultStyles.entries) key: DrawingCodec.styleToJson(value),
+  };
+
+  /// Puts back what [saveDefaultStyles] saved, in place of the current ones.
+  void restoreDefaultStyles(Map<Object?, Object?> json) {
+    _defaultStyles
+      ..clear()
+      ..addAll({
+        for (final MapEntry(:key, :value) in json.entries)
+          if (key is String) key: DrawingCodec.styleFromJson(value),
+      });
     notifyListeners();
   }
 
@@ -698,6 +845,7 @@ class ProChartController extends ChangeNotifier {
     'drawings': codec.encodeAll(drawings.drawings, chart.timeScale().logicalToTime),
     'tradingLines': [for (final l in _trading.lines) _lineToJson(l)],
     'display': _displayToJson(),
+    if (_defaultStyles.isNotEmpty) 'defaultStyles': saveDefaultStyles(),
   };
 
   /// Puts back what [saveState] saved. Call it after [setData], so drawings
@@ -723,6 +871,7 @@ class ProChartController extends ChangeNotifier {
       drawings.select(null);
       drawings.layer.drawings = codec.decodeAll(list, chart.timeScale().timeToLogical);
     }
+    if (state['defaultStyles'] case final Map<Object?, Object?> styles) restoreDefaultStyles(styles);
     if (state['tradingLines'] case final List<Object?> list) {
       _trading.clear();
       for (final l in list) {
@@ -762,8 +911,123 @@ class ProChartController extends ChangeNotifier {
     )..triggered = json['triggered'] == true;
   }
 
+  // ---- bar replay ----
+
+  // While replaying: all the bars (and volumes), and how many are shown.
+  List<CandlestickData>? _replayBars;
+  List<double>? _replayVolumes;
+  int _replayAt = 0;
+  bool _pickingReplay = false;
+  Timer? _replayTimer;
+  double _replaySpeed = 1;
+
+  /// Whether the chart replays history: it shows the bars up to a past
+  /// point and adds the rest one at a time.
+  bool get replaying => _replayBars != null;
+
+  /// Waiting for a tap on the bar to replay from (see [pickReplayStart]).
+  bool get pickingReplayStart => _pickingReplay;
+
+  /// Whether the replay plays by itself ([replaySpeed] bars a second).
+  bool get replayPlaying => _replayTimer != null;
+
+  /// Bars still to come in the replay.
+  int get replayRemaining => _replayBars == null ? 0 : _replayBars!.length - _replayAt;
+
+  /// Bars a second while the replay plays.
+  double get replaySpeed => _replaySpeed;
+
+  set replaySpeed(double value) {
+    if (value <= 0 || value == _replaySpeed) return;
+    _replaySpeed = value;
+    if (replayPlaying) playReplay();
+    notifyListeners();
+  }
+
+  /// The next tap on the chart picks the bar to replay from.
+  void pickReplayStart() {
+    activeTool = null;
+    _pickingReplay = true;
+    chart.unsubscribeClick(_onReplayPick);
+    chart.subscribeClick(_onReplayPick);
+    notifyListeners();
+  }
+
+  void cancelReplayPick() {
+    if (!_pickingReplay) return;
+    _pickingReplay = false;
+    chart.unsubscribeClick(_onReplayPick);
+    notifyListeners();
+  }
+
+  void _onReplayPick(ChartEventParams p) {
+    final logical = p.logical;
+    if (logical == null) return;
+    cancelReplayPick();
+    startReplay(logical.round());
+  }
+
+  /// Shows the bars before [index] (in the full history) and replays the
+  /// rest from there; again while replaying, it starts over from [index].
+  void startReplay(int index) {
+    final bars = _replayBars ?? _bars;
+    final volumes = _replayBars != null ? _replayVolumes : _volumes;
+    if (bars.length < 2) return;
+    pauseReplay();
+    _replayBars = List.of(bars);
+    _replayVolumes = volumes == null ? null : List.of(volumes);
+    _replayAt = index.clamp(1, bars.length - 1);
+    _load(bars.take(_replayAt).toList(), volumes?.take(_replayAt).toList());
+    chart.timeScale().scrollToRealTime();
+    notifyListeners();
+  }
+
+  /// Adds the next bar; false at the end of the history.
+  bool replayStep() {
+    final bars = _replayBars;
+    if (bars == null || _replayAt >= bars.length) {
+      pauseReplay();
+      return false;
+    }
+    final i = _replayAt++;
+    _apply(bars[i], volume: _replayVolumes?[i]);
+    if (_replayAt >= bars.length) pauseReplay();
+    notifyListeners();
+    return true;
+  }
+
+  /// Plays the replay by itself at [replaySpeed].
+  void playReplay() {
+    if (!replaying || replayRemaining == 0) return;
+    _replayTimer?.cancel();
+    _replayTimer = Timer.periodic(Duration(microseconds: (1e6 / _replaySpeed).round()), (_) => replayStep());
+    notifyListeners();
+  }
+
+  void pauseReplay() {
+    if (_replayTimer == null) return;
+    _replayTimer!.cancel();
+    _replayTimer = null;
+    notifyListeners();
+  }
+
+  /// Back to the whole history (with anything that arrived meanwhile).
+  void stopReplay() {
+    final bars = _replayBars;
+    if (bars == null) return;
+    _replayTimer?.cancel();
+    _replayTimer = null;
+    final volumes = _replayVolumes;
+    _replayBars = null;
+    _replayVolumes = null;
+    _load(bars, volumes);
+    notifyListeners();
+  }
+
   @override
   void dispose() {
+    _replayTimer?.cancel();
+    chart.unsubscribeClick(_onReplayPick);
     _watermark?.detach();
     legend.dispose();
     _trading.dispose();

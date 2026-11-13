@@ -13,6 +13,7 @@ import '../api/chart_controller.dart';
 import '../data.dart';
 import '../options.dart';
 import '../renderers/draw_utils.dart';
+import '../renderers/label_cache.dart';
 import 'drawing_codec.dart';
 import 'primitive.dart';
 
@@ -867,18 +868,19 @@ void _arrowHead(Canvas canvas, DrawingStyle s, Offset from, Offset tip) {
   );
 }
 
-TextPainter _text(String text, DrawingStyle s, {Color? color, FontWeight? weight, Color? background}) => TextPainter(
-  text: TextSpan(
-    text: text,
-    style: TextStyle(
-      color: color ?? s.textColor ?? s.color,
-      fontSize: s.fontSize,
-      fontWeight: weight,
-      backgroundColor: background,
-    ),
+/// Drawing labels, laid out once and reused frame after frame (see
+/// [LabelCache]); shared by every drawing.
+final _labels = LabelCache(capacity: 400);
+
+TextPainter _text(String text, DrawingStyle s, {Color? color, FontWeight? weight, Color? background}) => _labels.text(
+  text,
+  TextStyle(
+    color: color ?? s.textColor ?? s.color,
+    fontSize: s.fontSize,
+    fontWeight: weight,
+    backgroundColor: background,
   ),
-  textDirection: TextDirection.ltr,
-)..layout();
+);
 
 Rect _rectOf(DrawingContext c) => Rect.fromPoints(c.points[0], c.points.length > 1 ? c.points[1] : c.points[0]);
 

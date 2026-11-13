@@ -476,18 +476,10 @@ class IconMarkDrawing extends Drawing {
 
   @override
   void paint(Canvas canvas, DrawingContext c) {
-    final tp = TextPainter(
-      text: TextSpan(
-        text: String.fromCharCode(icon.codePoint),
-        style: TextStyle(
-          fontSize: style.fontSize,
-          fontFamily: icon.fontFamily,
-          package: icon.fontPackage,
-          color: style.color,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+    final tp = _labels.text(
+      String.fromCharCode(icon.codePoint),
+      TextStyle(fontSize: style.fontSize, fontFamily: icon.fontFamily, package: icon.fontPackage, color: style.color),
+    );
     tp.paint(canvas, _rect(c).topLeft);
   }
 

@@ -6,6 +6,7 @@ import 'package:flutter/painting.dart';
 import '../api/chart_controller.dart';
 import '../data.dart';
 import '../series_options.dart';
+import '../renderers/label_cache.dart';
 import 'primitive.dart';
 
 enum SeriesMarkerPosition {
@@ -101,6 +102,15 @@ class SeriesMarkersPrimitive extends ChartPrimitive {
 
   /// Reserve room above/below the data so markers stay visible.
   bool autoscale;
+
+  /// The markers' texts, laid out once rather than every frame.
+  final _labels = LabelCache(capacity: 200);
+
+  @override
+  void detached() {
+    _labels.clear();
+    super.detached();
+  }
 
   List<SeriesMarker> get markers => _markers;
 
@@ -215,15 +225,11 @@ class SeriesMarkersPrimitive extends ChartPrimitive {
       _drawShape(ctx.canvas, m.shape, x, y, shapeSize.toDouble(), m.color);
       _drawn.add((Rect.fromCenter(center: Offset(x, y), width: shapeSize.toDouble(), height: shapeSize.toDouble()), m));
       if (textY != null) {
-        final tp = TextPainter(
-          text: TextSpan(
-            text: m.text,
-            style: TextStyle(color: m.color, fontSize: ctx.fontSize, fontFamily: ctx.fontFamily, height: 1),
-          ),
-          textDirection: TextDirection.ltr,
-        )..layout();
+        final tp = _labels.text(
+          m.text!,
+          TextStyle(color: m.color, fontSize: ctx.fontSize, fontFamily: ctx.fontFamily, height: 1),
+        );
         tp.paint(ctx.canvas, Offset(x - tp.width / 2, textY - tp.height / 2));
-        tp.dispose();
       }
     }
   }

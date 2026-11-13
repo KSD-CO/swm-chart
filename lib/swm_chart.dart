@@ -41,6 +41,7 @@ export 'src/series_options.dart';
 export 'src/ta/bar.dart';
 export 'src/ta/ta.dart';
 export 'src/transforms/transforms.dart';
+export 'src/widget/depth_chart.dart';
 export 'src/widget/donut.dart';
 export 'src/widget/sparkline.dart';
 export 'src/widget/swm_chart.dart';

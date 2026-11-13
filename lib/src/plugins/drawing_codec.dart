@@ -382,6 +382,10 @@ class DrawingCodec {
   /// [d] as a JSON-ready map, its anchors at the times [timeOf] gives
   /// (e.g. `chart.timeScale().logicalToTime`). `null` for a drawing of a
   /// kind this codec doesn't know, or with an anchor that has no time.
+  /// The name [d] is saved under (its [DrawingKind.name]); `null` for a
+  /// drawing this codec doesn't know.
+  String? kindOf(Drawing d) => _kinds.where((k) => k.matches(d)).firstOrNull?.name;
+
   Map<String, Object?>? encode(Drawing d, num? Function(double logical) timeOf) {
     final kind = _kinds.where((k) => k.matches(d)).firstOrNull;
     if (kind == null) return null;
@@ -395,7 +399,7 @@ class DrawingCodec {
       'kind': kind.name,
       'id': d.id is String || d.id is num ? d.id : '${d.id}',
       'anchors': anchors,
-      'style': _style(d.style),
+      'style': styleToJson(d.style),
       if (!d.visible) 'visible': false,
       if (d.locked) 'locked': true,
       'props': kind._props(d),
@@ -418,7 +422,7 @@ class DrawingCodec {
     final d = kind.create(
       json['id'] ?? Object(),
       anchors,
-      _readStyle(json['style']),
+      styleFromJson(json['style']),
       (json['props'] as Map?)?.cast<String, Object?>() ?? const {},
     );
     d.visible = json['visible'] != false;
@@ -437,7 +441,8 @@ class DrawingCodec {
       if (j is Map) ?decode(j.cast<String, Object?>(), logicalOf),
   ];
 
-  static Map<String, Object?> _style(DrawingStyle s) => {
+  /// [s] as a JSON-ready map.
+  static Map<String, Object?> styleToJson(DrawingStyle s) => {
     'color': s.color.toARGB32(),
     'lineWidth': s.lineWidth,
     'lineStyle': s.lineStyle.name,
@@ -446,7 +451,8 @@ class DrawingCodec {
     'fontSize': s.fontSize,
   };
 
-  static DrawingStyle _readStyle(Object? json) {
+  /// The style [styleToJson] saved; the default style for anything else.
+  static DrawingStyle styleFromJson(Object? json) {
     if (json is! Map) return const DrawingStyle();
     const d = DrawingStyle();
     return DrawingStyle(

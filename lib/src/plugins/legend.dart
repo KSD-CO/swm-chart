@@ -7,6 +7,7 @@ import '../api/chart_controller.dart';
 import '../data.dart';
 import '../indicators/attach.dart';
 import '../model/series.dart';
+import '../renderers/label_cache.dart';
 import 'primitive.dart';
 
 enum LegendMode {
@@ -208,6 +209,16 @@ class _LegendPrimitive extends ChartPrimitive {
   final ChartLegend _legend;
   final PaneApi _pane;
 
+  /// The legend's lines: the same text while the crosshair rests and the
+  /// chart repaints (a tick, a pan) is laid out once.
+  final _labels = LabelCache(capacity: 64);
+
+  @override
+  void detached() {
+    _labels.clear();
+    super.detached();
+  }
+
   @override
   PrimitiveZOrder get zOrder => PrimitiveZOrder.top;
 
@@ -251,12 +262,12 @@ class _LegendPrimitive extends ChartPrimitive {
 
   /// Paints one line of text with a background; returns its height.
   double _paintSpans(PrimitivePaintContext ctx, Offset at, List<TextSpan> spans, Color background) {
-    final tp = TextPainter(
-      text: TextSpan(children: spans, style: const TextStyle(height: 1.2)),
-      textDirection: TextDirection.ltr,
+    final tp = _labels.get(
+      TextSpan(children: spans, style: const TextStyle(height: 1.2)),
+      maxWidth: ctx.paneSize.width - at.dx - 4,
       maxLines: 1,
       ellipsis: '…',
-    )..layout(maxWidth: ctx.paneSize.width - at.dx - 4);
+    );
     ctx.canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromLTWH(at.dx - 3, at.dy - 1, tp.width + 6, tp.height + 2),
@@ -265,9 +276,7 @@ class _LegendPrimitive extends ChartPrimitive {
       Paint()..color = background,
     );
     tp.paint(ctx.canvas, at);
-    final h = tp.height + 3;
-    tp.dispose();
-    return h;
+    return tp.height + 3;
   }
 
   void _paintTooltip(
@@ -281,18 +290,13 @@ class _LegendPrimitive extends ChartPrimitive {
     final o = _legend.options;
     final time = _legend.chart.timeScale().coordinateToTime(at.dx);
     final timeText = time == null ? null : (o.formatTime?.call(time) ?? _legend.chart.model.formatTime(time));
+    final maxWidth = ctx.paneSize.width * 0.8;
     final painters = [
-      if (timeText != null)
-        TextPainter(text: _span(timeText, textColor, o, bold: true), textDirection: TextDirection.ltr),
-      for (final row in rows)
-        TextPainter(
-          text: TextSpan(children: _rowSpans(row, textColor, o)),
-          textDirection: TextDirection.ltr,
-        ),
+      if (timeText != null) _labels.get(_span(timeText, textColor, o, bold: true), maxWidth: maxWidth),
+      for (final row in rows) _labels.get(TextSpan(children: _rowSpans(row, textColor, o)), maxWidth: maxWidth),
     ];
     var width = 0.0, height = 0.0;
     for (final p in painters) {
-      p.layout(maxWidth: ctx.paneSize.width * 0.8);
       width = width > p.width ? width : p.width;
       height += p.height + 2;
     }
@@ -321,7 +325,6 @@ class _LegendPrimitive extends ChartPrimitive {
     for (final p in painters) {
       p.paint(ctx.canvas, Offset(left + pad, y));
       y += p.height + 2;
-      p.dispose();
     }
   }
 }

@@ -61,7 +61,8 @@ void main() {
       expect(pro.indicators.first.handle.source, pro.mainSeries);
       expect(pro.trading.lines.single.id, 'a');
       expect(pro.chart.panes(), hasLength(panes));
-      expect(pro.mainSeries.data(), hasLength(200));
+      // Built types (Renko, Kagi, …) make their own bars.
+      expect(pro.mainSeries.data(), type.isBuilt ? isNotEmpty : hasLength(200));
     }
     expect(pro.mainSeries.seriesType(), SeriesType.candlestick);
     expect(tester.takeException(), isNull);

@@ -44,6 +44,7 @@ Each feature below has its own screenshot, all taken from the [example app](#exa
   - [Compare symbols](#compare-symbols)
   - [Several charts in step](#several-charts-in-step)
   - [Sparklines and donut charts](#sparklines-and-donut-charts)
+  - [Order book depth](#order-book-depth)
   - [Custom series and primitives](#custom-series-and-primitives)
 - [Interaction](#interaction)
 - [Performance](#performance)
@@ -55,7 +56,7 @@ Each feature below has its own screenshot, all taken from the [example app](#exa
 
 ```yaml
 dependencies:
-  swm_chart: ^0.15.0
+  swm_chart: ^0.17.0
 ```
 
 ```dart
@@ -150,14 +151,21 @@ Beyond upstream:
 `ProChartController`:
 
 - **Top bar**: the symbol, the interval, the chart type (candles, hollow
-  candles, bars, line, area, baseline, Heikin-Ashi), the indicator picker,
-  undo / redo, and log / percent scale and volume.
+  candles, bars, line, area, baseline, Heikin-Ashi, and the built charts:
+  Renko, line break, range bars, point & figure, Kagi), the indicator
+  picker, undo / redo, bar replay, and log / percent scale and volume.
 - **Drawing toolbar** on the left, tools in groups, plus magnet (snap to
   OHLC), keep drawing, hide and remove all — or, with
   `toolbarMode: DrawingToolbarMode.floating`, behind a pencil button over
   the chart, which then keeps the full width.
 - **Style bar** over the selected drawing: color, width, line style, text,
-  lock, duplicate, delete — each change can be undone.
+  lock, duplicate, delete — each change can be undone — and *save as
+  default style*, which new drawings of that kind then take.
+- **Bar replay**: pick a past bar, then step or play the rest of the
+  history in at 1x, 3x or 10x, as if it were live; new bars wait until
+  the replay ends.
+- **Keys** on a desktop or the web: Esc, Delete / Backspace, Ctrl/⌘+Z,
+  Ctrl/⌘+Shift+Z, Ctrl+Y and, while replaying, Space and →.
 - **Indicator picker**: the indicators on the chart (show / hide, settings,
   remove) and all 73 to add, searchable — the same one as often as you
   like (RSI 9 next to RSI 14, a stack of moving averages). **Settings**:
@@ -178,6 +186,14 @@ SwmProChart(
 )
 
 pro.update(tick); // realtime: price, volume, Heikin-Ashi and indicators
+
+pro.type = ProChartType.renko; // brick size from the ATR, or:
+pro.brickSize = 50;            // also the box of point & figure, range bars and Kagi
+
+pro.startReplay(bars.length - 200); // or pickReplayStart() for a tap
+pro.playReplay();                    // replayStep(), pauseReplay(), stopReplay()
+
+final styles = pro.saveDefaultStyles(); // keep across symbols; restoreDefaultStyles(styles)
 ```
 
 The parts are widgets of their own (`ProChartTopBar`, `DrawingToolbar`,
@@ -571,6 +587,8 @@ needed; the ranges take part in autoscale.
 ```dart
 candles.setData(heikinAshi(bars));
 candles.setData(renko(bars, boxSize: 50));   // also lineBreak, rangeBars
+candles.setData(pointAndFigure(bars, boxSize: autoBoxSize(bars)));   // X / O columns
+line.setData(kagi(bars, reversal: 150));      // thick (yang) and thin (yin) colors
 final hourly = resample(minuteBars, const Timeframe.hours(1));   // .weeks(), .months()
 final live = Resampler(const Timeframe.minutes(15));
 candles.update(live.add(tick));                  // streaming
@@ -644,6 +662,25 @@ SwmDonut(
 )
 ```
 
+## Order book depth
+
+`SwmDepthChart` piles up an order book: bids to the left of the mid price,
+asks to the right, each level adding to the total from the best price
+out. The mid price and spread sit on top; hover or drag for the total at a
+price.
+
+```dart
+SwmDepthChart(
+  bids: [for (final b in book.bids) DepthLevel(b.price, b.size)],
+  asks: [for (final a in book.asks) DepthLevel(a.price, a.size)],
+  range: 0.02,   // ±2% around the mid; null shows every level
+  height: 220,
+)
+```
+
+`DepthBook` gives the running totals, mid and spread on their own, and
+`DepthChartPainter` paints onto any `Canvas`.
+
 ## Custom series and primitives
 
 Custom series: implement `CustomSeriesView<T>` (`priceValues`, `draw`) and
@@ -684,7 +721,12 @@ When users can zoom out over tens of thousands of bars, turn on
 `TimeScaleOptions(enableConflation: true)` (optionally with
 `precomputeConflationOnInit`), as upstream recommends.
 
-Run the benchmark yourself:
+Marker texts, drawing labels and legend lines are laid out once and
+reused across frames, so a busy chart (10 000 bars, 300 text markers, 30
+labelled drawings) pans in about 2 ms a frame in a widget test
+(`flutter test benchmark/chart_benchmark.dart`).
+
+Run the device benchmark yourself:
 
 ```sh
 cd example

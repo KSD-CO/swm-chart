@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:swm_chart/swm_chart.dart';
 
@@ -155,5 +156,50 @@ void main() {
     final a = pro.drawings.drawings.single.anchors.single;
     final bar = pro.bars[a.logical.round()];
     expect([bar.open, bar.high, bar.low, bar.close], contains(a.price));
+  });
+
+  testWidgets('keyboard: Esc, Delete, undo and redo', (tester) async {
+    final pro = await _pump(tester);
+    pro.activeTool = DrawingTools.byId('trendLine');
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(pro.activeTool, isNull);
+
+    pro.activeTool = DrawingTools.byId('trendLine');
+    await tester.pump();
+    final rect = _chartRect(tester);
+    await tester.tapAt(rect.center.translate(-80, 40));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tapAt(rect.center.translate(0, -40));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(pro.drawings.selected, isNotNull);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+    await tester.pump();
+    expect(pro.drawings.drawings, isEmpty);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
+    await tester.pump();
+    expect(pro.drawings.drawings, hasLength(1));
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(pro.drawings.drawings, isEmpty);
+
+    // Esc with nothing in hand puts the selection down.
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    pro.drawings.select(pro.drawings.drawings.single.id);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(pro.drawings.selected, isNull);
+    expect(tester.takeException(), isNull);
   });
 }

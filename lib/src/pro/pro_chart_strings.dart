@@ -69,6 +69,15 @@ class ProChartStrings {
     this.inputs = 'Inputs',
     this.style = 'Style',
     this.defaults = 'Defaults',
+    this.replay = 'Bar replay',
+    this.replayPickStart = 'Tap a bar to replay from',
+    this.play = 'Play',
+    this.pause = 'Pause',
+    this.stepForward = 'Next bar',
+    this.replaySpeed = 'Speed',
+    this.exitReplay = 'Exit replay',
+    this.saveAsDefault = 'Save as default style',
+    this.resetDefault = 'Reset default style',
     this.added,
     this.lineStyleName,
     this.chartTypeName,
@@ -108,6 +117,15 @@ class ProChartStrings {
   final String lock;
   final String unlock;
   final String duplicate;
+  final String replay;
+  final String replayPickStart;
+  final String play;
+  final String pause;
+  final String stepForward;
+  final String replaySpeed;
+  final String exitReplay;
+  final String saveAsDefault;
+  final String resetDefault;
   final String delete;
   final String cancel;
   final String ok;

@@ -1,3 +1,37 @@
+## 0.17.0
+
+* Faster panning and zooming of busy charts: marker texts, drawing labels
+  and legend lines are laid out once and reused across frames (a shared,
+  bounded `LabelCache`) instead of every frame. A chart with 10 000 bars,
+  300 text markers and 30 labelled drawings pans in about 2.7 ms a frame,
+  down from 6.4 ms (median; `benchmark/chart_benchmark.dart`).
+* `benchmark/chart_benchmark.dart`: the frame cost of panning a busy chart,
+  to compare before and after a change.
+* Built chart types in `SwmProChart`: `ProChartType.renko`, `lineBreak`,
+  `rangeBars`, `pointAndFigure` and `kagi`, rebuilt from the bars on every
+  update (`isBuilt`; no volume pane). The box size comes from the ATR
+  (`autoBoxSize`) unless `ProChartController.brickSize` is set.
+* Transforms `pointAndFigure` (X / O columns as candles) and `kagi` (a line
+  colored yang / yin), and `autoBoxSize`.
+* Bar replay: `ProChartController.startReplay`, `pickReplayStart` (the next
+  tap on the chart), `replayStep`, `playReplay` / `pauseReplay` at
+  `replaySpeed` bars a second and `stopReplay`; `setData` / `update` wait
+  behind the replay point. In `SwmProChart`, a replay button on the top bar
+  and a `ReplayBar` (`replay: false` to leave it out).
+* Keyboard shortcuts in `SwmProChart` (`keyboardShortcuts`): Esc, Delete /
+  Backspace, Ctrl/⌘+Z, Ctrl/⌘+Shift+Z, Ctrl+Y, and Space / → while
+  replaying.
+* Default drawing styles: `saveDefaultStyle` / `resetDefaultStyle` per
+  drawing kind (in the style bar too), applied to new drawings, kept in
+  `saveState` and on their own with `saveDefaultStyles` /
+  `restoreDefaultStyles`. `DrawingCodec.kindOf`, `styleToJson` and
+  `styleFromJson` are public.
+* `SwmDepthChart`: an order book's depth, with `DepthLevel`, `DepthBook`
+  and `DepthChartPainter`.
+* `ProChartStrings`: `replay`, `replayPickStart`, `play`, `pause`,
+  `stepForward`, `replaySpeed`, `exitReplay`, `saveAsDefault`,
+  `resetDefault`.
+
 ## 0.16.0
 
 * `DrawingLabels`: the words drawings write on the chart — a position's

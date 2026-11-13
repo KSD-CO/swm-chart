@@ -2,6 +2,7 @@
 // interval, chart type, indicators, undo, scale), a drawing toolbar and a
 // floating style bar for the selected drawing.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../options.dart';
 import '../plugins/drawings.dart';
@@ -52,6 +53,8 @@ class SwmProChart extends StatefulWidget {
     this.showTopBar = true,
     this.showDrawingToolbar = true,
     this.toolbarMode = DrawingToolbarMode.docked,
+    this.keyboardShortcuts = true,
+    this.replay = true,
     this.strings,
     this.toolGroups,
   });
@@ -81,6 +84,16 @@ class SwmProChart extends StatefulWidget {
   /// The drawing toolbar docked down the left, or floating behind a
   /// pencil button.
   final DrawingToolbarMode toolbarMode;
+
+  /// Keys on a desktop or the web, as on TradingView: Esc puts the tool
+  /// down (or the selection), Delete / Backspace removes the selected
+  /// drawing, Ctrl/⌘+Z undoes, Ctrl/⌘+Shift+Z and Ctrl+Y redo.
+  final bool keyboardShortcuts;
+
+  /// A bar replay button on the top bar: pick a past bar, then step or
+  /// play the rest of the history in (see [ProChartController.startReplay]).
+  /// While replaying, Space plays or pauses and → steps.
+  final bool replay;
 
   @override
   State<SwmProChart> createState() => _SwmProChartState();
@@ -131,7 +144,50 @@ class _SwmProChartState extends State<SwmProChart> {
     return strings == null ? chart : ProChartStringsScope(strings: strings, child: chart);
   }
 
+  Map<ShortcutActivator, VoidCallback> get _shortcuts {
+    final d = _pro.drawings;
+    void undo() => d.canUndo ? d.undo() : null;
+    void redo() => d.canRedo ? d.redo() : null;
+    void delete() {
+      final s = d.selected;
+      if (s != null && !s.locked) d.deleteSelected();
+    }
+
+    return {
+      const SingleActivator(LogicalKeyboardKey.escape): () {
+        if (_pro.pickingReplayStart) {
+          _pro.cancelReplayPick();
+        } else if (_pro.activeTool != null) {
+          _pro.activeTool = null;
+        } else {
+          d.select(null);
+        }
+      },
+      const SingleActivator(LogicalKeyboardKey.delete): delete,
+      const SingleActivator(LogicalKeyboardKey.backspace): delete,
+      const SingleActivator(LogicalKeyboardKey.keyZ, control: true): undo,
+      const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): undo,
+      const SingleActivator(LogicalKeyboardKey.keyZ, control: true, shift: true): redo,
+      const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true): redo,
+      const SingleActivator(LogicalKeyboardKey.keyY, control: true): redo,
+      if (_pro.replaying) ...{
+        const SingleActivator(LogicalKeyboardKey.space): () =>
+            _pro.replayPlaying ? _pro.pauseReplay() : _pro.playReplay(),
+        const SingleActivator(LogicalKeyboardKey.arrowRight): _pro.replayStep,
+      },
+    };
+  }
+
   Widget _build(BuildContext context) {
+    final chart = _layout(context);
+    if (!widget.keyboardShortcuts) return chart;
+    return CallbackShortcuts(
+      bindings: _shortcuts,
+      child: Focus(autofocus: true, child: chart),
+    );
+  }
+
+  Widget _layout(BuildContext context) {
     final selected = _pro.drawings.selected;
     final docked = widget.showDrawingToolbar && widget.toolbarMode == DrawingToolbarMode.docked;
     final floating = widget.showDrawingToolbar && widget.toolbarMode == DrawingToolbarMode.floating;
@@ -145,6 +201,7 @@ class _SwmProChartState extends State<SwmProChart> {
             onIntervalChanged: widget.onIntervalChanged,
             onSymbolTap: widget.onSymbolTap,
             actions: widget.actions,
+            showReplay: widget.replay,
           ),
           const Divider(height: 1),
         ],
@@ -161,6 +218,13 @@ class _SwmProChartState extends State<SwmProChart> {
                   children: [
                     Positioned.fill(child: SwmChart(controller: _pro.chart)),
                     if (floating) ..._floatingToolbar(context),
+                    if (_pro.pickingReplayStart || _pro.replaying)
+                      Positioned(
+                        left: 60,
+                        right: 70,
+                        bottom: 8,
+                        child: Center(child: _pro.replaying ? ReplayBar(controller: _pro) : const _ReplayPickHint()),
+                      ),
                     if (selected != null)
                       Positioned(
                         top: 6,
@@ -240,6 +304,7 @@ class ProChartTopBar extends StatelessWidget {
     this.onIntervalChanged,
     this.onSymbolTap,
     this.actions = const [],
+    this.showReplay = true,
   });
 
   final ProChartController controller;
@@ -247,6 +312,9 @@ class ProChartTopBar extends StatelessWidget {
   final void Function(String interval)? onIntervalChanged;
   final VoidCallback? onSymbolTap;
   final List<Widget> actions;
+
+  /// The bar replay button.
+  final bool showReplay;
 
   static IconData typeIcon(ProChartType type) => switch (type) {
     ProChartType.candles => Icons.candlestick_chart,
@@ -256,6 +324,11 @@ class ProChartTopBar extends StatelessWidget {
     ProChartType.area => Icons.area_chart,
     ProChartType.baseline => Icons.ssid_chart,
     ProChartType.heikinAshi => Icons.view_week,
+    ProChartType.renko => Icons.view_agenda_outlined,
+    ProChartType.lineBreak => Icons.stacked_bar_chart,
+    ProChartType.rangeBars => Icons.align_vertical_center,
+    ProChartType.pointAndFigure => Icons.grid_on,
+    ProChartType.kagi => Icons.timeline,
   };
 
   @override
@@ -335,6 +408,14 @@ class ProChartTopBar extends StatelessWidget {
               icon: const Icon(Icons.redo),
               onPressed: pro.drawings.canRedo ? pro.drawings.redo : null,
             ),
+            // On a phone it's in the settings menu, so that stays on screen.
+            if (showReplay && !compact)
+              IconButton(
+                tooltip: pro.replaying ? strings.exitReplay : strings.replay,
+                isSelected: pro.replaying || pro.pickingReplayStart,
+                icon: const Icon(Icons.history),
+                onPressed: () => _toggleReplay(pro),
+              ),
             PopupMenuButton<String>(
               tooltip: strings.chartSettings,
               icon: const Icon(Icons.tune),
@@ -352,6 +433,8 @@ class ProChartTopBar extends StatelessWidget {
                     pro.showVolume = !pro.showVolume;
                   case 'display':
                     showChartDisplaySheet(context, pro);
+                  case 'replay':
+                    _toggleReplay(pro);
                 }
               },
               itemBuilder: (_) => [
@@ -367,6 +450,12 @@ class ProChartTopBar extends StatelessWidget {
                 ),
                 CheckedPopupMenuItem(value: 'volume', checked: pro.showVolume, child: Text(strings.volume)),
                 const PopupMenuDivider(),
+                if (showReplay && compact)
+                  CheckedPopupMenuItem(
+                    value: 'replay',
+                    checked: pro.replaying || pro.pickingReplayStart,
+                    child: Text(strings.replay),
+                  ),
                 PopupMenuItem(value: 'display', child: Text('${strings.chartDisplay}…')),
               ],
             ),
@@ -375,6 +464,16 @@ class ProChartTopBar extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+void _toggleReplay(ProChartController pro) {
+  if (pro.replaying) {
+    pro.stopReplay();
+  } else if (pro.pickingReplayStart) {
+    pro.cancelReplayPick();
+  } else {
+    pro.pickReplayStart();
   }
 }
 
@@ -513,6 +612,75 @@ class _DrawingToolbarState extends State<DrawingToolbar> {
   }
 }
 
+// ---- bar replay ----
+
+/// Plays, pauses and steps a bar replay, sets its speed and ends it.
+class ReplayBar extends StatelessWidget {
+  const ReplayBar({super.key, required this.controller, this.speeds = const [1, 3, 10]});
+
+  final ProChartController controller;
+
+  /// Bars a second to choose from.
+  final List<double> speeds;
+
+  @override
+  Widget build(BuildContext context) {
+    final pro = controller;
+    final strings = ProChartStrings.of(context);
+    final left = pro.replayRemaining > 0;
+    String label(double v) => '${v == v.roundToDouble() ? v.round() : v}x';
+    return Material(
+      elevation: 3,
+      borderRadius: BorderRadius.circular(8),
+      color: Theme.of(context).colorScheme.surfaceContainerHigh,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              tooltip: pro.replayPlaying ? strings.pause : strings.play,
+              icon: Icon(pro.replayPlaying ? Icons.pause : Icons.play_arrow),
+              onPressed: !left ? null : (pro.replayPlaying ? pro.pauseReplay : pro.playReplay),
+            ),
+            IconButton(
+              tooltip: strings.stepForward,
+              icon: const Icon(Icons.skip_next),
+              onPressed: left ? pro.replayStep : null,
+            ),
+            PopupMenuButton<double>(
+              tooltip: strings.replaySpeed,
+              initialValue: pro.replaySpeed,
+              onSelected: (v) => pro.replaySpeed = v,
+              itemBuilder: (_) => [for (final v in speeds) PopupMenuItem(value: v, child: Text(label(v)))],
+              child: _BarLabel(label(pro.replaySpeed), trailing: Icons.arrow_drop_down),
+            ),
+            IconButton(tooltip: strings.exitReplay, icon: const Icon(Icons.close), onPressed: pro.stopReplay),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReplayPickHint extends StatelessWidget {
+  const _ReplayPickHint();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      elevation: 3,
+      borderRadius: BorderRadius.circular(8),
+      color: scheme.inverseSurface,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Text(ProChartStrings.of(context).replayPickStart, style: TextStyle(color: scheme.onInverseSurface)),
+      ),
+    );
+  }
+}
+
 // ---- style bar ----
 
 /// Edits the selected [drawing]: color, width, line style, text, lock,
@@ -594,6 +762,16 @@ class DrawingStyleBar extends StatelessWidget {
               tooltip: strings.delete,
               icon: const Icon(Icons.delete_outline, size: 20),
               onPressed: () => controller.drawings.remove(d.id),
+            ),
+            PopupMenuButton<bool>(
+              icon: Icon(controller.defaultStyleOf(d) == null ? Icons.bookmark_border : Icons.bookmark, size: 20),
+              tooltip: strings.saveAsDefault,
+              onSelected: (save) => save ? controller.saveDefaultStyle(d) : controller.resetDefaultStyle(d),
+              itemBuilder: (_) => [
+                PopupMenuItem(value: true, child: Text(strings.saveAsDefault)),
+                if (controller.defaultStyleOf(d) != null)
+                  PopupMenuItem(value: false, child: Text(strings.resetDefault)),
+              ],
             ),
           ],
         ),

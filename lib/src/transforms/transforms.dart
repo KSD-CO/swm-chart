@@ -7,6 +7,7 @@
 // thousandth of a second apart, so times stay strictly ascending and labels
 // still show the source bar's date.
 import 'dart:math' as math;
+import 'dart:ui' show Color;
 
 import '../data.dart';
 import '../model/time_utils.dart' show utcDate;
@@ -181,6 +182,151 @@ List<CandlestickData> rangeBars(List<OhlcData> bars, {required double range}) {
     }
   }
   return out;
+}
+
+// ---- Point & Figure ----
+
+/// Point & Figure columns of [boxSize], driven by closes: a column of Xs
+/// (rising) grows while closes make new boxes up, and turns into a column
+/// of Os when the close falls [reversal] boxes below its top (and back).
+/// Each column is one candle, from its first box to its last — rising
+/// columns up, falling ones down — timed at the bar that started it.
+List<CandlestickData> pointAndFigure(List<OhlcData> bars, {required double boxSize, int reversal = 3}) {
+  final out = <CandlestickData>[];
+  if (bars.isEmpty || boxSize <= 0 || reversal < 1) return out;
+  double box(double price) => (price / boxSize).floorToDouble() * boxSize;
+  var top = box(bars.first.close), bottom = top;
+  bool? rising; // null until the first move of a box
+  num start = bars.first.time;
+  void emit() {
+    final up = rising ?? true;
+    final column = CandlestickData(
+      time: start,
+      open: up ? bottom : top,
+      high: top,
+      low: bottom,
+      close: up ? top : bottom,
+    );
+    if (out.isNotEmpty && out.last.time == start) {
+      out[out.length - 1] = column;
+    } else {
+      out.add(column);
+    }
+  }
+
+  for (final bar in bars.skip(1)) {
+    final c = bar.close;
+    if (rising != false && c >= top + boxSize) {
+      rising ??= true;
+      top = box(c);
+      emit();
+    } else if (rising != true && c <= bottom - boxSize) {
+      rising ??= false;
+      bottom = box(c) + (c % boxSize == 0 ? 0 : boxSize);
+      emit();
+    } else if (rising == true && c <= top - reversal * boxSize) {
+      rising = false;
+      start = bar.time;
+      top = top - boxSize;
+      bottom = box(c) + (c % boxSize == 0 ? 0 : boxSize);
+      emit();
+    } else if (rising == false && c >= bottom + reversal * boxSize) {
+      rising = true;
+      start = bar.time;
+      bottom = bottom + boxSize;
+      top = box(c);
+      emit();
+    }
+  }
+  return out;
+}
+
+// ---- Kagi ----
+
+/// A Kagi line, driven by closes: it runs on while the price keeps its
+/// direction and turns when it reverses by [reversal] (a price amount).
+/// Thick (yang, [yangColor]) once it climbs past the last shoulder, thin
+/// (yin, [yinColor]) once it falls below the last waist — here the colors,
+/// a line series having one width. One point per turn and per new extreme.
+List<LineData> kagi(
+  List<OhlcData> bars, {
+  required double reversal,
+  Color yangColor = const Color(0xFF26A69A),
+  Color yinColor = const Color(0xFFEF5350),
+}) {
+  final out = <LineData>[];
+  if (bars.isEmpty || reversal <= 0) return out;
+  var extreme = bars.first.close;
+  bool? up;
+  var yang = true;
+  double? shoulder, waist; // the last turn up top, the last turn down low
+  num? lastTime;
+  void point(num time, double value) {
+    final t = lastTime != null && time <= lastTime! ? lastTime! + _brickStep : time;
+    out.add(LineData(time: t, value: value, color: yang ? yangColor : yinColor));
+    lastTime = t;
+  }
+
+  point(bars.first.time, extreme);
+  for (final bar in bars.skip(1)) {
+    final c = bar.close;
+    if (up != false && c > extreme) {
+      up ??= true;
+      extreme = c;
+    } else if (up != true && c < extreme) {
+      up ??= false;
+      extreme = c;
+    } else if (up == true && c <= extreme - reversal) {
+      shoulder = extreme;
+      point(bar.time, extreme);
+      up = false;
+      extreme = c;
+    } else if (up == false && c >= extreme + reversal) {
+      waist = extreme;
+      point(bar.time, extreme);
+      up = true;
+      extreme = c;
+    } else {
+      continue;
+    }
+    if (shoulder != null && extreme > shoulder) yang = true;
+    if (waist != null && extreme < waist) yang = false;
+  }
+  point(bars.last.time, extreme);
+  return out;
+}
+
+// ---- Box size ----
+
+/// A round box size for Renko, Point & Figure, Kagi and range bars: the
+/// average true range of the last [period] bars rounded to 1, 2, 2.5 or 5
+/// times a power of ten (1% of the last close when there are too few bars).
+double autoBoxSize(List<OhlcData> bars, {int period = 14}) {
+  if (bars.isEmpty) return 1;
+  double raw;
+  if (bars.length <= period) {
+    raw = bars.last.close.abs() * 0.01;
+  } else {
+    var sum = 0.0;
+    for (var i = bars.length - period; i < bars.length; i++) {
+      final b = bars[i], prev = bars[i - 1].close;
+      sum += math.max(b.high - b.low, math.max((b.high - prev).abs(), (b.low - prev).abs()));
+    }
+    raw = sum / period;
+  }
+  if (raw <= 0 || !raw.isFinite) return 1;
+  final magnitude = math.pow(10, (math.log(raw) / math.ln10).floor()).toDouble();
+  final step = raw / magnitude;
+  final nice = step < 1.5
+      ? 1.0
+      : step < 2.25
+      ? 2.0
+      : step < 3.75
+      ? 2.5
+      : step < 7.5
+      ? 5.0
+      : 10.0;
+  return nice * magnitude;
 }
 
 // ---- Resampling ----
