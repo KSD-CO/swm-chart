@@ -1,3 +1,9 @@
+## 0.17.1
+
+* Fix: `rangeBars` (and `ProChartType.rangeBars`) could loop for ever on
+  large prices (e.g. 50 000), where rounding left a bar a hair short of its
+  range. A bar now closes when the price reaches its limit.
+
 ## 0.17.0
 
 * Faster panning and zooming of busy charts: marker texts, drawing labels

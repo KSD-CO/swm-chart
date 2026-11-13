@@ -56,7 +56,7 @@ Each feature below has its own screenshot, all taken from the [example app](#exa
 
 ```yaml
 dependencies:
-  swm_chart: ^0.17.0
+  swm_chart: ^0.17.1
 ```
 
 ```dart

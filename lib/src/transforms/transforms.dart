@@ -165,16 +165,21 @@ List<CandlestickData> rangeBars(List<OhlcData> bars, {required double range}) {
         continue;
       }
       // Walk towards the target, closing a bar each time the range fills.
+      // Whether it fills is decided by reaching the limit, not by
+      // high - low >= range: at large prices rounding can leave that a hair
+      // short, and the walk would stand still on the limit for ever.
       var p = close!;
       while (p != target) {
         final up = target > p;
         final limit = up ? low! + range : high! - range;
-        final next = up ? math.min(target, limit) : math.max(target, limit);
-        p = next;
+        // A range below the price's precision can't make a bar.
+        if (limit == p) return out;
+        final filled = up ? target >= limit : target <= limit;
+        p = filled ? limit : target;
         high = math.max(high!, p);
         low = math.min(low!, p);
         close = p;
-        if (high - low >= range - 1e-12) {
+        if (filled) {
           out.add(CandlestickData(time: bar.time + k++ * _brickStep, open: open!, high: high, low: low, close: p));
           open = high = low = close = p;
         }
