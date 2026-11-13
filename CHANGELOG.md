@@ -1,3 +1,11 @@
+## 0.18.0
+
+* `SeriesApi.syncData(data)`: give a series its whole data on every
+  rebuild; a tick on the last item (or one new item) is applied with
+  `update`, which keeps the series' min/max and conflation caches, and
+  anything else with `setData`. It compares against the series' own data,
+  so it stays right after direct `setData` / `update` / `pop` calls.
+
 ## 0.17.1
 
 * Fix: `rangeBars` (and `ProChartType.rangeBars`) could loop for ever on

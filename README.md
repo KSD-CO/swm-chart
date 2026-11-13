@@ -56,7 +56,7 @@ Each feature below has its own screenshot, all taken from the [example app](#exa
 
 ```yaml
 dependencies:
-  swm_chart: ^0.17.1
+  swm_chart: ^0.18.0
 ```
 
 ```dart
@@ -82,6 +82,10 @@ candles.setData([
 
 // realtime
 candles.update(CandlestickData(time: 1704153600, open: 103, high: 104, low: 101, close: 102));
+
+// or hand over the whole list on every rebuild: a tick on the last bar
+// (or one new bar) becomes an update, anything else a setData
+candles.syncData(bars);
 
 // widget, needs bounded constraints
 Expanded(child: SwmChart(controller: chart));

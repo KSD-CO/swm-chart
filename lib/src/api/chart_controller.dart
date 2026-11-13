@@ -586,6 +586,31 @@ class SeriesApi<T extends SeriesData, O extends SeriesOptions> {
   /// one is not supported, as upstream.
   void update(SeriesData item) => _model.updateSeries(_series, item);
 
+  /// Gives the series [data] the cheapest way: when only the last item
+  /// changed and/or one was added at the end — a live tick — just those are
+  /// [update]d; otherwise it's a [setData]. Call it with the whole data
+  /// every time (e.g. on each rebuild); a full [setData] drops the series'
+  /// min/max and conflation caches and redraws everything, [update] keeps
+  /// them. It compares against the series' own data, so it stays right
+  /// after [setData], [update] or [pop] calls of your own.
+  void syncData(List<SeriesData> data) {
+    final old = _series.allItems;
+    final grew = data.length - old.length;
+    if (old.isEmpty || grew < 0 || grew > 1 || data[old.length - 1].time != old.last.time) {
+      setData(data);
+      return;
+    }
+    for (var i = 0; i < old.length - 1; i++) {
+      if (!_sameData(old[i], data[i])) {
+        setData(data);
+        return;
+      }
+    }
+    for (var i = old.length - 1; i < data.length; i++) {
+      if (i >= old.length || !_sameData(old[i], data[i])) update(data[i]);
+    }
+  }
+
   /// Removes the last [count] items and returns them, like upstream's `pop`.
   List<SeriesData> pop([int count = 1]) => _model.popSeries(_series, count);
 
@@ -1003,3 +1028,32 @@ class PriceScaleApi {
     _model.invalidate();
   }
 }
+
+// Whether two items draw the same. Kinds it doesn't know count as changed
+// (a full setData, never wrong).
+bool _sameData(SeriesData a, SeriesData b) {
+  if (identical(a, b)) return true;
+  if (a.runtimeType != b.runtimeType || a.time != b.time) return false;
+  return switch ((a, b)) {
+    (final CandlestickData x, final CandlestickData y) =>
+      _sameOhlc(x, y) && x.borderColor == y.borderColor && x.wickColor == y.wickColor,
+    (final BarData x, final BarData y) => _sameOhlc(x, y),
+    (final AreaData x, final AreaData y) =>
+      x.value == y.value && x.lineColor == y.lineColor && x.topColor == y.topColor && x.bottomColor == y.bottomColor,
+    (final BaselineData x, final BaselineData y) =>
+      x.value == y.value &&
+          x.topLineColor == y.topLineColor &&
+          x.topFillColor1 == y.topFillColor1 &&
+          x.topFillColor2 == y.topFillColor2 &&
+          x.bottomLineColor == y.bottomLineColor &&
+          x.bottomFillColor1 == y.bottomFillColor1 &&
+          x.bottomFillColor2 == y.bottomFillColor2,
+    (final LineData x, final LineData y) => x.value == y.value && x.color == y.color,
+    (final HistogramData x, final HistogramData y) => x.value == y.value && x.color == y.color,
+    (WhitespaceData(), WhitespaceData()) => true,
+    _ => false,
+  };
+}
+
+bool _sameOhlc(OhlcData x, OhlcData y) =>
+    x.open == y.open && x.high == y.high && x.low == y.low && x.close == y.close && x.color == y.color;
