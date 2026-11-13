@@ -18,7 +18,10 @@ jobs:
       - name: Format
         run: dart format --output=none --set-exit-if-changed lib test example/lib example/integration_test example/test_driver
       - name: Analyze
-        run: flutter analyze
+        # Infos don't fail the build: newer stable releases deprecate
+        # package:flutter/material.dart (for package:material_ui), which the
+        # library keeps using so older Flutter versions can still depend on it.
+        run: flutter analyze --no-fatal-infos
       - name: Test
         run: flutter test
       - name: Publish dry run
